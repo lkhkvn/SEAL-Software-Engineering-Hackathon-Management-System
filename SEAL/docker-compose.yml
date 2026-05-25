@@ -1,0 +1,45 @@
+version: "3.8"
+
+services:
+  # 1. Cấu hình Container Backend (PHP + Apache)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: php_clean_backend
+    restart: unless-stopped
+    ports:
+      - "8000:80"
+    volumes:
+      - ./backend:/var/www/html
+      - backend_vendor:/var/www/html/vendor  # Named volume: giữ vendor trong Linux container, tránh lỗi symlink Windows
+      - ./logs:/var/www/logs
+    depends_on:
+      - db
+    networks:
+      - project_network
+
+  # 2. Cấu hình Container Database (MySQL 8.0)
+  db:
+    image: mysql:8.0
+    container_name: mysql_clean_db
+    restart: unless-stopped
+    ports:
+      - "3307:3306" # Mở cổng để bạn có thể dùng các app như Navicat/DBeaver kết nối từ máy thật
+    environment:
+      MYSQL_DATABASE: CleanDb
+      MYSQL_ROOT_PASSWORD: root_secret_password
+      MYSQL_USER: clean_user
+      MYSQL_PASSWORD: user_secret_password
+    volumes:
+      - mysql_data:/var/lib/mysql # Giữ lại dữ liệu database không bị mất khi tắt Docker
+    networks:
+      - project_network
+
+networks:
+  project_network:
+    driver: bridge
+
+volumes:
+  mysql_data:
+  backend_vendor:  # Named volume cho thư mục vendor của PHP (tránh lỗi symlink Windows)
