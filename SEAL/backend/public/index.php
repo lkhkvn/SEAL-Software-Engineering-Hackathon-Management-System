@@ -113,6 +113,298 @@ try {
     }
 
     // ------------------------------------------------------------------------
+    // ROUTE 3: ADMIN TẠO TÀI KHOẢN GIÁM KHẢO (JUDGE)
+    // ------------------------------------------------------------------------
+    if ($path === '/api/auth/create-judge' && $requestMethod === 'POST') {
+        $headers = getallheaders();
+        $authHeader = $headers['Authorization'] ?? '';
+        if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
+            throw new Exception("Yêu cầu phải có Token xác thực hợp lệ!");
+        }
+
+        // Lấy Token và xác minh bằng AuthService
+        $token = $matches[1];
+        $currentUser = $authService->verifyToken($token);
+
+        // Kiểm tra quyền Admin
+        if (!$currentUser->isAdmin()) {
+            http_response_code(403);
+            echo json_encode([
+                "status" => "error",
+                "message" => "Chỉ Ban tổ chức (ADMIN) mới có quyền tạo Giám khảo!"
+            ], JSON_UNESCAPED_UNICODE);
+            exit(0);
+        }
+
+        // Thực thi nghiệp vụ tạo Giám khảo
+        $inputData = json_decode(file_get_contents('php://input'), true) ?? [];
+        $dto = new RegisterRequestDTO($inputData);
+        $judge = $authService->registerJudge($dto);
+
+        http_response_code(201);
+        echo json_encode([
+            "status" => "success",
+            "message" => "Tạo tài khoản Giám khảo thành công!",
+            "data" => [
+                "username" => $judge->username,
+                "email" => $judge->email,
+                "role" => $judge->role
+            ]
+        ], JSON_UNESCAPED_UNICODE);
+        exit(0);
+    }
+
+    // ------------------------------------------------------------------------
+    // ROUTE 4: LẤY DANH SÁCH TẤT CẢ NGƯỜI DÙNG (YÊU CẦU QUYỀN ADMIN)
+    // ------------------------------------------------------------------------
+    if ($path === '/api/admin/users' && $requestMethod === 'GET') {
+        $headers = getallheaders();
+        $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+        if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
+            throw new Exception("Yêu cầu phải có Token xác thực hợp lệ!");
+        }
+
+        $token = $matches[1];
+        $currentUser = $authService->verifyToken($token);
+
+        if (!$currentUser->isAdmin()) {
+            http_response_code(403);
+            echo json_encode([
+                "status" => "error",
+                "message" => "Chỉ Ban tổ chức (ADMIN) mới có quyền truy cập!"
+            ], JSON_UNESCAPED_UNICODE);
+            exit(0);
+        }
+
+        $users = $userRepository->findAll();
+        $userDataList = array_map(function($user) {
+            return [
+                "id" => $user->id,
+                "username" => $user->username,
+                "email" => $user->email,
+                "role" => $user->role,
+                "phone" => $user->phone,
+                "skills" => $user->skills,
+                "teamId" => $user->teamId
+            ];
+        }, $users);
+
+        http_response_code(200);
+        echo json_encode([
+            "status" => "success",
+            "data" => $userDataList
+        ], JSON_UNESCAPED_UNICODE);
+        exit(0);
+    }
+
+    // ------------------------------------------------------------------------
+    // ROUTE 5: CẬP NHẬT VAI TRÒ NGƯỜI DÙNG (YÊU CẦU QUYỀN ADMIN)
+    // ------------------------------------------------------------------------
+    if ($path === '/api/admin/users/update-role' && $requestMethod === 'POST') {
+        $headers = getallheaders();
+        $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+        if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
+            throw new Exception("Yêu cầu phải có Token xác thực hợp lệ!");
+        }
+
+        $token = $matches[1];
+        $currentUser = $authService->verifyToken($token);
+
+        if (!$currentUser->isAdmin()) {
+            http_response_code(403);
+            echo json_encode([
+                "status" => "error",
+                "message" => "Chỉ Ban tổ chức (ADMIN) mới có quyền thay đổi vai trò!"
+            ], JSON_UNESCAPED_UNICODE);
+            exit(0);
+        }
+
+        $inputData = json_decode(file_get_contents('php://input'), true) ?? [];
+        $userId = $inputData['userId'] ?? null;
+        $newRole = $inputData['role'] ?? null;
+
+        if (!$userId || !$newRole) {
+            throw new Exception("Thiếu thông tin userId hoặc vai trò (role)!");
+        }
+
+        $allowedRoles = ['ADMIN', 'JUDGE', 'PARTICIPANT'];
+        if (!in_array(strtoupper($newRole), $allowedRoles)) {
+            throw new Exception("Vai trò mới không hợp lệ!");
+        }
+
+        $targetUser = $userRepository->findById((int)$userId);
+        if (!$targetUser) {
+            throw new Exception("Người dùng không tồn tại!");
+        }
+
+        $updatedUser = $targetUser->withRole(strtoupper($newRole));
+        $userRepository->save($updatedUser);
+
+        http_response_code(200);
+        echo json_encode([
+            "status" => "success",
+            "message" => "Cập nhật vai trò người dùng thành công!",
+            "data" => [
+                "id" => $updatedUser->id,
+                "username" => $updatedUser->username,
+                "email" => $updatedUser->email,
+                "role" => $updatedUser->role
+            ]
+        ], JSON_UNESCAPED_UNICODE);
+        exit(0);
+    }
+
+    // ------------------------------------------------------------------------
+    // ROUTE 6: LẤY DANH SÁCH ĐỘI THI (REAL DATA)
+    // ------------------------------------------------------------------------
+    if ($path === '/api/teams' && $requestMethod === 'GET') {
+        $conn = $entityManager->getConnection();
+        
+        // Lấy danh sách đội thi kèm số thành viên và trưởng nhóm
+        $teamsQuery = "
+            SELECT t.id, t.team_name as name, t.category, t.status, t.join_code as joinCode,
+                   u.name as leaderName,
+                   (SELECT COUNT(*) FROM users m WHERE m.team_id = t.id) as members,
+                   (
+                       SELECT GROUP_CONCAT(m.skills SEPARATOR ', ') 
+                       FROM users m 
+                       WHERE m.team_id = t.id AND m.skills IS NOT NULL
+                   ) as skillsCombined
+            FROM teams t
+            LEFT JOIN users u ON t.leader_id = u.id
+        ";
+        
+        $teams = $conn->executeQuery($teamsQuery)->fetchAllAssociative();
+        
+        // Định dạng lại các trường cho khớp với Frontend
+        $formattedTeams = array_map(function($team) use ($conn) {
+            $teamId = (int)$team['id'];
+            
+            // Tính tổng điểm trung bình các tiêu chí chấm điểm
+            $scoreQuery = "
+                SELECT COALESCE(SUM(avg_score), 0) as total_score
+                FROM (
+                    SELECT AVG(score) as avg_score
+                    FROM scores
+                    WHERE team_id = :teamId
+                    GROUP BY criteria_id
+                ) as crit_scores
+            ";
+            $totalScore = $conn->executeQuery($scoreQuery, ['teamId' => $teamId])->fetchOne();
+            
+            // Lấy danh sách công nghệ chính từ kỹ năng thành viên
+            $techList = [];
+            if (!empty($team['skillsCombined'])) {
+                $skills = explode(',', $team['skillsCombined']);
+                foreach ($skills as $skill) {
+                    $trimmed = trim($skill);
+                    if (!empty($trimmed) && !in_array($trimmed, $techList)) {
+                        $techList[] = $trimmed;
+                    }
+                }
+            }
+            if (empty($techList)) {
+                $techList = ['HTML', 'CSS', 'Javascript'];
+            }
+            $techList = array_slice($techList, 0, 4);
+
+            return [
+                "id" => $teamId,
+                "name" => $team['name'],
+                "members" => (int)$team['members'],
+                "category" => $team['category'],
+                "status" => $team['status'],
+                "joinCode" => $team['joinCode'],
+                "leaderName" => $team['leaderName'],
+                "score" => (float)number_format((float)$totalScore, 1),
+                "tech" => $techList
+            ];
+        }, $teams);
+
+        http_response_code(200);
+        echo json_encode([
+            "status" => "success",
+            "data" => $formattedTeams
+        ], JSON_UNESCAPED_UNICODE);
+        exit(0);
+    }
+
+    // ------------------------------------------------------------------------
+    // ROUTE 7: LẤY BẢNG XẾP HẠNG (REAL DATA)
+    // ------------------------------------------------------------------------
+    if ($path === '/api/leaderboard' && $requestMethod === 'GET') {
+        $conn = $entityManager->getConnection();
+        
+        $teams = $conn->executeQuery("SELECT id, team_name as name, category FROM teams")->fetchAllAssociative();
+        
+        $leaderboard = array_map(function($team) use ($conn) {
+            $teamId = (int)$team['id'];
+            
+            // Lấy điểm trung bình từng tiêu chí của đội
+            $innovation = $conn->executeQuery("SELECT COALESCE(AVG(score), 0) FROM scores WHERE team_id = :teamId AND criteria_id = 1", ['teamId' => $teamId])->fetchOne();
+            $technical = $conn->executeQuery("SELECT COALESCE(AVG(score), 0) FROM scores WHERE team_id = :teamId AND criteria_id = 2", ['teamId' => $teamId])->fetchOne();
+            $presentation = $conn->executeQuery("SELECT COALESCE(AVG(score), 0) FROM scores WHERE team_id = :teamId AND criteria_id = 3", ['teamId' => $teamId])->fetchOne();
+            $feasibility = $conn->executeQuery("SELECT COALESCE(AVG(score), 0) FROM scores WHERE team_id = :teamId AND criteria_id = 4", ['teamId' => $teamId])->fetchOne();
+            
+            // Lấy thông tin thành viên & công nghệ
+            $memberCount = $conn->executeQuery("SELECT COUNT(*) FROM users WHERE team_id = :teamId", ['teamId' => $teamId])->fetchOne();
+            
+            $skillsQuery = "SELECT GROUP_CONCAT(skills SEPARATOR ', ') FROM users WHERE team_id = :teamId AND skills IS NOT NULL";
+            $skillsCombined = $conn->executeQuery($skillsQuery, ['teamId' => $teamId])->fetchOne();
+            
+            $techList = [];
+            if (!empty($skillsCombined)) {
+                $skills = explode(',', $skillsCombined);
+                foreach ($skills as $skill) {
+                    $trimmed = trim($skill);
+                    if (!empty($trimmed) && !in_array($trimmed, $techList)) {
+                        $techList[] = $trimmed;
+                    }
+                }
+            }
+            if (empty($techList)) {
+                $techList = ['React', 'Node.js'];
+            }
+            $techList = array_slice($techList, 0, 3);
+            
+            $totalScore = (float)$innovation + (float)$technical + (float)$presentation + (float)$feasibility;
+
+            return [
+                "teamId" => $teamId,
+                "team" => $team['name'],
+                "category" => $team['category'],
+                "innovation" => round((float)$innovation, 1),
+                "technical" => round((float)$technical, 1),
+                "presentation" => round((float)$presentation, 1),
+                "feasibility" => round((float)$feasibility, 1),
+                "score" => round($totalScore, 1),
+                "members" => (int)$memberCount,
+                "tech" => $techList
+            ];
+        }, $teams);
+        
+        // Sắp xếp bảng xếp hạng theo tổng điểm giảm dần
+        usort($leaderboard, function($a, $b) {
+            if ($b['score'] == $a['score']) {
+                return 0;
+            }
+            return ($b['score'] < $a['score']) ? -1 : 1;
+        });
+        
+        // Gán thứ hạng
+        foreach ($leaderboard as $index => &$entry) {
+            $entry['rank'] = $index + 1;
+        }
+
+        http_response_code(200);
+        echo json_encode([
+            "status" => "success",
+            "data" => $leaderboard
+        ], JSON_UNESCAPED_UNICODE);
+        exit(0);
+    }
+
+    // ------------------------------------------------------------------------
     // LỖI 404: KHÔNG TÌM THẤY ENDPOINT PHÙ HỢP
     // ------------------------------------------------------------------------
     http_response_code(404);
