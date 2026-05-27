@@ -11,6 +11,9 @@ use Exception; // ĐÃ SỬA: Xóa bỏ App\ để dùng Exception chuẩn của
 class AuthService
 {
     private UserRepositoryInterface $userRepository;
+    
+    // Khóa bí mật dùng chung để mã hóa và giải mã Token
+    private const SECRET_KEY = "SEAL_HACKATHON_SUPER_SECRET_KEY_2026";
 
     // Injection Interface từ tầng Domain, đảm bảo tính độc lập
     public function __construct(UserRepositoryInterface $userRepository)
@@ -57,6 +60,36 @@ class AuthService
     }
 
     /**
+     * Kịch bản xử lý Tạo tài khoản Ban giám khảo (JUDGE)
+     * Chỉ ADMIN mới được phép gọi hàm này (Được bảo vệ ở tầng Controller)
+     */
+    public function registerJudge(RegisterRequestDTO $dto): User
+    {
+        if (empty($dto->username) || !filter_var($dto->email, FILTER_VALIDATE_EMAIL) || strlen($dto->password) < 6) {
+            throw new Exception("Dữ liệu đầu vào không hợp lệ!");
+        }
+
+        if ($this->userRepository->findByEmail($dto->email)) {
+            throw new Exception("Email này đã được sử dụng!");
+        }
+
+        $hashedPassword = password_hash($dto->password, PASSWORD_BCRYPT);
+
+        // Khởi tạo Entity User với vai trò JUDGE
+        $user = new User(
+            username: $dto->username,
+            email: $dto->email,
+            password: $hashedPassword,
+            role: 'JUDGE' // Ép cứng vai trò giám khảo
+        );
+
+        $this->userRepository->save($user);
+
+        return $user;
+    }
+
+
+    /**
      * Kịch bản xử lý Đăng nhập (Bằng chính xác Email & Password)
      */
     public function login(LoginRequestDTO $dto): array
@@ -77,7 +110,8 @@ class AuthService
             'user' => [
                 'id'       => $user->id,
                 'username' => $user->username,
-                'email'    => $user->email
+                'email'    => $user->email,
+                'role'     => $user->role
             ]
         ];
     }
@@ -94,13 +128,49 @@ class AuthService
             'exp'  => time() + 86400 // Token có giá trị trong 24 giờ
         ]));
 
-        // Khóa bí mật của hệ thống
-        $secretKey = "SEAL_HACKATHON_SUPER_SECRET_KEY_2026";
+        // Sử dụng khóa bí mật chung
+        $secretKey = self::SECRET_KEY;
 
         // Ký số bảo mật chống giả mạo
         $signature = hash_hmac('sha256', "$header.$payload", $secretKey, true);
         $signature = base64_encode($signature);
 
         return "$header.$payload.$signature";
+    }
+
+    /**
+     * Xác thực Token và trả về User nếu hợp lệ
+     */
+    public function verifyToken(string $token): User
+    {
+        $parts = explode('.', $token);
+        if (count($parts) !== 3) {
+            throw new Exception("Token không hợp lệ!");
+        }
+
+        [$header, $payload, $signature] = $parts;
+
+        // Ký lại để kiểm tra xem có khớp không
+        $expectedSignature = base64_encode(hash_hmac('sha256', "$header.$payload", self::SECRET_KEY, true));
+        if (!hash_equals($expectedSignature, $signature)) {
+            throw new Exception("Chữ ký Token không hợp lệ hoặc đã bị sửa đổi!");
+        }
+
+        $payloadData = json_decode(base64_decode($payload), true);
+        if (!isset($payloadData['exp']) || $payloadData['exp'] < time()) {
+            throw new Exception("Token đã hết hạn!");
+        }
+
+        if (!isset($payloadData['id'])) {
+            throw new Exception("Dữ liệu Token bị hỏng!");
+        }
+
+        // Lấy User từ DB
+        $user = $this->userRepository->findById($payloadData['id']);
+        if (!$user) {
+            throw new Exception("Tài khoản không còn tồn tại trong hệ thống!");
+        }
+
+        return $user;
     }
 }

@@ -13,8 +13,8 @@ $config = ORMSetup::createAttributeMetadataConfiguration(
 
 $connectionParams = [
     'dbname'   => 'CleanDb',
-    'user'     => 'root',
-    'password' => 'root_secret_password',
+    'user'     => 'clean_user',
+    'password' => 'user_secret_password',
     'host'     => 'db', 
     'port'     => 3306, 
     'driver'   => 'pdo_mysql',
