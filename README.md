@@ -64,7 +64,7 @@ Bước 2: Cập nhật Cấu trúc Bảng Database (Doctrine)
 Để tự động tạo và cập nhật các bảng cơ sở dữ liệu dựa trên cấu trúc Thực thể (Entities) của Backend, hãy chạy lệnh sau:
 
 Bash
-docker exec php_clean_backend vendor/bin/doctrine orm:schema-tool:update --force
+docker exec php_clean_backend php doctrine-cli.php orm:schema-tool:update --force
 Bước 3: Khởi chạy Giao diện Frontend (React)
 Mở một Terminal mới và di chuyển vào thư mục Frontend:
 

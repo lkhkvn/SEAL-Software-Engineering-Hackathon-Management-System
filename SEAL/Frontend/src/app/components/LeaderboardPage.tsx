@@ -1,94 +1,36 @@
-import { useState } from 'react';
-import { Trophy, Medal, Award, TrendingUp, Users, Code } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Trophy, Medal, Award, TrendingUp, Users, Code, Loader2 } from 'lucide-react';
 
 export function LeaderboardPage() {
-  const [selectedEvent, setSelectedEvent] = useState('all');
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [leaderboard, setLeaderboard] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const events = [
-    { id: 'all', name: 'Tất cả sự kiện' },
-    { id: '1', name: 'AI Innovation Hackathon 2026' },
-    { id: '2', name: 'FinTech Challenge' },
-    { id: '3', name: 'Green Tech Hackathon' },
-  ];
+  useEffect(() => {
+    const fetchLeaderboard = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/index.php/api/leaderboard');
+        const result = await response.json();
+        if (!response.ok || result.status === 'error') {
+          throw new Error(result.message || 'Không thể tải bảng xếp hạng.');
+        }
+        setLeaderboard(result.data || []);
+      } catch (err: any) {
+        setError(err.message || 'Lỗi kết nối máy chủ.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchLeaderboard();
+  }, []);
 
-  const leaderboard = [
-    {
-      rank: 1,
-      team: 'AI Innovators',
-      event: 'AI Innovation Hackathon 2026',
-      score: 95,
-      innovation: 28,
-      technical: 24,
-      presentation: 18,
-      feasibility: 25,
-      members: 5,
-      tech: ['Python', 'TensorFlow', 'React'],
-    },
-    {
-      rank: 2,
-      team: 'Code Warriors',
-      event: 'AI Innovation Hackathon 2026',
-      score: 92,
-      innovation: 27,
-      technical: 23,
-      presentation: 19,
-      feasibility: 23,
-      members: 4,
-      tech: ['Node.js', 'MongoDB', 'Vue.js'],
-    },
-    {
-      rank: 3,
-      team: 'Tech Titans',
-      event: 'FinTech Challenge',
-      score: 90,
-      innovation: 26,
-      technical: 23,
-      presentation: 18,
-      feasibility: 23,
-      members: 5,
-      tech: ['Java', 'Spring', 'Angular'],
-    },
-    {
-      rank: 4,
-      team: 'Digital Nomads',
-      event: 'Green Tech Hackathon',
-      score: 88,
-      innovation: 25,
-      technical: 22,
-      presentation: 17,
-      feasibility: 24,
-      members: 3,
-      tech: ['Go', 'PostgreSQL', 'Svelte'],
-    },
-    {
-      rank: 5,
-      team: 'Byte Builders',
-      event: 'AI Innovation Hackathon 2026',
-      score: 87,
-      innovation: 26,
-      technical: 21,
-      presentation: 17,
-      feasibility: 23,
-      members: 5,
-      tech: ['Python', 'FastAPI', 'React Native'],
-    },
-    {
-      rank: 6,
-      team: 'Cloud Ninjas',
-      event: 'FinTech Challenge',
-      score: 85,
-      innovation: 24,
-      technical: 22,
-      presentation: 16,
-      feasibility: 23,
-      members: 4,
-      tech: ['Rust', 'WebAssembly', 'Next.js'],
-    },
-  ];
+  // Lọc danh mục động từ dữ liệu thật
+  const categories = ['all', ...Array.from(new Set(leaderboard.map(item => item.category)))];
 
-  const filteredLeaderboard = selectedEvent === 'all'
+  const filteredLeaderboard = selectedCategory === 'all'
     ? leaderboard
-    : leaderboard.filter((entry) => entry.event === events.find((e) => e.id === selectedEvent)?.name);
+    : leaderboard.filter((entry) => entry.category === selectedCategory);
 
   const getRankColor = (rank: number) => {
     if (rank === 1) return 'from-yellow-400 to-yellow-600';
@@ -104,35 +46,64 @@ export function LeaderboardPage() {
     return TrendingUp;
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center py-16 gap-3">
+        <Loader2 className="text-blue-600 animate-spin" size={40} />
+        <span className="text-sm text-gray-500 font-medium">Đang tải bảng xếp hạng...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center py-16 px-4">
+        <div className="max-w-md w-full bg-white p-6 rounded-xl shadow border border-gray-200 text-center">
+          <div className="text-red-500 text-3xl font-bold mb-2">Lỗi tải dữ liệu</div>
+          <p className="text-gray-600 mb-4">{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm"
+          >
+            Thử tải lại
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-purple-700 text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <h1 className="text-4xl font-bold mb-4">Bảng xếp hạng</h1>
           <p className="text-blue-100 text-lg">
-            Theo dõi thành tích và xếp hạng của các đội thi
+            Theo dõi thành tích, điểm số chi tiết các tiêu chí và xếp hạng của các đội thi
           </p>
         </div>
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        
+        {/* Bộ lọc danh mục */}
         <div className="mb-6">
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Lọc theo sự kiện
+            Lọc theo danh mục công nghệ
           </label>
           <select
-            value={selectedEvent}
-            onChange={(e) => setSelectedEvent(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-sm font-medium text-gray-700 cursor-pointer shadow-sm"
           >
-            {events.map((event) => (
-              <option key={event.id} value={event.id}>
-                {event.name}
+            {categories.map((cat) => (
+              <option key={cat} value={cat}>
+                {cat === 'all' ? 'Tất cả danh mục' : cat}
               </option>
             ))}
           </select>
         </div>
 
+        {/* Top 3 đội dẫn đầu */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           {filteredLeaderboard.slice(0, 3).map((entry) => {
             const Icon = getRankIcon(entry.rank);
@@ -160,28 +131,28 @@ export function LeaderboardPage() {
                     </div>
                     <div className="text-right">
                       <div className="text-3xl font-bold text-gray-900">{entry.score}</div>
-                      <div className="text-sm text-gray-500">điểm</div>
+                      <div className="text-xs text-gray-500 font-semibold">điểm</div>
                     </div>
                   </div>
 
-                  <h3 className="text-xl font-bold text-gray-900 mb-2">{entry.team}</h3>
-                  <p className="text-sm text-gray-600 mb-4 line-clamp-1">{entry.event}</p>
+                  <h3 className="text-xl font-bold text-gray-900 mb-2 line-clamp-1">{entry.team}</h3>
+                  <p className="text-sm text-gray-500 mb-4 font-semibold">Danh mục: {entry.category}</p>
 
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div className="bg-blue-50 rounded p-2">
-                      <div className="text-gray-600">Sáng tạo</div>
+                      <div className="text-gray-600 font-medium">Sáng tạo</div>
                       <div className="font-bold text-blue-600">{entry.innovation}/30</div>
                     </div>
                     <div className="bg-green-50 rounded p-2">
-                      <div className="text-gray-600">Kỹ thuật</div>
+                      <div className="text-gray-600 font-medium">Kỹ thuật</div>
                       <div className="font-bold text-green-600">{entry.technical}/25</div>
                     </div>
                     <div className="bg-purple-50 rounded p-2">
-                      <div className="text-gray-600">Trình bày</div>
+                      <div className="text-gray-600 font-medium">Trình bày</div>
                       <div className="font-bold text-purple-600">{entry.presentation}/20</div>
                     </div>
                     <div className="bg-orange-50 rounded p-2">
-                      <div className="text-gray-600">Khả thi</div>
+                      <div className="text-gray-600 font-medium">Khả thi</div>
                       <div className="font-bold text-orange-600">{entry.feasibility}/25</div>
                     </div>
                   </div>
@@ -191,7 +162,8 @@ export function LeaderboardPage() {
           })}
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        {/* Bảng xếp hạng chi tiết */}
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
@@ -203,7 +175,7 @@ export function LeaderboardPage() {
                     Đội thi
                   </th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">
-                    Sự kiện
+                    Danh mục
                   </th>
                   <th className="px-6 py-4 text-center text-sm font-semibold text-gray-900">
                     Sáng tạo
@@ -247,7 +219,7 @@ export function LeaderboardPage() {
                         {entry.tech.map((tech, index) => (
                           <span
                             key={index}
-                            className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded"
+                            className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded font-medium"
                           >
                             {tech}
                           </span>
@@ -255,24 +227,24 @@ export function LeaderboardPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <span className="text-sm text-gray-600">{entry.event}</span>
+                      <span className="text-sm text-gray-600 font-medium">{entry.category}</span>
                     </td>
                     <td className="px-6 py-4 text-center">
-                      <span className="text-sm font-medium text-gray-900">{entry.innovation}</span>
+                      <span className="text-sm font-semibold text-gray-900">{entry.innovation}</span>
                       <span className="text-xs text-gray-500">/30</span>
                     </td>
                     <td className="px-6 py-4 text-center">
-                      <span className="text-sm font-medium text-gray-900">{entry.technical}</span>
+                      <span className="text-sm font-semibold text-gray-900">{entry.technical}</span>
                       <span className="text-xs text-gray-500">/25</span>
                     </td>
                     <td className="px-6 py-4 text-center">
-                      <span className="text-sm font-medium text-gray-900">
+                      <span className="text-sm font-semibold text-gray-900">
                         {entry.presentation}
                       </span>
                       <span className="text-xs text-gray-500">/20</span>
                     </td>
                     <td className="px-6 py-4 text-center">
-                      <span className="text-sm font-medium text-gray-900">{entry.feasibility}</span>
+                      <span className="text-sm font-semibold text-gray-900">{entry.feasibility}</span>
                       <span className="text-xs text-gray-500">/25</span>
                     </td>
                     <td className="px-6 py-4 text-center">
@@ -284,6 +256,12 @@ export function LeaderboardPage() {
             </table>
           </div>
         </div>
+
+        {filteredLeaderboard.length === 0 && (
+          <div className="text-center py-12">
+            <p className="text-gray-500">Không tìm thấy đội thi nào phù hợp.</p>
+          </div>
+        )}
       </div>
     </div>
   );

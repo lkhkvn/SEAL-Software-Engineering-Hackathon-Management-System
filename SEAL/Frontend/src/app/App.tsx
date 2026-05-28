@@ -11,10 +11,10 @@ import { LoginPage } from './components/LoginPage';
 import { RegisterPage } from './components/RegisterPage';
 
 // Component Layout chung bọc thanh điều hướng Navigation
-function MainLayout() {
+function MainLayout({ currentUser, onLogout }: { currentUser: any, onLogout: () => void }) {
   return (
     <>
-      <Navigation />
+      <Navigation currentUser={currentUser} onLogout={onLogout} />
       <Outlet /> {/* Khu vực hiển thị nội dung của các trang con */}
     </>
   );
@@ -23,27 +23,40 @@ function MainLayout() {
 // Hợp nhất các tuyến đường vào đây để sử dụng được hook useNavigate() hợp lệ của React Router
 function AppRoutes() {
   const navigate = useNavigate();
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [currentUser, setCurrentUser] = useState<any>(() => {
+    const savedUser = localStorage.getItem('user');
+    return savedUser ? JSON.parse(savedUser) : null;
+  });
 
   // Xử lý khi đăng nhập thành công từ API Backend
   const handleLoginSuccess = (userData: any) => {
     setCurrentUser(userData);
+    localStorage.setItem('user', JSON.stringify(userData));
     console.log("Đăng nhập thành công! Dữ liệu User:", userData);
     
     // Điều hướng về trang chủ sau khi xác thực thành công
     navigate('/');
   };
 
+  // Xử lý khi đăng xuất
+  const handleLogout = () => {
+    setCurrentUser(null);
+    localStorage.removeItem('user');
+    localStorage.removeItem('auth_token');
+    console.log("Đã đăng xuất khỏi hệ thống!");
+    navigate('/login');
+  };
+
   return (
     <Routes>
       {/* Nhóm 1: Các trang CÓ hiển thị thanh Navigation phía trên */}
-      <Route element={<MainLayout />}>
+      <Route element={<MainLayout currentUser={currentUser} onLogout={handleLogout} />}>
         <Route path="/" element={<HomePage />} />
         <Route path="/events" element={<EventsPage />} />
         <Route path="/events/:id" element={<EventDetailPage />} />
         <Route path="/teams" element={<TeamsPage />} />
         <Route path="/leaderboard" element={<LeaderboardPage />} />
-        <Route path="/admin" element={<AdminPage />} />
+        <Route path="/admin" element={<AdminPage currentUser={currentUser} />} />
       </Route>
 
       {/* Nhóm 2: Các trang KHÔNG hiển thị thanh Navigation (Ẩn hoàn toàn) */}
