@@ -37,18 +37,4 @@ class User
     {
         return password_verify($password, $this->password);
     }
-
-    public function withRole(string $role): User
-    {
-        return new User(
-            username: $this->username,
-            email: $this->email,
-            password: $this->password,
-            role: $role,
-            phone: $this->phone,
-            skills: $this->skills,
-            teamId: $this->teamId,
-            id: $this->id
-        );
-    }
 }
