@@ -405,6 +405,191 @@ try {
     }
 
     // ------------------------------------------------------------------------
+    // API: HACKATHONS
+    // ------------------------------------------------------------------------
+    if ($path === '/api/hackathons' && $requestMethod === 'POST') {
+        $inputData = json_decode(file_get_contents('php://input'), true) ?? [];
+        $hackathon = new \App\Infrastructure\Model\HackathonModel();
+        $hackathon->name = $inputData['name'] ?? 'Untitled Hackathon';
+        $hackathon->description = $inputData['description'] ?? null;
+        if (!empty($inputData['startDate'])) $hackathon->startDate = new \DateTime($inputData['startDate']);
+        if (!empty($inputData['endDate'])) $hackathon->endDate = new \DateTime($inputData['endDate']);
+        if (!empty($inputData['registrationStart'])) $hackathon->registrationStart = new \DateTime($inputData['registrationStart']);
+        if (!empty($inputData['registrationEnd'])) $hackathon->registrationEnd = new \DateTime($inputData['registrationEnd']);
+        if (!empty($inputData['status'])) $hackathon->status = $inputData['status'];
+
+        $entityManager->persist($hackathon);
+        $entityManager->flush();
+
+        http_response_code(201);
+        echo json_encode(["status" => "success", "message" => "Hackathon created", "id" => $hackathon->id], JSON_UNESCAPED_UNICODE);
+        exit(0);
+    }
+
+    if ($path === '/api/hackathons' && $requestMethod === 'GET') {
+        $repo = $entityManager->getRepository(\App\Infrastructure\Model\HackathonModel::class);
+        $hackathons = $repo->findAll();
+        $data = array_map(function($h) {
+            return [
+                "id" => $h->id,
+                "name" => $h->name,
+                "description" => $h->description,
+                "startDate" => $h->startDate ? $h->startDate->format('c') : null,
+                "endDate" => $h->endDate ? $h->endDate->format('c') : null,
+                "registrationStart" => $h->registrationStart ? $h->registrationStart->format('c') : null,
+                "registrationEnd" => $h->registrationEnd ? $h->registrationEnd->format('c') : null,
+                "status" => $h->status
+            ];
+        }, $hackathons);
+        http_response_code(200);
+        echo json_encode(["status" => "success", "data" => $data], JSON_UNESCAPED_UNICODE);
+        exit(0);
+    }
+
+    if (preg_match('#^/api/hackathons/(\d+)$#', $path, $matches)) {
+        $id = (int)$matches[1];
+        $repo = $entityManager->getRepository(\App\Infrastructure\Model\HackathonModel::class);
+        $hackathon = $repo->find($id);
+
+        if (!$hackathon) {
+            http_response_code(404);
+            echo json_encode(["status" => "error", "message" => "Hackathon not found"], JSON_UNESCAPED_UNICODE);
+            exit(0);
+        }
+
+        if ($requestMethod === 'GET') {
+            http_response_code(200);
+            echo json_encode(["status" => "success", "data" => [
+                "id" => $hackathon->id,
+                "name" => $hackathon->name,
+                "description" => $hackathon->description,
+                "startDate" => $hackathon->startDate ? $hackathon->startDate->format('c') : null,
+                "endDate" => $hackathon->endDate ? $hackathon->endDate->format('c') : null,
+                "registrationStart" => $hackathon->registrationStart ? $hackathon->registrationStart->format('c') : null,
+                "registrationEnd" => $hackathon->registrationEnd ? $hackathon->registrationEnd->format('c') : null,
+                "status" => $hackathon->status
+            ]], JSON_UNESCAPED_UNICODE);
+            exit(0);
+        }
+
+        if ($requestMethod === 'PUT') {
+            $inputData = json_decode(file_get_contents('php://input'), true) ?? [];
+            if (isset($inputData['name'])) $hackathon->name = $inputData['name'];
+            if (isset($inputData['description'])) $hackathon->description = $inputData['description'];
+            if (isset($inputData['startDate'])) $hackathon->startDate = new \DateTime($inputData['startDate']);
+            if (isset($inputData['endDate'])) $hackathon->endDate = new \DateTime($inputData['endDate']);
+            if (isset($inputData['registrationStart'])) $hackathon->registrationStart = new \DateTime($inputData['registrationStart']);
+            if (isset($inputData['registrationEnd'])) $hackathon->registrationEnd = new \DateTime($inputData['registrationEnd']);
+            if (isset($inputData['status'])) $hackathon->status = $inputData['status'];
+
+            $entityManager->flush();
+            http_response_code(200);
+            echo json_encode(["status" => "success", "message" => "Hackathon updated"], JSON_UNESCAPED_UNICODE);
+            exit(0);
+        }
+
+        if ($requestMethod === 'DELETE') {
+            $entityManager->remove($hackathon);
+            $entityManager->flush();
+            http_response_code(200);
+            echo json_encode(["status" => "success", "message" => "Hackathon deleted"], JSON_UNESCAPED_UNICODE);
+            exit(0);
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // API: MILESTONES
+    // ------------------------------------------------------------------------
+    if (preg_match('#^/api/hackathons/(\d+)/milestones$#', $path, $matches)) {
+        $hackathonId = (int)$matches[1];
+        $repo = $entityManager->getRepository(\App\Infrastructure\Model\MilestoneModel::class);
+
+        if ($requestMethod === 'POST') {
+            $inputData = json_decode(file_get_contents('php://input'), true) ?? [];
+            $milestone = new \App\Infrastructure\Model\MilestoneModel();
+            $milestone->hackathonId = $hackathonId;
+            $milestone->name = $inputData['name'] ?? 'Untitled Milestone';
+            $milestone->description = $inputData['description'] ?? null;
+            if (!empty($inputData['dueDate'])) $milestone->dueDate = new \DateTime($inputData['dueDate']);
+
+            $entityManager->persist($milestone);
+            $entityManager->flush();
+
+            http_response_code(201);
+            echo json_encode(["status" => "success", "message" => "Milestone created", "id" => $milestone->id], JSON_UNESCAPED_UNICODE);
+            exit(0);
+        }
+
+        if ($requestMethod === 'GET') {
+            $milestones = $repo->findBy(['hackathonId' => $hackathonId]);
+            $data = array_map(function($m) {
+                return [
+                    "id" => $m->id,
+                    "hackathonId" => $m->hackathonId,
+                    "name" => $m->name,
+                    "description" => $m->description,
+                    "dueDate" => $m->dueDate ? $m->dueDate->format('c') : null
+                ];
+            }, $milestones);
+            http_response_code(200);
+            echo json_encode(["status" => "success", "data" => $data], JSON_UNESCAPED_UNICODE);
+            exit(0);
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // API: SCHEDULES
+    // ------------------------------------------------------------------------
+    if ($path === '/api/schedules') {
+        $repo = $entityManager->getRepository(\App\Infrastructure\Model\ScheduleModel::class);
+
+        if ($requestMethod === 'POST') {
+            $inputData = json_decode(file_get_contents('php://input'), true) ?? [];
+            $schedule = new \App\Infrastructure\Model\ScheduleModel();
+            $schedule->title = $inputData['title'] ?? 'Untitled Event';
+            $schedule->description = $inputData['description'] ?? null;
+            if (!empty($inputData['hackathonId'])) $schedule->hackathonId = (int)$inputData['hackathonId'];
+            if (!empty($inputData['startTime'])) $schedule->startTime = new \DateTime($inputData['startTime']);
+            else $schedule->startTime = new \DateTime(); // Require start time
+            if (!empty($inputData['endTime'])) $schedule->endTime = new \DateTime($inputData['endTime']);
+            $schedule->location = $inputData['location'] ?? null;
+
+            $entityManager->persist($schedule);
+            $entityManager->flush();
+
+            http_response_code(201);
+            echo json_encode(["status" => "success", "message" => "Schedule created", "id" => $schedule->id], JSON_UNESCAPED_UNICODE);
+            exit(0);
+        }
+
+        if ($requestMethod === 'GET') {
+            // Optional filter by hackathonId
+            $hackathonId = $_GET['hackathonId'] ?? null;
+            $criteria = [];
+            if ($hackathonId) {
+                $criteria['hackathonId'] = (int)$hackathonId;
+            }
+            $schedules = $repo->findBy($criteria);
+            
+            $data = array_map(function($s) {
+                return [
+                    "id" => $s->id,
+                    "hackathonId" => $s->hackathonId,
+                    "title" => $s->title,
+                    "description" => $s->description,
+                    "startTime" => $s->startTime ? $s->startTime->format('c') : null,
+                    "endTime" => $s->endTime ? $s->endTime->format('c') : null,
+                    "location" => $s->location
+                ];
+            }, $schedules);
+
+            http_response_code(200);
+            echo json_encode(["status" => "success", "data" => $data], JSON_UNESCAPED_UNICODE);
+            exit(0);
+        }
+    }
+
+    // ------------------------------------------------------------------------
     // LỖI 404: KHÔNG TÌM THẤY ENDPOINT PHÙ HỢP
     // ------------------------------------------------------------------------
     http_response_code(404);
