@@ -260,7 +260,7 @@ try {
     if ($path === '/api/teams' && $requestMethod === 'GET') {
         $conn = $entityManager->getConnection();
         
-        // Lấy danh sách đội thi kèm số thành viên và trưởng nhóm
+        // Lấy danh sách đội thi kèm số thành viên, trưởng nhóm và thông tin dự án
         $teamsQuery = "
             SELECT t.id, t.team_name as name, t.category, t.status, t.join_code as joinCode,
                    u.name as leaderName,
@@ -269,9 +269,14 @@ try {
                        SELECT GROUP_CONCAT(m.skills SEPARATOR ', ') 
                        FROM users m 
                        WHERE m.team_id = t.id AND m.skills IS NOT NULL
-                   ) as skillsCombined
+                   ) as skillsCombined,
+                   s.project_name as projectName,
+                   s.description as projectDescription,
+                   s.github_url as githubUrl,
+                   s.demo_video_url as demoVideoUrl
             FROM teams t
             LEFT JOIN users u ON t.leader_id = u.id
+            LEFT JOIN submissions s ON s.team_id = t.id
         ";
         
         $teams = $conn->executeQuery($teamsQuery)->fetchAllAssociative();
@@ -317,7 +322,13 @@ try {
                 "joinCode" => $team['joinCode'],
                 "leaderName" => $team['leaderName'],
                 "score" => (float)number_format((float)$totalScore, 1),
-                "tech" => $techList
+                "tech" => $techList,
+                "project" => $team['projectName'] ? [
+                    "name" => $team['projectName'],
+                    "description" => $team['projectDescription'],
+                    "githubUrl" => $team['githubUrl'],
+                    "demoVideoUrl" => $team['demoVideoUrl']
+                ] : null
             ];
         }, $teams);
 
@@ -405,9 +416,145 @@ try {
     }
 
     // ------------------------------------------------------------------------
+    // API: ĐĂNG KÝ / TẠO / THAM GIA ĐỘI THI (REAL DATA)
+    // ------------------------------------------------------------------------
+    if ($path === '/api/teams' && $requestMethod === 'POST') {
+        $headers = getallheaders();
+        $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+        if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
+            throw new Exception("Yêu cầu phải có Token xác thực hợp lệ!");
+        }
+
+        $token = $matches[1];
+        $currentUser = $authService->verifyToken($token);
+
+        $inputData = json_decode(file_get_contents('php://input'), true) ?? [];
+        $teamName = $inputData['name'] ?? '';
+        $category = $inputData['category'] ?? 'AI & ML';
+        
+        if (empty($teamName)) {
+            throw new Exception("Tên đội thi không được để trống!");
+        }
+
+        $conn = $entityManager->getConnection();
+        
+        // Kiểm tra xem tên đội đã tồn tại chưa
+        $existingTeam = $conn->executeQuery("SELECT id FROM teams WHERE team_name = :name", ['name' => $teamName])->fetchOne();
+        if ($existingTeam) {
+            throw new Exception("Tên đội thi này đã tồn tại!");
+        }
+
+        // Tạo mã join code ngẫu nhiên dạng AI123, CW456...
+        $prefix = strtoupper(substr(str_replace(' ', '', $teamName), 0, 2));
+        if (empty($prefix) || strlen($prefix) < 2) {
+            $prefix = 'TM';
+        }
+        $joinCode = $prefix . rand(100, 999);
+
+        // Chèn đội thi vào bảng teams
+        $conn->executeStatement("
+            INSERT INTO teams (team_name, category, join_code, status, leader_id) 
+            VALUES (:teamName, :category, :joinCode, 'APPROVED', :leaderId)
+        ", [
+            'teamName' => $teamName,
+            'category' => $category,
+            'joinCode' => $joinCode,
+            'leaderId' => $currentUser->id
+        ]);
+
+        $teamId = $conn->lastInsertId();
+
+        // Cập nhật team_id cho người tạo (Trưởng nhóm)
+        $conn->executeStatement("
+            UPDATE users SET team_id = :teamId WHERE id = :userId
+        ", [
+            'teamId' => $teamId,
+            'userId' => $currentUser->id
+        ]);
+
+        http_response_code(201);
+        echo json_encode([
+            "status" => "success",
+            "message" => "Tạo đội thi và đăng ký tham gia thành công!",
+            "data" => [
+                "teamId" => (int)$teamId,
+                "teamName" => $teamName,
+                "joinCode" => $joinCode
+            ]
+        ], JSON_UNESCAPED_UNICODE);
+        exit(0);
+    }
+
+    if ($path === '/api/teams/join' && $requestMethod === 'POST') {
+        $headers = getallheaders();
+        $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+        if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
+            throw new Exception("Yêu cầu phải có Token xác thực hợp lệ!");
+        }
+
+        $token = $matches[1];
+        $currentUser = $authService->verifyToken($token);
+
+        $inputData = json_decode(file_get_contents('php://input'), true) ?? [];
+        $joinCode = $inputData['joinCode'] ?? '';
+
+        if (empty($joinCode)) {
+            throw new Exception("Vui lòng nhập mã tham gia!");
+        }
+
+        $conn = $entityManager->getConnection();
+        
+        // Tìm đội thi theo mã joinCode
+        $team = $conn->executeQuery("SELECT id, team_name FROM teams WHERE join_code = :joinCode", ['joinCode' => $joinCode])->fetchAssociative();
+        if (!$team) {
+            throw new Exception("Mã tham gia không chính xác hoặc đội thi không tồn tại!");
+        }
+
+        // Cập nhật team_id cho người dùng
+        $conn->executeStatement("
+            UPDATE users SET team_id = :teamId WHERE id = :userId
+        ", [
+            'teamId' => $team['id'],
+            'userId' => $currentUser->id
+        ]);
+
+        http_response_code(200);
+        echo json_encode([
+            "status" => "success",
+            "message" => "Tham gia đội thi thành công!",
+            "data" => [
+                "teamId" => (int)$team['id'],
+                "teamName" => $team['team_name']
+            ]
+        ], JSON_UNESCAPED_UNICODE);
+        exit(0);
+    }
+
+    // ------------------------------------------------------------------------
+    // API: HACKATHONS
+    // ------------------------------------------------------------------------
+    // ------------------------------------------------------------------------
     // API: HACKATHONS
     // ------------------------------------------------------------------------
     if ($path === '/api/hackathons' && $requestMethod === 'POST') {
+        $headers = getallheaders();
+        $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+        if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
+            throw new Exception("Yêu cầu phải có Token xác thực hợp lệ!");
+        }
+
+        $token = $matches[1];
+        $currentUser = $authService->verifyToken($token);
+
+        if (!$currentUser->isAdmin()) {
+            http_response_code(403);
+            echo json_encode([
+                "status" => "error",
+                "message" => "Chỉ Ban tổ chức (ADMIN) mới có quyền tạo cuộc thi!"
+            ], JSON_UNESCAPED_UNICODE);
+            exit(0);
+        }
+
         $inputData = json_decode(file_get_contents('php://input'), true) ?? [];
         $hackathon = new \App\Infrastructure\Model\HackathonModel();
         $hackathon->name = $inputData['name'] ?? 'Untitled Hackathon';
@@ -417,6 +564,9 @@ try {
         if (!empty($inputData['registrationStart'])) $hackathon->registrationStart = new \DateTime($inputData['registrationStart']);
         if (!empty($inputData['registrationEnd'])) $hackathon->registrationEnd = new \DateTime($inputData['registrationEnd']);
         if (!empty($inputData['status'])) $hackathon->status = $inputData['status'];
+        if (!empty($inputData['category'])) $hackathon->category = $inputData['category'];
+        if (!empty($inputData['location'])) $hackathon->location = $inputData['location'];
+        if (isset($inputData['maxTeams'])) $hackathon->maxTeams = (int)$inputData['maxTeams'];
 
         $entityManager->persist($hackathon);
         $entityManager->flush();
@@ -438,7 +588,10 @@ try {
                 "endDate" => $h->endDate ? $h->endDate->format('c') : null,
                 "registrationStart" => $h->registrationStart ? $h->registrationStart->format('c') : null,
                 "registrationEnd" => $h->registrationEnd ? $h->registrationEnd->format('c') : null,
-                "status" => $h->status
+                "status" => $h->status,
+                "category" => $h->category,
+                "location" => $h->location,
+                "maxTeams" => $h->maxTeams
             ];
         }, $hackathons);
         http_response_code(200);
@@ -467,12 +620,33 @@ try {
                 "endDate" => $hackathon->endDate ? $hackathon->endDate->format('c') : null,
                 "registrationStart" => $hackathon->registrationStart ? $hackathon->registrationStart->format('c') : null,
                 "registrationEnd" => $hackathon->registrationEnd ? $hackathon->registrationEnd->format('c') : null,
-                "status" => $hackathon->status
+                "status" => $hackathon->status,
+                "category" => $hackathon->category,
+                "location" => $hackathon->location,
+                "maxTeams" => $hackathon->maxTeams
             ]], JSON_UNESCAPED_UNICODE);
             exit(0);
         }
 
         if ($requestMethod === 'PUT') {
+            $headers = getallheaders();
+            $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+            if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches_token)) {
+                throw new Exception("Yêu cầu phải có Token xác thực hợp lệ!");
+            }
+
+            $token = $matches_token[1];
+            $currentUser = $authService->verifyToken($token);
+
+            if (!$currentUser->isAdmin()) {
+                http_response_code(403);
+                echo json_encode([
+                    "status" => "error",
+                    "message" => "Chỉ Ban tổ chức (ADMIN) mới có quyền cập nhật cuộc thi!"
+                ], JSON_UNESCAPED_UNICODE);
+                exit(0);
+            }
+
             $inputData = json_decode(file_get_contents('php://input'), true) ?? [];
             if (isset($inputData['name'])) $hackathon->name = $inputData['name'];
             if (isset($inputData['description'])) $hackathon->description = $inputData['description'];
@@ -481,6 +655,9 @@ try {
             if (isset($inputData['registrationStart'])) $hackathon->registrationStart = new \DateTime($inputData['registrationStart']);
             if (isset($inputData['registrationEnd'])) $hackathon->registrationEnd = new \DateTime($inputData['registrationEnd']);
             if (isset($inputData['status'])) $hackathon->status = $inputData['status'];
+            if (isset($inputData['category'])) $hackathon->category = $inputData['category'];
+            if (isset($inputData['location'])) $hackathon->location = $inputData['location'];
+            if (isset($inputData['maxTeams'])) $hackathon->maxTeams = (int)$inputData['maxTeams'];
 
             $entityManager->flush();
             http_response_code(200);
@@ -489,6 +666,24 @@ try {
         }
 
         if ($requestMethod === 'DELETE') {
+            $headers = getallheaders();
+            $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+            if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches_token)) {
+                throw new Exception("Yêu cầu phải có Token xác thực hợp lệ!");
+            }
+
+            $token = $matches_token[1];
+            $currentUser = $authService->verifyToken($token);
+
+            if (!$currentUser->isAdmin()) {
+                http_response_code(403);
+                echo json_encode([
+                    "status" => "error",
+                    "message" => "Chỉ Ban tổ chức (ADMIN) mới có quyền xóa cuộc thi!"
+                ], JSON_UNESCAPED_UNICODE);
+                exit(0);
+            }
+
             $entityManager->remove($hackathon);
             $entityManager->flush();
             http_response_code(200);
