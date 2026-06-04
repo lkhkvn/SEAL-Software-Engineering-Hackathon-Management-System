@@ -33,4 +33,13 @@ class HackathonModel
 
     #[ORM\Column(type: 'string', length: 50, options: ['default' => 'UPCOMING'])]
     public string $status = 'UPCOMING';
+
+    #[ORM\Column(type: 'string', length: 50, nullable: true)]
+    public ?string $category = null;
+
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
+    public ?string $location = null;
+
+    #[ORM\Column(name: 'max_teams', type: 'integer', nullable: true)]
+    public ?int $maxTeams = null;
 }

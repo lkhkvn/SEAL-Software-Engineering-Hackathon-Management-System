@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Calendar, Users, Trophy, Search, Filter, MapPin } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -6,90 +6,61 @@ export function EventsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
 
-  const events = [
-    {
-      id: 1,
-      name: 'AI Innovation Hackathon 2026',
-      date: '15-17/06/2026',
-      location: 'TP. Hồ Chí Minh',
-      teams: 124,
-      maxTeams: 150,
-      prize: '₫150,000,000',
-      status: 'Đang mở đăng ký',
-      category: 'AI & ML',
-      image: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-      description: 'Cuộc thi tập trung vào ứng dụng AI trong đời sống',
-    },
-    {
-      id: 2,
-      name: 'FinTech Challenge',
-      date: '22-24/06/2026',
-      location: 'Hà Nội',
-      teams: 89,
-      maxTeams: 120,
-      prize: '₫100,000,000',
-      status: 'Đang mở đăng ký',
-      category: 'FinTech',
-      image: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-      description: 'Giải pháp công nghệ tài chính sáng tạo',
-    },
-    {
-      id: 3,
-      name: 'Green Tech Hackathon',
-      date: '01-03/07/2026',
-      location: 'Đà Nẵng',
-      teams: 67,
-      maxTeams: 100,
-      prize: '₫80,000,000',
-      status: 'Sắp mở đăng ký',
-      category: 'Sustainability',
-      image: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-      description: 'Công nghệ xanh vì môi trường bền vững',
-    },
-    {
-      id: 4,
-      name: 'Healthcare Innovation',
-      date: '10-12/07/2026',
-      location: 'TP. Hồ Chí Minh',
-      teams: 156,
-      maxTeams: 200,
-      prize: '₫200,000,000',
-      status: 'Đang mở đăng ký',
-      category: 'Healthcare',
-      image: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
-      description: 'Đổi mới sáng tạo trong lĩnh vực y tế',
-    },
-    {
-      id: 5,
-      name: 'EdTech Summit',
-      date: '20-22/07/2026',
-      location: 'Cần Thơ',
-      teams: 45,
-      maxTeams: 80,
-      prize: '₫60,000,000',
-      status: 'Đang diễn ra',
-      category: 'Education',
-      image: 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
-      description: 'Giải pháp công nghệ giáo dục',
-    },
-    {
-      id: 6,
-      name: 'Blockchain Developer Challenge',
-      date: '05-07/08/2026',
-      location: 'Hà Nội',
-      teams: 92,
-      maxTeams: 150,
-      prize: '₫120,000,000',
-      status: 'Đã kết thúc',
-      category: 'Blockchain',
-      image: 'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)',
-      description: 'Ứng dụng blockchain trong thực tế',
-    },
-  ];
+  const [events, setEvents] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchEvents();
+  }, []);
+
+  const fetchEvents = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch('http://localhost:8000/index.php/api/hackathons');
+      const result = await response.json();
+      if (!response.ok || result.status === 'error') {
+        throw new Error(result.message || 'Không thể tải danh sách sự kiện.');
+      }
+      setEvents(result.data || []);
+    } catch (err: any) {
+      setError(err.message || 'Lỗi kết nối API Backend.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatDateRange = (startStr: string | null, endStr: string | null) => {
+    if (!startStr) return 'Chưa xác định';
+    try {
+      const start = new Date(startStr);
+      const end = endStr ? new Date(endStr) : null;
+      
+      const formatDigit = (n: number) => n < 10 ? `0${n}` : n;
+      
+      const startDay = formatDigit(start.getDate());
+      const startMonth = formatDigit(start.getMonth() + 1);
+      const startYear = start.getFullYear();
+      
+      if (end) {
+        const endDay = formatDigit(end.getDate());
+        const endMonth = formatDigit(end.getMonth() + 1);
+        const endYear = end.getFullYear();
+        
+        if (startMonth === endMonth && startYear === endYear) {
+          return `${startDay}-${endDay}/${startMonth}/${startYear}`;
+        }
+        return `${startDay}/${startMonth}/${startYear} - ${endDay}/${endMonth}/${endYear}`;
+      }
+      return `${startDay}/${startMonth}/${startYear}`;
+    } catch (e) {
+      return 'Lỗi ngày tháng';
+    }
+  };
 
   const filteredEvents = events.filter((event) => {
-    const matchesSearch = event.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         event.category.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = (event.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         (event.category || '').toLowerCase().includes(searchQuery.toLowerCase());
     const matchesFilter = filterStatus === 'all' || event.status === filterStatus;
     return matchesSearch && matchesFilter;
   });
@@ -99,6 +70,15 @@ export function EventsPage() {
     'Sắp mở đăng ký': 'bg-blue-100 text-blue-700',
     'Đang diễn ra': 'bg-orange-100 text-orange-700',
     'Đã kết thúc': 'bg-gray-100 text-gray-700',
+    'UPCOMING': 'bg-blue-100 text-blue-700',
+    'ACTIVE': 'bg-green-100 text-green-700',
+    'COMPLETED': 'bg-gray-100 text-gray-700'
+  };
+
+  const statusLabels: Record<string, string> = {
+    'UPCOMING': 'Sắp diễn ra',
+    'ACTIVE': 'Đang diễn ra',
+    'COMPLETED': 'Đã kết thúc'
   };
 
   return (
@@ -138,7 +118,16 @@ export function EventsPage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {loading ? (
+          <div className="text-center py-12">
+            <p className="text-gray-500">Đang tải danh sách sự kiện...</p>
+          </div>
+        ) : error ? (
+          <div className="text-center py-12 text-red-500">
+            <p>{error}</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredEvents.map((event) => (
             <Link
               key={event.id}
@@ -147,18 +136,18 @@ export function EventsPage() {
             >
               <div
                 className="h-40 flex items-center justify-center text-white text-xl font-bold p-6 text-center"
-                style={{ background: event.image }}
+                style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}
               >
                 {event.name}
               </div>
 
               <div className="p-6">
                 <div className="flex items-center justify-between mb-3">
-                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusColors[event.status]}`}>
-                    {event.status}
+                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusColors[event.status] || 'bg-gray-100'}`}>
+                    {statusLabels[event.status] || event.status}
                   </span>
                   <span className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-xs font-medium">
-                    {event.category}
+                    {event.category || 'Khác'}
                   </span>
                 </div>
 
@@ -167,33 +156,34 @@ export function EventsPage() {
                 <div className="space-y-2 text-gray-600 text-sm">
                   <div className="flex items-center gap-2">
                     <Calendar size={16} />
-                    <span>{event.date}</span>
+                    <span>{formatDateRange(event.startDate, event.endDate)}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <MapPin size={16} />
-                    <span>{event.location}</span>
+                    <span>{event.location || 'Chưa công bố'}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Users size={16} />
-                    <span>{event.teams}/{event.maxTeams} đội</span>
+                    <span>0/{event.maxTeams || '∞'} đội</span>
                     <div className="flex-1 bg-gray-200 rounded-full h-2 ml-2">
                       <div
                         className="bg-blue-600 h-2 rounded-full"
-                        style={{ width: `${(event.teams / event.maxTeams) * 100}%` }}
+                        style={{ width: '0%' }}
                       ></div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <Trophy size={16} />
-                    <span className="font-semibold text-gray-900">{event.prize}</span>
+                    <span className="font-semibold text-gray-900">Chi tiết bên trong</span>
                   </div>
                 </div>
               </div>
             </Link>
           ))}
         </div>
+        )}
 
-        {filteredEvents.length === 0 && (
+        {!loading && !error && filteredEvents.length === 0 && (
           <div className="text-center py-12">
             <p className="text-gray-500">Không tìm thấy sự kiện nào</p>
           </div>

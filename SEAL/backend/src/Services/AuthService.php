@@ -77,7 +77,8 @@ class AuthService
             'user' => [
                 'id'       => $user->id,
                 'username' => $user->username,
-                'email'    => $user->email
+                'email'    => $user->email,
+                'role'     => $user->role
             ]
         ];
     }
@@ -102,5 +103,41 @@ class AuthService
         $signature = base64_encode($signature);
 
         return "$header.$payload.$signature";
+    }
+
+    /**
+     * Kịch bản xử lý Xác thực Token
+     */
+    public function verifyToken(string $token): User
+    {
+        $parts = explode('.', $token);
+        if (count($parts) !== 3) {
+            throw new Exception("Token không hợp lệ!");
+        }
+
+        [$header, $payload, $signature] = $parts;
+
+        $secretKey = "SEAL_HACKATHON_SUPER_SECRET_KEY_2026";
+        $validSignature = base64_encode(hash_hmac('sha256', "$header.$payload", $secretKey, true));
+
+        if (!hash_equals($validSignature, $signature)) {
+            throw new Exception("Chữ ký Token không hợp lệ!");
+        }
+
+        $payloadData = json_decode(base64_decode($payload), true);
+        if (!isset($payloadData['id']) || !isset($payloadData['exp'])) {
+            throw new Exception("Dữ liệu Token không hợp lệ!");
+        }
+
+        if (time() > $payloadData['exp']) {
+            throw new Exception("Token đã hết hạn!");
+        }
+
+        $user = $this->userRepository->findById((int)$payloadData['id']);
+        if (!$user) {
+            throw new Exception("Tài khoản không tồn tại!");
+        }
+
+        return $user;
     }
 }
