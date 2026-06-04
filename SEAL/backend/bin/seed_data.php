@@ -11,6 +11,19 @@ echo "Bắt đầu seed dữ liệu mẫu cho hệ thống...\n";
 try {
     // 1. Tắt tạm thời kiểm tra khóa ngoại để dọn dẹp bảng
     $conn->executeStatement('SET FOREIGN_KEY_CHECKS = 0');
+    $conn->executeStatement('CREATE TABLE IF NOT EXISTS team_members (
+        id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+        team_id INT UNSIGNED NOT NULL,
+        user_id INT UNSIGNED NOT NULL,
+        role_in_team VARCHAR(20) NOT NULL DEFAULT \'MEMBER\',
+        joined_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY uniq_team_user (team_id, user_id),
+        KEY idx_team_members_team_id (team_id),
+        KEY idx_team_members_user_id (user_id),
+        CONSTRAINT fk_team_members_team FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE,
+        CONSTRAINT fk_team_members_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci');
     $conn->executeStatement('TRUNCATE TABLE scores');
     $conn->executeStatement('TRUNCATE TABLE submissions');
     $conn->executeStatement('TRUNCATE TABLE judging_assignments');
@@ -19,6 +32,7 @@ try {
     // Xóa tất cả users ngoại trừ Admin (ID=1) và Giám khảo A (testuser, ID=2)
     $conn->executeStatement('DELETE FROM users WHERE id > 2');
     $conn->executeStatement('ALTER TABLE users AUTO_INCREMENT = 3');
+    $conn->executeStatement('TRUNCATE TABLE team_members');
     $conn->executeStatement('SET FOREIGN_KEY_CHECKS = 1');
 
     // 2. Chèn tiêu chí đánh giá (Criteria)
@@ -53,6 +67,12 @@ try {
     $conn->executeStatement("UPDATE users SET team_id = 1 WHERE id IN (3, 4)");
     $conn->executeStatement("UPDATE users SET team_id = 2 WHERE id IN (5, 6)");
     $conn->executeStatement("UPDATE users SET team_id = 3 WHERE id = 7");
+    $conn->executeStatement("INSERT INTO team_members (team_id, user_id, role_in_team) VALUES
+        (1, 3, 'LEAD'),
+        (1, 4, 'MEMBER'),
+        (2, 5, 'LEAD'),
+        (2, 6, 'MEMBER'),
+        (3, 7, 'LEAD')");
     echo "- Đã xếp thành viên vào đội thi tương ứng.\n";
 
     // 6. Tạo các bài nộp (Submissions)
