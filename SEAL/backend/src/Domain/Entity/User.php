@@ -37,4 +37,21 @@ class User
     {
         return password_verify($password, $this->password);
     }
+
+    /**
+     * Trả về bản sao của User với vai trò mới (Immutable pattern)
+     */
+    public function withRole(string $newRole): self
+    {
+        return new self(
+            username: $this->username,
+            email:    $this->email,
+            password: $this->password,
+            role:     $newRole,
+            phone:    $this->phone,
+            skills:   $this->skills,
+            teamId:   $this->teamId,
+            id:       $this->id,
+        );
+    }
 }

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
   Calendar,
@@ -11,55 +11,127 @@ import {
   Award,
   FileText,
   ArrowLeft,
+  Loader2,
 } from 'lucide-react';
 
 export function EventDetailPage() {
   const { id } = useParams();
   const [activeTab, setActiveTab] = useState('overview');
+  
+  const [eventData, setEventData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    const fetchEvent = async () => {
+      try {
+        const res = await fetch(`http://localhost:8000/index.php/api/contests/${id}`);
+        const result = await res.json();
+        if (!res.ok || result.status === 'error') throw new Error(result.message);
+        setEventData(result.data);
+      } catch (e: any) {
+        setError(e.message || 'Lỗi tải chi tiết cuộc thi');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchEvent();
+  }, [id]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center gap-3">
+        <Loader2 className="text-blue-600 animate-spin" size={40} />
+        <span className="text-gray-500 font-medium text-lg">Đang tải thông tin cuộc thi...</span>
+      </div>
+    );
+  }
+
+  if (error || !eventData) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center gap-3">
+        <div className="text-red-500 text-6xl font-bold mb-2">404</div>
+        <span className="text-gray-700 font-medium text-lg">{error || 'Không tìm thấy cuộc thi'}</span>
+        <Link to="/events" className="mt-4 px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold transition-colors">
+          Quay lại danh sách
+        </Link>
+      </div>
+    );
+  }
+
+  // Parse data for UI display
   const event = {
-    id: Number(id),
-    name: 'AI Innovation Hackathon 2026',
-    date: '15-17/06/2026',
-    location: 'TP. Hồ Chí Minh - Trung tâm Đổi mới Sáng tạo Quốc gia (NIC)',
-    teams: 124,
-    maxTeams: 150,
-    prize: '₫150,000,000',
-    status: 'Đang mở đăng ký',
-    category: 'AI & ML',
-    image: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-    description: 'Cuộc thi hackathon tập trung vào việc phát triển các ứng dụng AI và Machine Learning giải quyết các vấn đề thực tế trong đời sống.',
-    organizer: 'Bộ Khoa học và Công nghệ',
-    registrationDeadline: '10/06/2026',
-    prizes: [
-      { rank: 'Giải Nhất', amount: '₫70,000,000', teams: 1 },
-      { rank: 'Giải Nhì', amount: '₫40,000,000', teams: 1 },
-      { rank: 'Giải Ba', amount: '₫25,000,000', teams: 1 },
-      { rank: 'Giải Khuyến khích', amount: '₫5,000,000', teams: 3 },
-    ],
-    schedule: [
-      { time: '15/06 - 08:00', event: 'Check-in và đăng ký', location: 'Sảnh chính' },
-      { time: '15/06 - 09:00', event: 'Lễ khai mạc', location: 'Hội trường A' },
-      { time: '15/06 - 10:00', event: 'Bắt đầu thi đấu', location: 'Khu vực làm việc' },
-      { time: '15/06 - 12:00', event: 'Nghỉ trưa', location: 'Nhà ăn tầng 2' },
-      { time: '16/06 - 14:00', event: 'Checkpoint 1 - Demo tiến độ', location: 'Hội trường B' },
-      { time: '17/06 - 10:00', event: 'Nộp sản phẩm cuối cùng', location: 'Online' },
-      { time: '17/06 - 14:00', event: 'Thuyết trình trước BGK', location: 'Hội trường A' },
-      { time: '17/06 - 17:00', event: 'Lễ trao giải', location: 'Hội trường A' },
-    ],
+    id: eventData.id,
+    name: eventData.name,
+    date: `${eventData.start_date?.slice(0,10)} → ${eventData.end_date?.slice(0,10)}`,
+    location: eventData.location || 'Chưa cập nhật',
+    teams: 124, // Fake for now as no teams registered table counts
+    maxTeams: eventData.max_teams || 50,
+    prize: eventData.prize || 'Chưa công bố',
+    status: eventData.status === 'ACTIVE' ? 'Đang diễn ra' : eventData.status === 'UPCOMING' ? 'Sắp diễn ra' : eventData.status === 'COMPLETED' ? 'Đã kết thúc' : 'Đã huỷ',
+    category: eventData.category,
+    image: eventData.image || 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    description: eventData.description || 'Chưa có mô tả',
+    organizer: 'Bộ Khoa học và Công nghệ', // Hardcoded as requested to keep UI identical if not in DB
+    registrationDeadline: eventData.start_date?.slice(0,10) || 'Chưa cập nhật',
+    
+    // Parse Prizes
+    prizes: eventData.prize_details 
+      ? eventData.prize_details.split('\n').filter((p: string) => p.trim() !== '').map((p: string) => {
+          const parts = p.split(':');
+          return {
+            rank: parts[0]?.trim() || 'Giải',
+            amount: parts[1]?.trim() || '',
+            teams: 1
+          };
+        })
+      : [
+          { rank: 'Giải Nhất', amount: '₫70,000,000', teams: 1 },
+          { rank: 'Giải Nhì', amount: '₫40,000,000', teams: 1 },
+          { rank: 'Giải Ba', amount: '₫25,000,000', teams: 1 },
+          { rank: 'Giải Khuyến khích', amount: '₫5,000,000', teams: 3 },
+        ],
+    
+    // Parse Schedule
+    schedule: eventData.schedule
+      ? eventData.schedule.split('\n').filter((s: string) => s.trim() !== '').map((s: string) => {
+          let parts = s.split('|').map((x: string) => x.trim());
+          if (parts.length === 1) parts = s.split('-').map((x: string) => x.trim());
+          return {
+            time: parts[0] || '',
+            event: parts.length > 1 ? parts[1] : s,
+            location: parts.length > 2 ? parts[2] : ''
+          };
+        })
+      : [
+          { time: '15/06 - 08:00', event: 'Check-in và đăng ký', location: 'Sảnh chính' },
+          { time: '15/06 - 09:00', event: 'Lễ khai mạc', location: 'Hội trường A' },
+          { time: '15/06 - 10:00', event: 'Bắt đầu thi đấu', location: 'Khu vực làm việc' },
+          { time: '15/06 - 12:00', event: 'Nghỉ trưa', location: 'Nhà ăn tầng 2' },
+          { time: '16/06 - 14:00', event: 'Checkpoint 1 - Demo tiến độ', location: 'Hội trường B' },
+          { time: '17/06 - 10:00', event: 'Nộp sản phẩm cuối cùng', location: 'Online' },
+          { time: '17/06 - 14:00', event: 'Thuyết trình trước BGK', location: 'Hội trường A' },
+          { time: '17/06 - 17:00', event: 'Lễ trao giải', location: 'Hội trường A' },
+        ],
+    
+    // Hardcoded criteria to keep UI pretty since DB has no criteria column yet
     criteria: [
       { name: 'Tính sáng tạo', weight: '30%', description: 'Ý tưởng độc đáo và sáng tạo' },
       { name: 'Tính khả thi', weight: '25%', description: 'Khả năng triển khai thực tế' },
       { name: 'Kỹ thuật', weight: '25%', description: 'Chất lượng code và kiến trúc' },
       { name: 'Trình bày', weight: '20%', description: 'Cách thuyết trình và demo' },
     ],
-    rules: [
-      'Mỗi đội từ 3-5 thành viên',
-      'Sử dụng công nghệ AI/ML là bắt buộc',
-      'Sản phẩm phải là ứng dụng mới, không được sử dụng dự án cũ',
-      'Code phải được push lên GitHub công khai',
-      'Tuân thủ quy định về bản quyền và đạo đức',
-    ],
+    
+    // Parse Rules
+    rules: eventData.rules
+      ? eventData.rules.split('\n').filter((r: string) => r.trim() !== '')
+      : [
+          'Mỗi đội từ 3-5 thành viên',
+          'Sử dụng công nghệ AI/ML là bắt buộc',
+          'Sản phẩm phải là ứng dụng mới, không được sử dụng dự án cũ',
+          'Code phải được push lên GitHub công khai',
+          'Tuân thủ quy định về bản quyền và đạo đức',
+        ],
   };
 
   const tabs = [

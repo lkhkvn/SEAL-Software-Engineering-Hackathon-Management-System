@@ -405,6 +405,254 @@ try {
     }
 
     // ------------------------------------------------------------------------
+    // ROUTE 8: LẤY DANH SÁCH CUỘC THI (CÔNG KHAI - KHÔNG CẦN TOKEN)
+    // GET /api/contests
+    // ------------------------------------------------------------------------
+    if ($path === '/api/contests' && $requestMethod === 'GET') {
+        $conn = $entityManager->getConnection();
+
+        $contests = $conn->executeQuery("
+            SELECT id, name, category, description, location,
+                   start_date, end_date, max_teams, status, prize, image, schedule, prize_details, rules, created_at
+            FROM contests
+            ORDER BY created_at DESC
+        ")->fetchAllAssociative();
+
+        http_response_code(200);
+        echo json_encode([
+            "status" => "success",
+            "data"   => $contests
+        ], JSON_UNESCAPED_UNICODE);
+        exit(0);
+    }
+
+    // ------------------------------------------------------------------------
+    // ROUTE 9: LẤY CHI TIẾT MỘT CUỘC THI (CÔNG KHAI)
+    // GET /api/contests/{id}
+    // ------------------------------------------------------------------------
+    if (preg_match('#^/api/contests/(\d+)$#', $path, $m) && $requestMethod === 'GET') {
+        $contestId = (int)$m[1];
+        $conn = $entityManager->getConnection();
+
+        $contest = $conn->executeQuery("
+            SELECT id, name, category, description, location,
+                   start_date, end_date, max_teams, status, prize, image, schedule, prize_details, rules, created_at
+            FROM contests WHERE id = :id
+        ", ['id' => $contestId])->fetchAssociative();
+
+        if (!$contest) {
+            http_response_code(404);
+            echo json_encode(["status" => "error", "message" => "Cuộc thi không tồn tại!"], JSON_UNESCAPED_UNICODE);
+            exit(0);
+        }
+
+        http_response_code(200);
+        echo json_encode(["status" => "success", "data" => $contest], JSON_UNESCAPED_UNICODE);
+        exit(0);
+    }
+
+    // ------------------------------------------------------------------------
+    // ROUTE 10: TẠO CUỘC THI MỚI (YÊU CẦU QUYỀN ADMIN)
+    // POST /api/admin/contests
+    // ------------------------------------------------------------------------
+    if ($path === '/api/admin/contests' && $requestMethod === 'POST') {
+        $headers = getallheaders();
+        $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+        if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
+            http_response_code(401);
+            echo json_encode(["status" => "error", "message" => "Yêu cầu phải có Token xác thực!"], JSON_UNESCAPED_UNICODE);
+            exit(0);
+        }
+        $currentUser = $authService->verifyToken($matches[1]);
+        if (!$currentUser->isAdmin()) {
+            http_response_code(403);
+            echo json_encode(["status" => "error", "message" => "Chỉ Ban tổ chức (ADMIN) mới có quyền tạo cuộc thi!"], JSON_UNESCAPED_UNICODE);
+            exit(0);
+        }
+
+        $data = json_decode(file_get_contents('php://input'), true) ?? [];
+        $name        = trim($data['name'] ?? '');
+        $category    = trim($data['category'] ?? '');
+        $description = trim($data['description'] ?? '');
+        $location    = trim($data['location'] ?? '');
+        $startDate   = trim($data['start_date'] ?? '');
+        $endDate     = trim($data['end_date'] ?? '');
+        $maxTeams    = (int)($data['max_teams'] ?? 50);
+        $status      = strtoupper(trim($data['status'] ?? 'UPCOMING'));
+        $prize       = trim($data['prize'] ?? '');
+        $image       = trim($data['image'] ?? '');
+        $schedule    = trim($data['schedule'] ?? '');
+        $prizeDetails= trim($data['prize_details'] ?? '');
+        $rules       = trim($data['rules'] ?? '');
+
+        if (!$name || !$category || !$startDate || !$endDate) {
+            http_response_code(400);
+            echo json_encode(["status" => "error", "message" => "Thiếu thông tin bắt buộc: tên, danh mục, ngày bắt đầu, ngày kết thúc!"], JSON_UNESCAPED_UNICODE);
+            exit(0);
+        }
+
+        $allowedStatuses = ['UPCOMING', 'ACTIVE', 'COMPLETED', 'CANCELLED'];
+        if (!in_array($status, $allowedStatuses)) {
+            $status = 'UPCOMING';
+        }
+
+        $conn = $entityManager->getConnection();
+        $conn->executeStatement("
+            INSERT INTO contests (name, category, description, location, start_date, end_date, max_teams, status, prize, image, schedule, prize_details, rules, created_at)
+            VALUES (:name, :category, :description, :location, :startDate, :endDate, :maxTeams, :status, :prize, :image, :schedule, :prizeDetails, :rules, NOW())
+        ", [
+            'name'        => $name,
+            'category'    => $category,
+            'description' => $description,
+            'location'    => $location,
+            'startDate'   => $startDate,
+            'endDate'     => $endDate,
+            'maxTeams'    => $maxTeams,
+            'status'      => $status,
+            'prize'       => $prize,
+            'image'       => $image,
+            'schedule'    => $schedule,
+            'prizeDetails'=> $prizeDetails,
+            'rules'       => $rules,
+        ]);
+
+        $newId = $conn->lastInsertId();
+
+        http_response_code(201);
+        echo json_encode([
+            "status"  => "success",
+            "message" => "Tạo cuộc thi mới thành công!",
+            "data"    => ["id" => (int)$newId, "name" => $name]
+        ], JSON_UNESCAPED_UNICODE);
+        exit(0);
+    }
+
+    // ------------------------------------------------------------------------
+    // ROUTE 11: CẬP NHẬT CUỘC THI (YÊU CẦU QUYỀN ADMIN)
+    // PUT /api/admin/contests/{id}
+    // ------------------------------------------------------------------------
+    if (preg_match('#^/api/admin/contests/(\d+)$#', $path, $m) && $requestMethod === 'PUT') {
+        $contestId = (int)$m[1];
+        $headers = getallheaders();
+        $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+        if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
+            http_response_code(401);
+            echo json_encode(["status" => "error", "message" => "Yêu cầu phải có Token xác thực!"], JSON_UNESCAPED_UNICODE);
+            exit(0);
+        }
+        $currentUser = $authService->verifyToken($matches[1]);
+        if (!$currentUser->isAdmin()) {
+            http_response_code(403);
+            echo json_encode(["status" => "error", "message" => "Chỉ Ban tổ chức (ADMIN) mới có quyền cập nhật cuộc thi!"], JSON_UNESCAPED_UNICODE);
+            exit(0);
+        }
+
+        $conn = $entityManager->getConnection();
+        $existing = $conn->executeQuery("SELECT id FROM contests WHERE id = :id", ['id' => $contestId])->fetchAssociative();
+        if (!$existing) {
+            http_response_code(404);
+            echo json_encode(["status" => "error", "message" => "Cuộc thi không tồn tại!"], JSON_UNESCAPED_UNICODE);
+            exit(0);
+        }
+
+        $data = json_decode(file_get_contents('php://input'), true) ?? [];
+        $name        = trim($data['name'] ?? '');
+        $category    = trim($data['category'] ?? '');
+        $description = trim($data['description'] ?? '');
+        $location    = trim($data['location'] ?? '');
+        $startDate   = trim($data['start_date'] ?? '');
+        $endDate     = trim($data['end_date'] ?? '');
+        $maxTeams    = (int)($data['max_teams'] ?? 50);
+        $status      = strtoupper(trim($data['status'] ?? 'UPCOMING'));
+        $prize       = trim($data['prize'] ?? '');
+        $image       = trim($data['image'] ?? '');
+        $schedule    = trim($data['schedule'] ?? '');
+        $prizeDetails= trim($data['prize_details'] ?? '');
+        $rules       = trim($data['rules'] ?? '');
+
+        if (!$name || !$category || !$startDate || !$endDate) {
+            http_response_code(400);
+            echo json_encode(["status" => "error", "message" => "Thiếu thông tin bắt buộc!"], JSON_UNESCAPED_UNICODE);
+            exit(0);
+        }
+
+        $allowedStatuses = ['UPCOMING', 'ACTIVE', 'COMPLETED', 'CANCELLED'];
+        if (!in_array($status, $allowedStatuses)) {
+            $status = 'UPCOMING';
+        }
+
+        $conn->executeStatement("
+            UPDATE contests
+            SET name=:name, category=:category, description=:description,
+                location=:location, start_date=:startDate, end_date=:endDate,
+                max_teams=:maxTeams, status=:status, prize=:prize, image=:image,
+                schedule=:schedule, prize_details=:prizeDetails, rules=:rules
+            WHERE id=:id
+        ", [
+            'name'        => $name,
+            'category'    => $category,
+            'description' => $description,
+            'location'    => $location,
+            'startDate'   => $startDate,
+            'endDate'     => $endDate,
+            'maxTeams'    => $maxTeams,
+            'status'      => $status,
+            'prize'       => $prize,
+            'image'       => $image,
+            'schedule'    => $schedule,
+            'prizeDetails'=> $prizeDetails,
+            'rules'       => $rules,
+            'id'          => $contestId,
+        ]);
+
+        http_response_code(200);
+        echo json_encode([
+            "status"  => "success",
+            "message" => "Cập nhật cuộc thi thành công!",
+            "data"    => ["id" => $contestId, "name" => $name]
+        ], JSON_UNESCAPED_UNICODE);
+        exit(0);
+    }
+
+    // ------------------------------------------------------------------------
+    // ROUTE 12: XOÁ CUỘC THI (YÊU CẦU QUYỀN ADMIN)
+    // DELETE /api/admin/contests/{id}
+    // ------------------------------------------------------------------------
+    if (preg_match('#^/api/admin/contests/(\d+)$#', $path, $m) && $requestMethod === 'DELETE') {
+        $contestId = (int)$m[1];
+        $headers = getallheaders();
+        $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+        if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
+            http_response_code(401);
+            echo json_encode(["status" => "error", "message" => "Yêu cầu phải có Token xác thực!"], JSON_UNESCAPED_UNICODE);
+            exit(0);
+        }
+        $currentUser = $authService->verifyToken($matches[1]);
+        if (!$currentUser->isAdmin()) {
+            http_response_code(403);
+            echo json_encode(["status" => "error", "message" => "Chỉ Ban tổ chức (ADMIN) mới có quyền xoá cuộc thi!"], JSON_UNESCAPED_UNICODE);
+            exit(0);
+        }
+
+        $conn = $entityManager->getConnection();
+        $existing = $conn->executeQuery("SELECT id, name FROM contests WHERE id = :id", ['id' => $contestId])->fetchAssociative();
+        if (!$existing) {
+            http_response_code(404);
+            echo json_encode(["status" => "error", "message" => "Cuộc thi không tồn tại!"], JSON_UNESCAPED_UNICODE);
+            exit(0);
+        }
+
+        $conn->executeStatement("DELETE FROM contests WHERE id = :id", ['id' => $contestId]);
+
+        http_response_code(200);
+        echo json_encode([
+            "status"  => "success",
+            "message" => "Đã xoá cuộc thi \"" . $existing['name'] . "\" thành công!"
+        ], JSON_UNESCAPED_UNICODE);
+        exit(0);
+    }
+
+    // ------------------------------------------------------------------------
     // LỖI 404: KHÔNG TÌM THẤY ENDPOINT PHÙ HỢP
     // ------------------------------------------------------------------------
     http_response_code(404);

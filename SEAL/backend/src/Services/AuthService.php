@@ -77,9 +77,72 @@ class AuthService
             'user' => [
                 'id'       => $user->id,
                 'username' => $user->username,
-                'email'    => $user->email
+                'email'    => $user->email,
+                'role'     => $user->role  // ✅ FIX: Bổ sung role để Frontend kiểm tra quyền Admin
             ]
         ];
+    }
+
+    /**
+     * Xác thực Token JWT và trả về User Entity tương ứng
+     * Được gọi bởi các route Admin trong index.php
+     */
+    public function verifyToken(string $token): User
+    {
+        // Giải mã phần payload (phần thứ 2 trong chuỗi JWT)
+        $parts = explode('.', $token);
+        if (count($parts) !== 3) {
+            throw new Exception("Token không hợp lệ!");
+        }
+
+        $payload = json_decode(base64_decode($parts[1]), true);
+        if (!$payload || !isset($payload['id']) || !isset($payload['exp'])) {
+            throw new Exception("Cấu trúc Token không hợp lệ!");
+        }
+
+        // Kiểm tra Token còn hạn sử dụng không
+        if (time() > $payload['exp']) {
+            throw new Exception("Token đã hết hạn, vui lòng đăng nhập lại!");
+        }
+
+        // Tìm User trong database theo ID từ payload
+        $user = $this->userRepository->findById((int)$payload['id']);
+        if (!$user) {
+            throw new Exception("Tài khoản không tồn tại!");
+        }
+
+        return $user;
+    }
+
+    /**
+     * Tạo tài khoản Giám khảo (JUDGE) - Chỉ Admin mới có quyền gọi
+     */
+    public function registerJudge(RegisterRequestDTO $dto): User
+    {
+        if (empty($dto->username)) {
+            throw new Exception("Tên đăng nhập không được để trống!");
+        }
+        if (!filter_var($dto->email, FILTER_VALIDATE_EMAIL)) {
+            throw new Exception("Định dạng email không hợp lệ!");
+        }
+        if (strlen($dto->password) < 6) {
+            throw new Exception("Mật khẩu phải chứa ít nhất 6 ký tự!");
+        }
+        if ($this->userRepository->findByEmail($dto->email)) {
+            throw new Exception("Email này đã được sử dụng!");
+        }
+
+        $hashedPassword = password_hash($dto->password, PASSWORD_BCRYPT);
+
+        $judge = new User(
+            username: $dto->username,
+            email:    $dto->email,
+            password: $hashedPassword,
+            role:     'JUDGE'
+        );
+
+        $this->userRepository->save($judge);
+        return $judge;
     }
 
     /**

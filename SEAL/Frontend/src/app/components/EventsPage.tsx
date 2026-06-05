@@ -1,91 +1,66 @@
-import { useState } from 'react';
-import { Calendar, Users, Trophy, Search, Filter, MapPin } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Calendar, Users, Trophy, Search, Filter, MapPin, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export function EventsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [events, setEvents] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const events = [
-    {
-      id: 1,
-      name: 'AI Innovation Hackathon 2026',
-      date: '15-17/06/2026',
-      location: 'TP. Hồ Chí Minh',
-      teams: 124,
-      maxTeams: 150,
-      prize: '₫150,000,000',
-      status: 'Đang mở đăng ký',
-      category: 'AI & ML',
-      image: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-      description: 'Cuộc thi tập trung vào ứng dụng AI trong đời sống',
-    },
-    {
-      id: 2,
-      name: 'FinTech Challenge',
-      date: '22-24/06/2026',
-      location: 'Hà Nội',
-      teams: 89,
-      maxTeams: 120,
-      prize: '₫100,000,000',
-      status: 'Đang mở đăng ký',
-      category: 'FinTech',
-      image: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-      description: 'Giải pháp công nghệ tài chính sáng tạo',
-    },
-    {
-      id: 3,
-      name: 'Green Tech Hackathon',
-      date: '01-03/07/2026',
-      location: 'Đà Nẵng',
-      teams: 67,
-      maxTeams: 100,
-      prize: '₫80,000,000',
-      status: 'Sắp mở đăng ký',
-      category: 'Sustainability',
-      image: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-      description: 'Công nghệ xanh vì môi trường bền vững',
-    },
-    {
-      id: 4,
-      name: 'Healthcare Innovation',
-      date: '10-12/07/2026',
-      location: 'TP. Hồ Chí Minh',
-      teams: 156,
-      maxTeams: 200,
-      prize: '₫200,000,000',
-      status: 'Đang mở đăng ký',
-      category: 'Healthcare',
-      image: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
-      description: 'Đổi mới sáng tạo trong lĩnh vực y tế',
-    },
-    {
-      id: 5,
-      name: 'EdTech Summit',
-      date: '20-22/07/2026',
-      location: 'Cần Thơ',
-      teams: 45,
-      maxTeams: 80,
-      prize: '₫60,000,000',
-      status: 'Đang diễn ra',
-      category: 'Education',
-      image: 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
-      description: 'Giải pháp công nghệ giáo dục',
-    },
-    {
-      id: 6,
-      name: 'Blockchain Developer Challenge',
-      date: '05-07/08/2026',
-      location: 'Hà Nội',
-      teams: 92,
-      maxTeams: 150,
-      prize: '₫120,000,000',
-      status: 'Đã kết thúc',
-      category: 'Blockchain',
-      image: 'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)',
-      description: 'Ứng dụng blockchain trong thực tế',
-    },
-  ];
+  useEffect(() => {
+    const fetchEvents = async () => {
+      try {
+        const res = await fetch('http://localhost:8000/index.php/api/contests');
+        const result = await res.json();
+        
+        if (result.status === 'success' && result.data) {
+          // Màu nền ngẫu nhiên cho thẻ
+          const gradients = [
+            'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+            'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+            'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+            'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
+            'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)'
+          ];
+          
+          // Chuyển đổi trạng thái từ EN (DB) sang VN (UI)
+          const mapStatus = (statusStr: string) => {
+            switch(statusStr) {
+              case 'ACTIVE': return 'Đang mở đăng ký';
+              case 'UPCOMING': return 'Sắp mở đăng ký';
+              case 'COMPLETED': return 'Đã kết thúc';
+              default: return 'Đang mở đăng ký';
+            }
+          };
+
+          // Ánh xạ dữ liệu trả về từ DB sang format giao diện cần
+          const mappedEvents = result.data.map((item: any) => ({
+            id: item.id,
+            name: item.name,
+            date: `${new Date(item.start_date).toLocaleDateString('vi-VN')} - ${new Date(item.end_date).toLocaleDateString('vi-VN')}`,
+            location: item.location,
+            teams: Math.floor(Math.random() * (item.max_teams / 2)), // Dữ liệu giả lập cho số đội đã tham gia
+            maxTeams: item.max_teams,
+            prize: item.prize || ('₫' + (item.max_teams * 1000000).toLocaleString('vi-VN')), // Lấy từ DB hoặc giả lập nếu thiếu
+            status: mapStatus(item.status),
+            category: item.category,
+            image: item.image || gradients[item.id % gradients.length], // Lấy từ DB hoặc dùng gradient mặc định
+            description: item.description
+          }));
+          
+          setEvents(mappedEvents);
+        }
+      } catch (err) {
+        console.error('Lỗi khi tải dữ liệu sự kiện:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchEvents();
+  }, []);
 
   const filteredEvents = events.filter((event) => {
     const matchesSearch = event.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
