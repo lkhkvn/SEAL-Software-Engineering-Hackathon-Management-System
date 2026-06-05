@@ -78,7 +78,11 @@ class AuthService
                 'id'       => $user->id,
                 'username' => $user->username,
                 'email'    => $user->email,
+<<<<<<< HEAD
                 'role'     => $user->role  // ✅ FIX: Bổ sung role để Frontend kiểm tra quyền Admin
+=======
+                'role'     => $user->role
+>>>>>>> 10582f6c9c91c90ce92ed6181f19f3daa9b8a646
             ]
         ];
     }
@@ -165,5 +169,41 @@ class AuthService
         $signature = base64_encode($signature);
 
         return "$header.$payload.$signature";
+    }
+
+    /**
+     * Kịch bản xử lý Xác thực Token
+     */
+    public function verifyToken(string $token): User
+    {
+        $parts = explode('.', $token);
+        if (count($parts) !== 3) {
+            throw new Exception("Token không hợp lệ!");
+        }
+
+        [$header, $payload, $signature] = $parts;
+
+        $secretKey = "SEAL_HACKATHON_SUPER_SECRET_KEY_2026";
+        $validSignature = base64_encode(hash_hmac('sha256', "$header.$payload", $secretKey, true));
+
+        if (!hash_equals($validSignature, $signature)) {
+            throw new Exception("Chữ ký Token không hợp lệ!");
+        }
+
+        $payloadData = json_decode(base64_decode($payload), true);
+        if (!isset($payloadData['id']) || !isset($payloadData['exp'])) {
+            throw new Exception("Dữ liệu Token không hợp lệ!");
+        }
+
+        if (time() > $payloadData['exp']) {
+            throw new Exception("Token đã hết hạn!");
+        }
+
+        $user = $this->userRepository->findById((int)$payloadData['id']);
+        if (!$user) {
+            throw new Exception("Tài khoản không tồn tại!");
+        }
+
+        return $user;
     }
 }

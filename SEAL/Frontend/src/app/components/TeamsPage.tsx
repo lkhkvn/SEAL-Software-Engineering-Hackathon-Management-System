@@ -1,11 +1,24 @@
 import { useState, useEffect } from 'react';
-import { Users, Search, Trophy, Code, Target, Loader2 } from 'lucide-react';
+import { 
+  Users, 
+  Search, 
+  Trophy, 
+  Code, 
+  Target, 
+  Loader2,
+  X,
+  Github,
+  Video,
+  FileText,
+  User
+} from 'lucide-react';
 
 export function TeamsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [teams, setTeams] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedTeam, setSelectedTeam] = useState<any | null>(null);
 
   useEffect(() => {
     const fetchTeams = async () => {
@@ -162,7 +175,10 @@ export function TeamsPage() {
                   </div>
                 </div>
 
-                <button className="w-full py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-blue-600 hover:text-white transition-all font-medium text-sm shadow-sm">
+                <button 
+                  onClick={() => setSelectedTeam(team)}
+                  className="w-full py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-blue-600 hover:text-white transition-all font-medium text-sm shadow-sm cursor-pointer"
+                >
                   Xem chi tiết
                 </button>
               </div>
@@ -176,6 +192,153 @@ export function TeamsPage() {
           </div>
         )}
       </div>
+
+      {/* Modal chi tiết đội thi */}
+      {selectedTeam && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden border border-gray-100 p-6 relative">
+            
+            {/* Nút đóng */}
+            <button 
+              onClick={() => setSelectedTeam(null)}
+              className="absolute top-4 right-4 p-1 rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors cursor-pointer"
+            >
+              <X size={20} />
+            </button>
+
+            {/* Header đội thi */}
+            <div className="flex items-center gap-4 mb-6">
+              <div 
+                className="w-14 h-14 rounded-xl flex items-center justify-center shadow-md text-white font-extrabold text-2xl"
+                style={{ background: getAvatarGradient(selectedTeam.id) }}
+              >
+                {selectedTeam.name.charAt(0).toUpperCase()}
+              </div>
+              <div>
+                <h3 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+                  {selectedTeam.name}
+                  {selectedTeam.rank <= 3 && (
+                    <span className="text-xs px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded-full font-bold">
+                      Hạng #{selectedTeam.rank}
+                    </span>
+                  )}
+                </h3>
+                <p className="text-sm text-gray-500 font-medium text-left">Lĩnh vực: {selectedTeam.category}</p>
+              </div>
+            </div>
+
+            {/* Thông tin thống kê nhanh */}
+            <div className="grid grid-cols-3 gap-4 mb-6 bg-gray-50 rounded-xl p-4 border border-gray-100">
+              <div className="text-center border-r border-gray-200">
+                <span className="text-xs text-gray-500 block mb-0.5">Thành viên</span>
+                <span className="text-lg font-bold text-gray-800 flex items-center justify-center gap-1">
+                  <Users size={16} className="text-blue-500" />
+                  {selectedTeam.members}
+                </span>
+              </div>
+              <div className="text-center border-r border-gray-200">
+                <span className="text-xs text-gray-500 block mb-0.5">Điểm số</span>
+                <span className="text-lg font-bold text-gray-800 flex items-center justify-center gap-1">
+                  <Target size={16} className="text-green-600" />
+                  {selectedTeam.score > 0 ? `${selectedTeam.score}` : 'N/A'}
+                </span>
+              </div>
+              <div className="text-center">
+                <span className="text-xs text-gray-500 block mb-0.5">Mã tham gia</span>
+                <span className="text-sm font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 block truncate select-all" title="Mã Join Code của nhóm">
+                  {selectedTeam.joinCode}
+                </span>
+              </div>
+            </div>
+
+            {/* Chi tiết dự án */}
+            <div className="space-y-4 text-left">
+              <div>
+                <h4 className="text-sm font-bold text-gray-800 uppercase tracking-wider mb-2 flex items-center gap-1.5 border-b pb-1">
+                  <Code size={16} className="text-blue-600" />
+                  Dự án dự thi
+                </h4>
+                {selectedTeam.project ? (
+                  <div className="bg-gradient-to-r from-blue-50/50 to-indigo-50/50 border border-blue-100 rounded-xl p-4 space-y-3">
+                    <div>
+                      <span className="text-xs text-gray-400 block font-semibold">TÊN DỰ ÁN</span>
+                      <span className="font-bold text-gray-900 text-base">{selectedTeam.project.name}</span>
+                    </div>
+                    <div>
+                      <span className="text-xs text-gray-400 block font-semibold">MÔ TẢ NGẮN</span>
+                      <p className="text-sm text-gray-700 leading-relaxed">{selectedTeam.project.description}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-3 pt-1">
+                      {selectedTeam.project.githubUrl && (
+                        <a 
+                          href={selectedTeam.project.githubUrl} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors text-xs font-semibold cursor-pointer"
+                        >
+                          <Github size={14} />
+                          <span>Mã nguồn GitHub</span>
+                        </a>
+                      )}
+                      {selectedTeam.project.demoVideoUrl && (
+                        <a 
+                          href={selectedTeam.project.demoVideoUrl} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-xs font-semibold cursor-pointer"
+                        >
+                          <Video size={14} />
+                          <span>Video Demo</span>
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-6 bg-gray-50 border border-dashed border-gray-200 rounded-xl">
+                    <FileText className="text-gray-300 mb-2" size={32} />
+                    <span className="text-sm text-gray-500 font-medium">Đội thi chưa nộp sản phẩm dự án.</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Thông tin Trưởng nhóm & Công nghệ */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+                <div>
+                  <span className="text-xs text-gray-500 font-semibold block mb-1">TRƯỞNG NHÓM</span>
+                  <div className="flex items-center gap-2 bg-gray-50 p-2.5 rounded-lg border border-gray-100">
+                    <User size={16} className="text-blue-500" />
+                    <span className="text-sm font-semibold text-gray-800">{selectedTeam.leaderName || 'Chưa xác định'}</span>
+                  </div>
+                </div>
+                <div>
+                  <span className="text-xs text-gray-500 font-semibold block mb-1">CÔNG NGHỆ CHÍNH</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {selectedTeam.tech.map((tech: string, index: number) => (
+                      <span
+                        key={index}
+                        className="px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs font-semibold border border-blue-100"
+                      >
+                        {tech}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer nút đóng */}
+            <div className="mt-6 pt-4 border-t border-gray-100">
+              <button
+                onClick={() => setSelectedTeam(null)}
+                className="w-full py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-semibold text-sm transition-colors cursor-pointer"
+              >
+                Đóng thông tin
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -56,7 +56,7 @@ function AppRoutes() {
         <Route path="/events/:id" element={<EventDetailPage />} />
         <Route path="/teams" element={<TeamsPage />} />
         <Route path="/leaderboard" element={<LeaderboardPage />} />
-        <Route path="/admin" element={<AdminPage currentUser={currentUser} />} />
+        <Route path="/admin" element={<AdminPage currentUser={currentUser} onLogout={handleLogout} />} />
       </Route>
 
       {/* Nhóm 2: Các trang KHÔNG hiển thị thanh Navigation (Ẩn hoàn toàn) */}
