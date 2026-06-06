@@ -21,24 +21,14 @@ class DoctrineUserRepository implements UserRepositoryInterface {
     }
 
     public function findById(int $id): ?DomainUser {
-<<<<<<< HEAD
-        $model = $this->em->find(UserModel::class, $id);
+        $model = $this->em->getRepository(UserModel::class)->find($id);
         return $model ? UserMapper::toDomain($model) : null;
     }
 
     /** @return DomainUser[] */
     public function findAll(): array {
         $models = $this->em->getRepository(UserModel::class)->findAll();
-        return array_map(fn($m) => UserMapper::toDomain($m), $models);
-=======
-        $model = $this->em->getRepository(UserModel::class)->find($id);
-        return $model ? UserMapper::toDomain($model) : null;
-    }
-
-    public function findAll(): array {
-        $models = $this->em->getRepository(UserModel::class)->findAll();
         return array_map(fn($model) => UserMapper::toDomain($model), $models);
->>>>>>> 10582f6c9c91c90ce92ed6181f19f3daa9b8a646
     }
 
     public function save(DomainUser $user): void {

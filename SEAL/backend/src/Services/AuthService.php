@@ -78,44 +78,9 @@ class AuthService
                 'id'       => $user->id,
                 'username' => $user->username,
                 'email'    => $user->email,
-<<<<<<< HEAD
                 'role'     => $user->role  // ✅ FIX: Bổ sung role để Frontend kiểm tra quyền Admin
-=======
-                'role'     => $user->role
->>>>>>> 10582f6c9c91c90ce92ed6181f19f3daa9b8a646
             ]
         ];
-    }
-
-    /**
-     * Xác thực Token JWT và trả về User Entity tương ứng
-     * Được gọi bởi các route Admin trong index.php
-     */
-    public function verifyToken(string $token): User
-    {
-        // Giải mã phần payload (phần thứ 2 trong chuỗi JWT)
-        $parts = explode('.', $token);
-        if (count($parts) !== 3) {
-            throw new Exception("Token không hợp lệ!");
-        }
-
-        $payload = json_decode(base64_decode($parts[1]), true);
-        if (!$payload || !isset($payload['id']) || !isset($payload['exp'])) {
-            throw new Exception("Cấu trúc Token không hợp lệ!");
-        }
-
-        // Kiểm tra Token còn hạn sử dụng không
-        if (time() > $payload['exp']) {
-            throw new Exception("Token đã hết hạn, vui lòng đăng nhập lại!");
-        }
-
-        // Tìm User trong database theo ID từ payload
-        $user = $this->userRepository->findById((int)$payload['id']);
-        if (!$user) {
-            throw new Exception("Tài khoản không tồn tại!");
-        }
-
-        return $user;
     }
 
     /**

@@ -1,9 +1,5 @@
 import { useState, useEffect } from 'react';
-<<<<<<< HEAD
-import { useParams, Link } from 'react-router-dom';
-=======
 import { useParams, Link, useNavigate } from 'react-router-dom';
->>>>>>> 10582f6c9c91c90ce92ed6181f19f3daa9b8a646
 import {
   Calendar,
   Users,
@@ -16,26 +12,19 @@ import {
   FileText,
   ArrowLeft,
   Loader2,
-<<<<<<< HEAD
-=======
   Copy,
   Check,
   Sparkles,
   X,
->>>>>>> 10582f6c9c91c90ce92ed6181f19f3daa9b8a646
 } from 'lucide-react';
 
 export function EventDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
-<<<<<<< HEAD
-  
   const [eventData, setEventData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-=======
-  const [dbEvent, setDbEvent] = useState<any | null>(null);
+  const [milestones, setMilestones] = useState<any[]>([]);
+  const [schedules, setSchedules] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -81,7 +70,7 @@ export function EventDetailPage() {
           },
           body: JSON.stringify({
             name: registerTeamName,
-            category: dbEvent.category || 'AI & ML'
+            category: eventData?.category || 'AI & ML'
           })
         });
 
@@ -117,7 +106,7 @@ export function EventDetailPage() {
 
         setSuccessTeam({
           name: result.data.teamName,
-          joinCode: registerJoinCode
+          joinCode: result.data.joinCode
         });
       }
     } catch (err: any) {
@@ -136,99 +125,43 @@ export function EventDetailPage() {
   };
 
   useEffect(() => {
-    const fetchEventDetail = async () => {
+    const fetchEventData = async () => {
       setLoading(true);
       setError(null);
       try {
-        const response = await fetch(`http://localhost:8000/index.php/api/hackathons/${id}`);
-        const result = await response.json();
-        if (!response.ok || result.status === 'error') {
-          throw new Error(result.message || 'Không thể tải thông tin chi tiết cuộc thi.');
-        }
-        setDbEvent(result.data);
-      } catch (err: any) {
-        setError(err.message || 'Lỗi kết nối máy chủ.');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchEventDetail();
-  }, [id]);
-
-  const formatDateRange = (startStr: string | null, endStr: string | null) => {
-    if (!startStr) return 'Chưa xác định';
-    try {
-      const start = new Date(startStr);
-      const end = endStr ? new Date(endStr) : null;
-      const formatDigit = (n: number) => n < 10 ? `0${n}` : n;
-      const startDay = formatDigit(start.getDate());
-      const startMonth = formatDigit(start.getMonth() + 1);
-      const startYear = start.getFullYear();
-      if (end) {
-        const endDay = formatDigit(end.getDate());
-        const endMonth = formatDigit(end.getMonth() + 1);
-        const endYear = end.getFullYear();
-        if (startMonth === endMonth && startYear === endYear) {
-          return `${startDay}-${endDay}/${startMonth}/${startYear}`;
-        }
-        return `${startDay}/${startMonth}/${startYear} - ${endDay}/${endMonth}/${endYear}`;
-      }
-      return `${startDay}/${startMonth}/${startYear}`;
-    } catch (e) {
-      return 'Lỗi ngày tháng';
-    }
-  };
-
-  const statusLabels: Record<string, string> = {
-    active: 'Đang diễn ra',
-    upcoming: 'Sắp diễn ra',
-    completed: 'Đã kết thúc',
-    ACTIVE: 'Đang diễn ra',
-    UPCOMING: 'Sắp diễn ra',
-    COMPLETED: 'Đã kết thúc',
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center py-20 gap-3">
-        <Loader2 className="text-blue-600 animate-spin" size={38} />
-        <span className="text-sm text-gray-500 font-medium">Đang tải chi tiết sự kiện...</span>
-      </div>
-    );
-  }
-
-  if (error || !dbEvent) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="max-w-md w-full text-center bg-white p-8 rounded-xl shadow-lg border border-gray-200">
-          <div className="text-red-500 font-bold text-4xl mb-4">Lỗi</div>
-          <p className="text-gray-600 mb-6">{error || 'Không tìm thấy cuộc thi.'}</p>
-          <Link
-            to="/events"
-            className="inline-flex items-center justify-center px-5 py-2.5 border border-transparent text-sm font-semibold rounded-lg text-white bg-blue-600 hover:bg-blue-700 transition-colors shadow"
-          >
-            Quay lại danh sách
-          </Link>
-        </div>
-      </div>
-    );
-  }
->>>>>>> 10582f6c9c91c90ce92ed6181f19f3daa9b8a646
-
-  useEffect(() => {
-    const fetchEvent = async () => {
-      try {
-        const res = await fetch(`http://localhost:8000/index.php/api/contests/${id}`);
+        const res = await fetch(`http://localhost:8000/index.php/api/hackathons/${id}`);
         const result = await res.json();
-        if (!res.ok || result.status === 'error') throw new Error(result.message);
+        if (!res.ok || result.status === 'error') throw new Error(result.message || 'Lỗi tải chi tiết cuộc thi');
         setEventData(result.data);
+
+        // Tải danh sách mốc thời gian (milestones)
+        try {
+          const milestonesRes = await fetch(`http://localhost:8000/index.php/api/hackathons/${id}/milestones`);
+          const milestonesResult = await milestonesRes.json();
+          if (milestonesRes.ok && milestonesResult.status === 'success') {
+            setMilestones(milestonesResult.data || []);
+          }
+        } catch (mErr) {
+          console.error("Lỗi tải milestones:", mErr);
+        }
+
+        // Tải danh sách lịch trình (schedules)
+        try {
+          const schedulesRes = await fetch(`http://localhost:8000/index.php/api/schedules?hackathonId=${id}`);
+          const schedulesResult = await schedulesRes.json();
+          if (schedulesRes.ok && schedulesResult.status === 'success') {
+            setSchedules(schedulesResult.data || []);
+          }
+        } catch (sErr) {
+          console.error("Lỗi tải schedules:", sErr);
+        }
       } catch (e: any) {
         setError(e.message || 'Lỗi tải chi tiết cuộc thi');
       } finally {
         setLoading(false);
       }
     };
-    fetchEvent();
+    fetchEventData();
   }, [id]);
 
   if (loading) {
@@ -254,47 +187,54 @@ export function EventDetailPage() {
 
   // Parse data for UI display
   const event = {
-<<<<<<< HEAD
     id: eventData.id,
     name: eventData.name,
-    date: `${eventData.start_date?.slice(0,10)} → ${eventData.end_date?.slice(0,10)}`,
+    date: (eventData.startDate && eventData.endDate)
+      ? `${eventData.startDate.slice(0, 10)} → ${eventData.endDate.slice(0, 10)}`
+      : 'Chưa cập nhật',
     location: eventData.location || 'Chưa cập nhật',
-    teams: 124, // Fake for now as no teams registered table counts
-    maxTeams: eventData.max_teams || 50,
-    prize: eventData.prize || 'Chưa công bố',
-    status: eventData.status === 'ACTIVE' ? 'Đang diễn ra' : eventData.status === 'UPCOMING' ? 'Sắp diễn ra' : eventData.status === 'COMPLETED' ? 'Đã kết thúc' : 'Đã huỷ',
+    teams: 12, // Số lượng đội mẫu của cuộc thi
+    maxTeams: eventData.maxTeams || 50,
+    prize: 'Cơ cấu giải thưởng hấp dẫn',
+    status: eventData.status === 'ACTIVE' 
+      ? 'Đang diễn ra' 
+      : eventData.status === 'UPCOMING' 
+      ? 'Sắp diễn ra' 
+      : eventData.status === 'COMPLETED' 
+      ? 'Đã kết thúc' 
+      : 'Đã huỷ',
     category: eventData.category,
-    image: eventData.image || 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    image: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
     description: eventData.description || 'Chưa có mô tả',
-    organizer: 'Bộ Khoa học và Công nghệ', // Hardcoded as requested to keep UI identical if not in DB
-    registrationDeadline: eventData.start_date?.slice(0,10) || 'Chưa cập nhật',
+    organizer: 'Bộ Khoa học và Công nghệ', // Hardcoded theo yêu cầu để giữ giao diện đồng bộ
+    registrationDeadline: eventData.registrationEnd ? eventData.registrationEnd.slice(0, 10) : 'Chưa cập nhật',
     
     // Parse Prizes
-    prizes: eventData.prize_details 
-      ? eventData.prize_details.split('\n').filter((p: string) => p.trim() !== '').map((p: string) => {
-          const parts = p.split(':');
-          return {
-            rank: parts[0]?.trim() || 'Giải',
-            amount: parts[1]?.trim() || '',
-            teams: 1
-          };
-        })
-      : [
-          { rank: 'Giải Nhất', amount: '₫70,000,000', teams: 1 },
-          { rank: 'Giải Nhì', amount: '₫40,000,000', teams: 1 },
-          { rank: 'Giải Ba', amount: '₫25,000,000', teams: 1 },
-          { rank: 'Giải Khuyến khích', amount: '₫5,000,000', teams: 3 },
-        ],
+    prizes: [
+      { rank: 'Giải Nhất', amount: '₫70,000,000', teams: 1 },
+      { rank: 'Giải Nhì', amount: '₫40,000,000', teams: 1 },
+      { rank: 'Giải Ba', amount: '₫25,000,000', teams: 1 },
+      { rank: 'Giải Khuyến khích', amount: '₫5,000,000', teams: 3 },
+    ],
     
     // Parse Schedule
-    schedule: eventData.schedule
-      ? eventData.schedule.split('\n').filter((s: string) => s.trim() !== '').map((s: string) => {
-          let parts = s.split('|').map((x: string) => x.trim());
-          if (parts.length === 1) parts = s.split('-').map((x: string) => x.trim());
+    schedule: schedules.length > 0
+      ? schedules.map((item: any) => {
+          const startStr = item.startTime ? new Date(item.startTime).toLocaleString('vi-VN', {
+            day: '2-digit',
+            month: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+          }) : '';
+          const endStr = item.endTime ? ' - ' + new Date(item.endTime).toLocaleTimeString('vi-VN', {
+            hour: '2-digit',
+            minute: '2-digit'
+          }) : '';
           return {
-            time: parts[0] || '',
-            event: parts.length > 1 ? parts[1] : s,
-            location: parts.length > 2 ? parts[2] : ''
+            time: `${startStr}${endStr}`,
+            event: item.title,
+            description: item.description,
+            location: item.location || 'Online'
           };
         })
       : [
@@ -308,69 +248,20 @@ export function EventDetailPage() {
           { time: '17/06 - 17:00', event: 'Lễ trao giải', location: 'Hội trường A' },
         ],
     
-    // Hardcoded criteria to keep UI pretty since DB has no criteria column yet
-=======
-    id: dbEvent.id,
-    name: dbEvent.name,
-    date: formatDateRange(dbEvent.startDate, dbEvent.endDate),
-    location: dbEvent.location || 'Địa điểm Online/Trực tiếp chưa xác định',
-    teams: 0,
-    maxTeams: dbEvent.maxTeams || 150,
-    prize: '₫150,000,000',
-    status: statusLabels[dbEvent.status] || dbEvent.status || 'Chưa xác định',
-    category: dbEvent.category || 'AI & ML',
-    image: dbEvent.category === 'Blockchain' 
-      ? 'linear-gradient(135deg, #f36265 0%, #961276 100%)' 
-      : dbEvent.category === 'FinTech' 
-      ? 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)' 
-      : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-    description: dbEvent.description || 'Chưa có mô tả chi tiết cho cuộc thi này.',
-    organizer: 'Ban tổ chức Hackathon SEAL',
-    registrationDeadline: dbEvent.registrationStart ? formatDateRange(dbEvent.registrationStart, null) : 'Trước ngày khai mạc',
-    prizes: [
-      { rank: 'Giải Nhất', amount: '₫70,000,000', teams: 1 },
-      { rank: 'Giải Nhì', amount: '₫40,000,000', teams: 1 },
-      { rank: 'Giải Ba', amount: '₫25,000,000', teams: 1 },
-      { rank: 'Giải Khuyến khích', amount: '₫5,000,000', teams: 3 },
-    ],
-    schedule: [
-      { time: 'Ngày 1 - 08:00', event: 'Check-in và Khởi động cuộc thi', location: dbEvent.location || 'Địa điểm tổ chức' },
-      { time: 'Ngày 1 - 09:30', event: 'Khai mạc & Công bố đề bài chi tiết', location: 'Hội trường chính' },
-      { time: 'Ngày 2 - 14:00', event: 'Mentoring & Hỗ trợ kỹ thuật từ chuyên gia', location: 'Phòng làm việc chung' },
-      { time: 'Ngày 3 - 09:00', event: 'Nộp sản phẩm dự thi (Mã nguồn & Video Demo)', location: 'Hệ thống SEAL' },
-      { time: 'Ngày 3 - 14:00', event: 'Thuyết trình sản phẩm trước Ban giám khảo', location: 'Hội trường thuyết trình' },
-      { time: 'Ngày 3 - 17:00', event: 'Lễ bế mạc & Trao giải thưởng', location: 'Hội trường chính' },
-    ],
->>>>>>> 10582f6c9c91c90ce92ed6181f19f3daa9b8a646
     criteria: [
       { name: 'Tính sáng tạo', weight: '30%', description: 'Ý tưởng đột phá và giải pháp mới mẻ' },
       { name: 'Khả năng ứng dụng', weight: '25%', description: 'Giá trị thực tiễn và tính khả thi của mô hình kinh doanh' },
       { name: 'Chất lượng kỹ thuật', weight: '25%', description: 'Độ hoàn thiện của code, kiến trúc hệ thống và công nghệ sử dụng' },
       { name: 'Kỹ năng thuyết trình', weight: '20%', description: 'Khả năng trình bày ý tưởng thuyết phục và demo sản phẩm tốt' },
     ],
-<<<<<<< HEAD
-    
-    // Parse Rules
-    rules: eventData.rules
-      ? eventData.rules.split('\n').filter((r: string) => r.trim() !== '')
-      : [
-          'Mỗi đội từ 3-5 thành viên',
-          'Sử dụng công nghệ AI/ML là bắt buộc',
-          'Sản phẩm phải là ứng dụng mới, không được sử dụng dự án cũ',
-          'Code phải được push lên GitHub công khai',
-          'Tuân thủ quy định về bản quyền và đạo đức',
-        ],
-=======
     rules: [
-      'Mỗi đội thi đăng ký có số lượng từ 3 đến 5 thành viên.',
-      `Dự án phải thuộc danh mục ${dbEvent.category || 'AI & ML'} và giải quyết chủ đề liên quan.`,
-      'Sản phẩm dự thi phải được phát triển mới hoàn toàn trong thời gian diễn ra cuộc thi.',
-      'Toàn bộ mã nguồn sản phẩm phải được cập nhật công khai trên Git repository liên kết.',
-      'Nghiêm cấm các hành vi gian lận học thuật, sao chép code hoặc vi phạm bản quyền phần mềm.',
+      'Mỗi đội từ 3-5 thành viên',
+      'Sử dụng công nghệ AI/ML là bắt buộc',
+      'Sản phẩm phải là ứng dụng mới, không được sử dụng dự án cũ',
+      'Code phải được push lên GitHub công khai',
+      'Tuân thủ quy định về bản quyền và đạo đức',
     ],
->>>>>>> 10582f6c9c91c90ce92ed6181f19f3daa9b8a646
   };
-
 
   const tabs = [
     { id: 'overview', label: 'Tổng quan', icon: Info },
@@ -491,16 +382,19 @@ export function EventDetailPage() {
                     {event.schedule.map((item, index) => (
                       <div key={index} className="flex gap-4">
                         <div className="flex flex-col items-center">
-                          <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-semibold">
+                          <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-semibold flex-shrink-0 animate-pulse">
                             {index + 1}
                           </div>
                           {index < event.schedule.length - 1 && (
                             <div className="w-0.5 h-full bg-gray-200 my-2"></div>
                           )}
                         </div>
-                        <div className="flex-1 pb-8">
+                        <div className="flex-1 pb-8 text-left">
                           <div className="font-semibold text-blue-600 mb-1">{item.time}</div>
                           <div className="font-medium text-gray-900 mb-1">{item.event}</div>
+                          {item.description && (
+                            <p className="text-sm text-gray-600 mb-2 leading-relaxed">{item.description}</p>
+                          )}
                           <div className="text-sm text-gray-600 flex items-center gap-1">
                             <MapPin size={14} />
                             {item.location}
@@ -537,15 +431,58 @@ export function EventDetailPage() {
                 )}
 
                 {activeTab === 'rules' && (
-                  <div className="space-y-3">
-                    {event.rules.map((rule, index) => (
-                      <div key={index} className="flex items-start gap-3">
-                        <div className="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0 mt-0.5">
-                          {index + 1}
-                        </div>
-                        <p className="text-gray-700">{rule}</p>
+                  <div className="space-y-6 text-left">
+                    {/* Thể lệ cuộc thi */}
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                        <FileText className="text-blue-600" size={20} />
+                        Quy định chung
+                      </h3>
+                      <div className="space-y-3">
+                        {event.rules.map((rule, index) => (
+                          <div key={index} className="flex items-start gap-3">
+                            <div className="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0 mt-0.5 shadow-sm">
+                              {index + 1}
+                            </div>
+                            <p className="text-gray-700 leading-relaxed">{rule}</p>
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    </div>
+
+                    {/* Mốc thời gian quan trọng */}
+                    {milestones.length > 0 && (
+                      <div className="pt-6 border-t border-gray-200">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                          <Clock className="text-blue-600" size={20} />
+                          Mốc thời gian quan trọng (Timeline)
+                        </h3>
+                        <div className="space-y-4">
+                          {milestones.map((milestone: any, index: number) => (
+                            <div key={milestone.id || index} className="p-4 bg-blue-50/40 border border-blue-100 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm hover:shadow transition-shadow">
+                              <div>
+                                <h4 className="font-bold text-gray-950">{milestone.name}</h4>
+                                {milestone.description && (
+                                  <p className="text-sm text-gray-600 mt-1 leading-relaxed">{milestone.description}</p>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1.5 text-blue-700 font-semibold text-xs bg-blue-50 px-3.5 py-2 rounded-full self-start sm:self-center border border-blue-100">
+                                <Clock size={14} />
+                                <span>
+                                  {milestone.dueDate ? new Date(milestone.dueDate).toLocaleString('vi-VN', {
+                                    day: '2-digit',
+                                    month: '2-digit',
+                                    year: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  }) : 'Chưa cập nhật'}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

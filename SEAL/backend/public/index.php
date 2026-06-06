@@ -416,7 +416,6 @@ try {
     }
 
     // ------------------------------------------------------------------------
-<<<<<<< HEAD
     // ROUTE 8: LẤY DANH SÁCH CUỘC THI (CÔNG KHAI - KHÔNG CẦN TOKEN)
     // GET /api/contests
     // ------------------------------------------------------------------------
@@ -429,7 +428,15 @@ try {
             FROM contests
             ORDER BY created_at DESC
         ")->fetchAllAssociative();
-=======
+
+        http_response_code(200);
+        echo json_encode([
+            "status" => "success",
+            "data"   => $contests
+        ], JSON_UNESCAPED_UNICODE);
+        exit(0);
+    }
+
     // API: ĐĂNG KÝ / TẠO / THAM GIA ĐỘI THI (REAL DATA)
     // ------------------------------------------------------------------------
     if ($path === '/api/teams' && $requestMethod === 'POST') {
@@ -531,26 +538,20 @@ try {
             'teamId' => $team['id'],
             'userId' => $currentUser->id
         ]);
->>>>>>> 10582f6c9c91c90ce92ed6181f19f3daa9b8a646
 
         http_response_code(200);
         echo json_encode([
             "status" => "success",
-<<<<<<< HEAD
-            "data"   => $contests
-=======
             "message" => "Tham gia đội thi thành công!",
             "data" => [
                 "teamId" => (int)$team['id'],
                 "teamName" => $team['team_name']
             ]
->>>>>>> 10582f6c9c91c90ce92ed6181f19f3daa9b8a646
         ], JSON_UNESCAPED_UNICODE);
         exit(0);
     }
 
     // ------------------------------------------------------------------------
-<<<<<<< HEAD
     // ROUTE 9: LẤY CHI TIẾT MỘT CUỘC THI (CÔNG KHAI)
     // GET /api/contests/{id}
     // ------------------------------------------------------------------------
@@ -774,9 +775,8 @@ try {
             "message" => "Đã xoá cuộc thi \"" . $existing['name'] . "\" thành công!"
         ], JSON_UNESCAPED_UNICODE);
         exit(0);
-=======
-    // API: HACKATHONS
-    // ------------------------------------------------------------------------
+    }
+
     // ------------------------------------------------------------------------
     // API: HACKATHONS
     // ------------------------------------------------------------------------
@@ -937,6 +937,7 @@ try {
     }
 
     // ------------------------------------------------------------------------
+    // ------------------------------------------------------------------------
     // API: MILESTONES
     // ------------------------------------------------------------------------
     if (preg_match('#^/api/hackathons/(\d+)/milestones$#', $path, $matches)) {
@@ -944,6 +945,19 @@ try {
         $repo = $entityManager->getRepository(\App\Infrastructure\Model\MilestoneModel::class);
 
         if ($requestMethod === 'POST') {
+            // Xác thực Admin
+            $headers = getallheaders();
+            $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+            if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches_token)) {
+                throw new Exception("Yêu cầu phải có Token xác thực hợp lệ!");
+            }
+            $currentUser = $authService->verifyToken($matches_token[1]);
+            if (!$currentUser->isAdmin()) {
+                http_response_code(403);
+                echo json_encode(["status" => "error", "message" => "Chỉ Ban tổ chức (ADMIN) mới có quyền tạo mốc thời gian!"], JSON_UNESCAPED_UNICODE);
+                exit(0);
+            }
+
             $inputData = json_decode(file_get_contents('php://input'), true) ?? [];
             $milestone = new \App\Infrastructure\Model\MilestoneModel();
             $milestone->hackathonId = $hackathonId;
@@ -976,6 +990,53 @@ try {
         }
     }
 
+    if (preg_match('#^/api/milestones/(\d+)$#', $path, $matches)) {
+        $id = (int)$matches[1];
+        $repo = $entityManager->getRepository(\App\Infrastructure\Model\MilestoneModel::class);
+        $milestone = $repo->find($id);
+
+        if (!$milestone) {
+            http_response_code(404);
+            echo json_encode(["status" => "error", "message" => "Mốc thời gian không tồn tại!"], JSON_UNESCAPED_UNICODE);
+            exit(0);
+        }
+
+        // Xác thực Admin cho các thao tác thay đổi
+        $headers = getallheaders();
+        $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+        if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches_token)) {
+            throw new Exception("Yêu cầu phải có Token xác thực hợp lệ!");
+        }
+        $currentUser = $authService->verifyToken($matches_token[1]);
+        if (!$currentUser->isAdmin()) {
+            http_response_code(403);
+            echo json_encode(["status" => "error", "message" => "Chỉ Ban tổ chức (ADMIN) mới có quyền thực hiện!"], JSON_UNESCAPED_UNICODE);
+            exit(0);
+        }
+
+        if ($requestMethod === 'PUT') {
+            $inputData = json_decode(file_get_contents('php://input'), true) ?? [];
+            if (isset($inputData['name'])) $milestone->name = $inputData['name'];
+            if (isset($inputData['description'])) $milestone->description = $inputData['description'];
+            if (isset($inputData['dueDate'])) {
+                $milestone->dueDate = !empty($inputData['dueDate']) ? new \DateTime($inputData['dueDate']) : null;
+            }
+
+            $entityManager->flush();
+            http_response_code(200);
+            echo json_encode(["status" => "success", "message" => "Cập nhật mốc thời gian thành công!"], JSON_UNESCAPED_UNICODE);
+            exit(0);
+        }
+
+        if ($requestMethod === 'DELETE') {
+            $entityManager->remove($milestone);
+            $entityManager->flush();
+            http_response_code(200);
+            echo json_encode(["status" => "success", "message" => "Xoá mốc thời gian thành công!"], JSON_UNESCAPED_UNICODE);
+            exit(0);
+        }
+    }
+
     // ------------------------------------------------------------------------
     // API: SCHEDULES
     // ------------------------------------------------------------------------
@@ -983,6 +1044,19 @@ try {
         $repo = $entityManager->getRepository(\App\Infrastructure\Model\ScheduleModel::class);
 
         if ($requestMethod === 'POST') {
+            // Xác thực Admin
+            $headers = getallheaders();
+            $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+            if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches_token)) {
+                throw new Exception("Yêu cầu phải có Token xác thực hợp lệ!");
+            }
+            $currentUser = $authService->verifyToken($matches_token[1]);
+            if (!$currentUser->isAdmin()) {
+                http_response_code(403);
+                echo json_encode(["status" => "error", "message" => "Chỉ Ban tổ chức (ADMIN) mới có quyền tạo lịch trình!"], JSON_UNESCAPED_UNICODE);
+                exit(0);
+            }
+
             $inputData = json_decode(file_get_contents('php://input'), true) ?? [];
             $schedule = new \App\Infrastructure\Model\ScheduleModel();
             $schedule->title = $inputData['title'] ?? 'Untitled Event';
@@ -1026,7 +1100,55 @@ try {
             echo json_encode(["status" => "success", "data" => $data], JSON_UNESCAPED_UNICODE);
             exit(0);
         }
->>>>>>> 10582f6c9c91c90ce92ed6181f19f3daa9b8a646
+    }
+
+    if (preg_match('#^/api/schedules/(\d+)$#', $path, $matches)) {
+        $id = (int)$matches[1];
+        $repo = $entityManager->getRepository(\App\Infrastructure\Model\ScheduleModel::class);
+        $schedule = $repo->find($id);
+
+        if (!$schedule) {
+            http_response_code(404);
+            echo json_encode(["status" => "error", "message" => "Lịch trình không tồn tại!"], JSON_UNESCAPED_UNICODE);
+            exit(0);
+        }
+
+        // Xác thực Admin cho các thao tác thay đổi
+        $headers = getallheaders();
+        $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+        if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches_token)) {
+            throw new Exception("Yêu cầu phải có Token xác thực hợp lệ!");
+        }
+        $currentUser = $authService->verifyToken($matches_token[1]);
+        if (!$currentUser->isAdmin()) {
+            http_response_code(403);
+            echo json_encode(["status" => "error", "message" => "Chỉ Ban tổ chức (ADMIN) mới có quyền thực hiện!"], JSON_UNESCAPED_UNICODE);
+            exit(0);
+        }
+
+        if ($requestMethod === 'PUT') {
+            $inputData = json_decode(file_get_contents('php://input'), true) ?? [];
+            if (isset($inputData['title'])) $schedule->title = $inputData['title'];
+            if (isset($inputData['description'])) $schedule->description = $inputData['description'];
+            if (isset($inputData['startTime'])) $schedule->startTime = new \DateTime($inputData['startTime']);
+            if (isset($inputData['endTime'])) {
+                $schedule->endTime = !empty($inputData['endTime']) ? new \DateTime($inputData['endTime']) : null;
+            }
+            if (isset($inputData['location'])) $schedule->location = $inputData['location'];
+
+            $entityManager->flush();
+            http_response_code(200);
+            echo json_encode(["status" => "success", "message" => "Cập nhật lịch trình thành công!"], JSON_UNESCAPED_UNICODE);
+            exit(0);
+        }
+
+        if ($requestMethod === 'DELETE') {
+            $entityManager->remove($schedule);
+            $entityManager->flush();
+            http_response_code(200);
+            echo json_encode(["status" => "success", "message" => "Xoá lịch trình thành công!"], JSON_UNESCAPED_UNICODE);
+            exit(0);
+        }
     }
 
     // ------------------------------------------------------------------------

@@ -1,9 +1,5 @@
 import { useState, useEffect } from 'react';
-<<<<<<< HEAD
 import { Calendar, Users, Trophy, Search, Filter, MapPin, Loader2 } from 'lucide-react';
-=======
-import { Calendar, Users, Trophy, Search, Filter, MapPin } from 'lucide-react';
->>>>>>> 10582f6c9c91c90ce92ed6181f19f3daa9b8a646
 import { Link } from 'react-router-dom';
 
 export function EventsPage() {
@@ -12,11 +8,14 @@ export function EventsPage() {
   const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-<<<<<<< HEAD
+  const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
     const fetchEvents = async () => {
       try {
-        const res = await fetch('http://localhost:8000/index.php/api/contests');
+        setLoading(true);
+        setError(null);
+        const res = await fetch('http://localhost:8000/index.php/api/hackathons');
         const result = await res.json();
         
         if (result.status === 'success' && result.data) {
@@ -33,10 +32,10 @@ export function EventsPage() {
           // Chuyển đổi trạng thái từ EN (DB) sang VN (UI)
           const mapStatus = (statusStr: string) => {
             switch(statusStr) {
-              case 'ACTIVE': return 'Đang mở đăng ký';
-              case 'UPCOMING': return 'Sắp mở đăng ký';
+              case 'ACTIVE': return 'Đang diễn ra';
+              case 'UPCOMING': return 'Sắp diễn ra';
               case 'COMPLETED': return 'Đã kết thúc';
-              default: return 'Đang mở đăng ký';
+              default: return 'Sắp diễn ra';
             }
           };
 
@@ -44,21 +43,23 @@ export function EventsPage() {
           const mappedEvents = result.data.map((item: any) => ({
             id: item.id,
             name: item.name,
-            date: `${new Date(item.start_date).toLocaleDateString('vi-VN')} - ${new Date(item.end_date).toLocaleDateString('vi-VN')}`,
+            startDate: item.startDate,
+            endDate: item.endDate,
             location: item.location,
-            teams: Math.floor(Math.random() * (item.max_teams / 2)), // Dữ liệu giả lập cho số đội đã tham gia
-            maxTeams: item.max_teams,
-            prize: item.prize || ('₫' + (item.max_teams * 1000000).toLocaleString('vi-VN')), // Lấy từ DB hoặc giả lập nếu thiếu
+            teams: Math.floor(Math.random() * ((item.maxTeams || 50) / 2)), // Dữ liệu giả lập cho số đội đã tham gia
+            maxTeams: item.maxTeams || 50,
+            prize: '₫' + ((item.maxTeams || 50) * 1000000).toLocaleString('vi-VN'), // Giả lập giải thưởng dựa trên quy mô đội thi
             status: mapStatus(item.status),
             category: item.category,
-            image: item.image || gradients[item.id % gradients.length], // Lấy từ DB hoặc dùng gradient mặc định
-            description: item.description
+            image: gradients[item.id % gradients.length], // Dùng gradient mặc định
+            description: item.description || 'Chưa có mô tả'
           }));
           
           setEvents(mappedEvents);
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Lỗi khi tải dữ liệu sự kiện:', err);
+        setError(err.message || 'Lỗi kết nối API Backend.');
       } finally {
         setLoading(false);
       }
@@ -66,30 +67,6 @@ export function EventsPage() {
     
     fetchEvents();
   }, []);
-=======
-  const [events, setEvents] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetchEvents();
-  }, []);
-
-  const fetchEvents = async () => {
-    try {
-      setLoading(true);
-      const response = await fetch('http://localhost:8000/index.php/api/hackathons');
-      const result = await response.json();
-      if (!response.ok || result.status === 'error') {
-        throw new Error(result.message || 'Không thể tải danh sách sự kiện.');
-      }
-      setEvents(result.data || []);
-    } catch (err: any) {
-      setError(err.message || 'Lỗi kết nối API Backend.');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const formatDateRange = (startStr: string | null, endStr: string | null) => {
     if (!startStr) return 'Chưa xác định';
@@ -118,7 +95,6 @@ export function EventsPage() {
       return 'Lỗi ngày tháng';
     }
   };
->>>>>>> 10582f6c9c91c90ce92ed6181f19f3daa9b8a646
 
   const filteredEvents = events.filter((event) => {
     const matchesSearch = (event.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
