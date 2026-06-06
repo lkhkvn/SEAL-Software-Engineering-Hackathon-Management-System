@@ -33,6 +33,7 @@ services:
       MYSQL_PASSWORD: user_secret_password
     volumes:
       - mysql_data:/var/lib/mysql # Giữ lại dữ liệu database không bị mất khi tắt Docker
+      - ./database:/docker-entrypoint-initdb.d # Tự động nạp dữ liệu mẫu khi khởi tạo Database mới
     networks:
       - project_network
 

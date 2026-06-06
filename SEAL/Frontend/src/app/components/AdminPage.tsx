@@ -40,6 +40,12 @@ interface Hackathon {
   registrationEnd: string;
   maxTeams: number;
   status: string;
+  organizer?: string;
+  schedule?: string;
+  prizeDetails?: string;
+  rules?: string;
+  criteria?: string;
+  registrationDeadline?: string;
 }
 
 interface Milestone {
@@ -69,8 +75,14 @@ const EMPTY_FORM: Omit<Hackathon, 'id'> = {
   endDate: '',
   registrationStart: '',
   registrationEnd: '',
+  registrationDeadline: '',
   maxTeams: 50,
   status: 'UPCOMING',
+  organizer: '',
+  schedule: '',
+  prizeDetails: '',
+  rules: '',
+  criteria: '',
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -238,8 +250,14 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
       endDate: c.endDate ? c.endDate.slice(0, 10) : '',
       registrationStart: c.registrationStart ? c.registrationStart.slice(0, 10) : '',
       registrationEnd: c.registrationEnd ? c.registrationEnd.slice(0, 10) : '',
+      registrationDeadline: (c as any).registration_deadline ? (c as any).registration_deadline.slice(0, 10) : (c.registrationEnd ? c.registrationEnd.slice(0, 10) : ''),
       maxTeams: c.maxTeams || 50,
       status: c.status,
+      organizer: c.organizer || '',
+      schedule: c.schedule || '',
+      prizeDetails: (c as any).prize_details || c.prizeDetails || '',
+      rules: c.rules || '',
+      criteria: c.criteria || '',
     });
     setFormError(null);
     setShowModal(true);
@@ -274,8 +292,8 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
       const token = localStorage.getItem('auth_token');
       const isEdit = !!editingContest;
       const url = isEdit
-        ? `http://localhost:8000/index.php/api/hackathons/${editingContest!.id}`
-        : 'http://localhost:8000/index.php/api/hackathons';
+        ? `http://localhost:8000/index.php/api/admin/hackathons/${editingContest!.id}`
+        : 'http://localhost:8000/index.php/api/admin/hackathons';
 
       const res = await fetch(url, {
         method: isEdit ? 'PUT' : 'POST',
@@ -285,12 +303,18 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
           category: formData.category,
           description: formData.description,
           location: formData.location,
-          startDate: formData.startDate,
-          endDate: formData.endDate,
-          registrationStart: formData.registrationStart,
-          registrationEnd: formData.registrationEnd,
-          maxTeams: Number(formData.maxTeams),
-          status: formData.status
+          start_date: formData.startDate,
+          end_date: formData.endDate,
+          registration_start: formData.registrationStart,
+          registration_end: formData.registrationEnd,
+          max_teams: Number(formData.maxTeams),
+          status: formData.status,
+          organizer: formData.organizer,
+          schedule: formData.schedule,
+          prize_details: formData.prizeDetails,
+          rules: formData.rules,
+          criteria: formData.criteria,
+          registration_deadline: formData.registrationDeadline || formData.registrationEnd,
         }),
       });
       const result = await res.json();
@@ -311,7 +335,7 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
     setDeletingId(contest.id);
     try {
       const token = localStorage.getItem('auth_token');
-      const res = await fetch(`http://localhost:8000/index.php/api/hackathons/${contest.id}`, {
+      const res = await fetch(`http://localhost:8000/index.php/api/admin/hackathons/${contest.id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -457,6 +481,7 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
     }
   };
   
+  // ── Không có quyền ──
   if (!isAdmin) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4">
@@ -704,6 +729,19 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
                 </div>
               </div>
 
+              {/* Ban tổ chức */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Ban tổ chức</label>
+                <input
+                  id="contest-organizer"
+                  type="text"
+                  value={formData.organizer}
+                  onChange={e => setFormData(p => ({ ...p, organizer: e.target.value }))}
+                  placeholder="VD: Bộ Khoa học và Công nghệ"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white"
+                />
+              </div>
+
               {/* Mô tả */}
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1.5">Mô tả chi tiết</label>
@@ -713,6 +751,55 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
                   value={formData.description}
                   onChange={e => setFormData(p => ({ ...p, description: e.target.value }))}
                   placeholder="Nhập mô tả chi tiết về Hackathon..."
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm resize-none bg-white"
+                />
+              </div>
+
+              {/* Các trường cấu hình nâng cao */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Tiêu chí đánh giá</label>
+                <textarea
+                  id="contest-criteria"
+                  rows={3}
+                  value={formData.criteria}
+                  onChange={e => setFormData(p => ({ ...p, criteria: e.target.value }))}
+                  placeholder="Ví dụ: Tính sáng tạo (30%), Khả năng ứng dụng (25%)..."
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm resize-none bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Lịch trình</label>
+                <textarea
+                  id="contest-schedule"
+                  rows={3}
+                  value={formData.schedule}
+                  onChange={e => setFormData(p => ({ ...p, schedule: e.target.value }))}
+                  placeholder="Ví dụ: 08:00 Khai mạc, 09:00 Bắt đầu..."
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm resize-none bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Cơ cấu giải thưởng</label>
+                <textarea
+                  id="contest-prize"
+                  rows={3}
+                  value={formData.prizeDetails}
+                  onChange={e => setFormData(p => ({ ...p, prizeDetails: e.target.value }))}
+                  placeholder="Ví dụ: Giải nhất: 70,000,000đ..."
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm resize-none bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Thể lệ chung</label>
+                <textarea
+                  id="contest-rules"
+                  rows={3}
+                  value={formData.rules}
+                  onChange={e => setFormData(p => ({ ...p, rules: e.target.value }))}
+                  placeholder="Ví dụ: Mỗi đội 3-5 người, bắt buộc AI/ML..."
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm resize-none bg-white"
                 />
               </div>

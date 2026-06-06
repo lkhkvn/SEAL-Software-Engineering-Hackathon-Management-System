@@ -2,9 +2,9 @@
 -- Adds a normalized join table to manage users in teams.
 
 CREATE TABLE IF NOT EXISTS `team_members` (
-    `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
-    `team_id` INT UNSIGNED NOT NULL,
-    `user_id` INT UNSIGNED NOT NULL,
+    `id` INT NOT NULL AUTO_INCREMENT,
+    `team_id` INT NOT NULL,
+    `user_id` INT NOT NULL,
     `role_in_team` VARCHAR(20) NOT NULL DEFAULT 'MEMBER',
     `joined_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),

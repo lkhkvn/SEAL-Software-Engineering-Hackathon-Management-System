@@ -9,7 +9,6 @@ export function EventsPage() {
   const [loading, setLoading] = useState(true);
 
   const [error, setError] = useState<string | null>(null);
-
   useEffect(() => {
     const fetchEvents = async () => {
       try {
@@ -67,7 +66,6 @@ export function EventsPage() {
     
     fetchEvents();
   }, []);
-
   const formatDateRange = (startStr: string | null, endStr: string | null) => {
     if (!startStr) return 'Chưa xác định';
     try {
