@@ -18,6 +18,7 @@ $connectionParams = [
     'host'     => 'db', 
     'port'     => 3306, 
     'driver'   => 'pdo_mysql',
+    'charset'  => 'utf8mb4',
 ];
 
 $connection = DriverManager::getConnection($connectionParams, $config);
