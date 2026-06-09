@@ -1,5 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { Trophy, Calendar, Users, Settings, Home, Award, LogIn, LogOut } from 'lucide-react';
+import { NotificationBell } from './NotificationBell';
 
 interface NavigationProps {
   currentUser: any;
@@ -86,6 +87,9 @@ export function Navigation({ currentUser, onLogout }: NavigationProps) {
                     {getRoleBadge(currentUser.role)}
                   </span>
                 </div>
+
+                {/* Chuông thông báo */}
+                <NotificationBell currentUser={currentUser} />
 
                 {/* Avatar tròn */}
                 <div className="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-sm shadow-md cursor-pointer hover:scale-105 transition-transform" title={currentUser.username}>

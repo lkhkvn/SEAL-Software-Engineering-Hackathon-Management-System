@@ -21,6 +21,13 @@ import {
   Hash,
   Clock,
   Award,
+  FileText,
+  BookOpen,
+  Send,
+  Lock,
+  Unlock,
+  PlayCircle,
+  UploadCloud
 } from 'lucide-react';
 
 interface AdminPageProps {
@@ -132,9 +139,9 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
   // Toast
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-  // ── Milestones & Schedules Management State ──
+  // ── Milestones & Schedules & Challenge Management State ──
   const [selectedHackathonForTimeline, setSelectedHackathonForTimeline] = useState<Hackathon | null>(null);
-  const [activeTimelineTab, setActiveTimelineTab] = useState<'milestones' | 'schedules'>('milestones');
+  const [activeTimelineTab, setActiveTimelineTab] = useState<'milestones' | 'schedules' | 'challenge'>('milestones');
   
   // Milestones
   const [milestones, setMilestones] = useState<Milestone[]>([]);
@@ -147,6 +154,19 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
   const [loadingSchedules, setLoadingSchedules] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState<Schedule | null>(null);
   const [scheduleForm, setScheduleForm] = useState({ title: '', description: '', startTime: '', endTime: '', location: '' });
+
+  // Challenge (Đề bài)
+  const [challenge, setChallenge] = useState<any>(null);
+  const [loadingChallenge, setLoadingChallenge] = useState(false);
+  const [releasingChallenge, setReleasingChallenge] = useState(false);
+  const [savingChallenge, setSavingChallenge] = useState(false);
+  const [challengeForm, setChallengeForm] = useState({
+    title: '',
+    description: '',
+    resources: '',
+    constraints: '',
+    criteriaItems: [{ name: '', weight: 30 }],
+  });
 
   const isAdmin = currentUser && currentUser.role?.toUpperCase() === 'ADMIN';
 
@@ -351,11 +371,12 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
     }
   };
 
-  // ── Fetch Milestones & Schedules side-effects ──
+  // ── Fetch Milestones & Schedules & Challenge side-effects ──
   useEffect(() => {
     if (selectedHackathonForTimeline) {
       fetchMilestones(selectedHackathonForTimeline.id);
       fetchSchedules(selectedHackathonForTimeline.id);
+      fetchChallenge(selectedHackathonForTimeline.id);
     }
   }, [selectedHackathonForTimeline]);
 
@@ -461,6 +482,143 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
       fetchSchedules(selectedHackathonForTimeline.id);
     } catch (e: any) {
       toast('error', e.message || 'Thao tác thất bại.');
+    }
+  };
+
+  // ── Challenge handlers ──────────────────────────────────────────────────
+
+  const fetchChallenge = async (hackathonId: number) => {
+    setLoadingChallenge(true);
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch(`http://localhost:8000/index.php/api/admin/hackathons/${hackathonId}/challenge`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const result = await res.json();
+      if (res.ok && result.status === 'success') {
+        const d = result.data;
+        setChallenge(d.exists ? d : null);
+        if (d.exists) {
+          setChallengeForm({
+            title: d.title || '',
+            description: d.description || '',
+            resources: d.resources || '',
+            constraints: d.constraints || '',
+            criteriaItems: Array.isArray(d.criteria) && d.criteria.length > 0
+              ? d.criteria.map((c: any) => ({ name: c.name || '', weight: c.weight ?? 30 }))
+              : [{ name: '', weight: 30 }],
+          });
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingChallenge(false);
+    }
+  };
+
+  const handleChallengeSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedHackathonForTimeline) return;
+    setSavingChallenge(true);
+    try {
+      const token = localStorage.getItem('auth_token');
+      const criteriaJson = JSON.stringify(
+        challengeForm.criteriaItems.filter(c => c.name.trim())
+      );
+      const res = await fetch(
+        `http://localhost:8000/index.php/api/admin/hackathons/${selectedHackathonForTimeline.id}/challenge`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            title: challengeForm.title,
+            description: challengeForm.description,
+            resources: challengeForm.resources,
+            constraints: challengeForm.constraints,
+            criteria_json: criteriaJson,
+          }),
+        }
+      );
+      const result = await res.json();
+      if (!res.ok || result.status === 'error') throw new Error(result.message);
+      toast('success', result.message || 'Lưu đề bài thành công!');
+      fetchChallenge(selectedHackathonForTimeline.id);
+    } catch (e: any) {
+      toast('error', e.message || 'Lưu đề bài thất bại.');
+    } finally {
+      setSavingChallenge(false);
+    }
+  };
+
+  const handleChallengeRelease = async () => {
+    if (!selectedHackathonForTimeline) return;
+    if (!confirm('Bạn có chắc muốn phát đề bài ngay lập tức cho tất cả các đội? Hành động này không thể hoàn tác!')) return;
+    setReleasingChallenge(true);
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch(
+        `http://localhost:8000/index.php/api/admin/hackathons/${selectedHackathonForTimeline.id}/challenge/release`,
+        { method: 'POST', headers: { Authorization: `Bearer ${token}` } }
+      );
+      const result = await res.json();
+      if (!res.ok || result.status === 'error') throw new Error(result.message);
+      toast('success', result.message || 'Đề bài đã được phát!');
+      fetchChallenge(selectedHackathonForTimeline.id);
+    } catch (e: any) {
+      toast('error', e.message || 'Không thể phát đề bài.');
+    } finally {
+      setReleasingChallenge(false);
+    }
+  };
+
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedHackathonForTimeline) return;
+
+    if (file.size > 20 * 1024 * 1024) {
+      toast('error', 'Kích thước file vượt quá 20MB.');
+      return;
+    }
+
+    setUploadingFile(true);
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch(`http://localhost:8000/index.php/api/admin/hackathons/${selectedHackathonForTimeline.id}/challenge/upload`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData
+      });
+      const result = await res.json();
+      if (!res.ok || result.status === 'error') throw new Error(result.message);
+      toast('success', 'Tải lên file đề bài thành công!');
+      fetchChallenge(selectedHackathonForTimeline.id); // Reload
+    } catch (error: any) {
+      toast('error', error.message || 'Lỗi khi tải file lên.');
+    } finally {
+      setUploadingFile(false);
+      e.target.value = ''; // Reset input
+    }
+  };
+
+  const handleStartContest = async (id: number) => {
+    if (!confirm('Bạn có chắc muốn BẮT ĐẦU cuộc thi? Đề bài sẽ được tự động phát và thông báo sẽ gửi tới tất cả các đội!')) return;
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch(`http://localhost:8000/index.php/api/admin/hackathons/${id}/start`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const result = await res.json();
+      if (!res.ok || result.status === 'error') throw new Error(result.message);
+      toast('success', 'Đã bắt đầu cuộc thi và phát thông báo!');
+      fetchContests(); // Reload hackathon list to update status
+    } catch (error: any) {
+      toast('error', error.message || 'Lỗi khi bắt đầu cuộc thi.');
     }
   };
 
@@ -1045,6 +1203,15 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
                               <Pencil size={16} />
                             </button>
                             <button
+                              id={`btn-start-contest-${c.id}`}
+                              onClick={() => handleStartContest(c.id)}
+                              disabled={c.status === 'COMPLETED' || c.status === 'CANCELLED'}
+                              className="p-1.5 hover:bg-green-50 hover:shadow rounded-lg transition-all text-gray-400 hover:text-green-600 cursor-pointer disabled:opacity-40"
+                              title="Bắt đầu cuộc thi"
+                            >
+                              <PlayCircle size={16} />
+                            </button>
+                            <button
                               id={`btn-delete-contest-${c.id}`}
                               onClick={() => setConfirmDelete(c)}
                               disabled={deletingId === c.id}
@@ -1233,7 +1400,7 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
                       : 'border-transparent text-gray-600 hover:text-gray-900'
                   }`}
                 >
-                  Mốc thời gian (Milestones - Timeline)
+                  Mốc thời gian (Timeline)
                 </button>
                 <button
                   onClick={() => setActiveTimelineTab('schedules')}
@@ -1243,13 +1410,227 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
                       : 'border-transparent text-gray-600 hover:text-gray-900'
                   }`}
                 >
-                  Lịch trình sự kiện (Schedules)
+                  Lịch trình sự kiện
+                </button>
+                <button
+                  onClick={() => setActiveTimelineTab('challenge')}
+                  className={`px-4 py-3 font-semibold text-sm border-b-2 transition-colors cursor-pointer flex items-center gap-1.5 ${
+                    activeTimelineTab === 'challenge'
+                      ? 'border-orange-500 text-orange-600 font-bold'
+                      : 'border-transparent text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <BookOpen size={14} />
+                  Đề bài & Tiêu chí
+                  {challenge?.released_at && (
+                    <span className="ml-1 px-1.5 py-0.5 bg-green-100 text-green-700 rounded text-[10px] font-bold">ĐÃ PHÁT</span>
+                  )}
                 </button>
               </div>
 
               {/* Body */}
               <div className="flex-1 overflow-y-auto p-6 flex flex-col lg:flex-row gap-6">
-                
+
+                {/* ══ TAB: ĐỀ BÀI & TIÊU CHÍ ══ */}
+                {activeTimelineTab === 'challenge' && (
+                  <div className="w-full">
+                    {loadingChallenge ? (
+                      <div className="flex items-center justify-center py-16 gap-2 text-gray-500 text-sm">
+                        <Loader2 className="animate-spin text-orange-500" size={20} />
+                        <span>Đang tải đề bài...</span>
+                      </div>
+                    ) : (
+                      <form onSubmit={handleChallengeSave} className="space-y-5">
+
+                        {/* Status Banner */}
+                        {challenge?.released_at ? (
+                          <div className="flex items-center gap-3 p-3.5 bg-green-50 border border-green-200 rounded-xl">
+                            <Unlock size={18} className="text-green-600 flex-shrink-0" />
+                            <div className="text-left">
+                              <p className="text-sm font-bold text-green-800">Đề bài đã được phát công khai</p>
+                              <p className="text-xs text-green-600 mt-0.5">
+                                Phát lúc: {new Date(challenge.released_at).toLocaleString('vi-VN')}
+                              </p>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-3 p-3.5 bg-amber-50 border border-amber-200 rounded-xl">
+                            <Lock size={18} className="text-amber-600 flex-shrink-0" />
+                            <div className="flex-1 text-left">
+                              <p className="text-sm font-bold text-amber-800">Đề bài chưa được phát</p>
+                              <p className="text-xs text-amber-600 mt-0.5">
+                                Sẽ tự động hiển thị khi đến ngày bắt đầu cuộc thi, hoặc bạn có thể phát ngay.
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={handleChallengeRelease}
+                              disabled={!challenge || releasingChallenge}
+                              className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-xs font-bold rounded-lg transition-colors cursor-pointer"
+                            >
+                              {releasingChallenge ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+                              Phát đề ngay
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Grid: Left form + Right criteria */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                          {/* Left: Basic Info */}
+                          <div className="space-y-4">
+                            <div>
+                              <label className="block text-xs font-bold text-gray-700 mb-1.5 text-left">Tiêu đề đề bài *</label>
+                              <input
+                                type="text"
+                                required
+                                value={challengeForm.title}
+                                onChange={e => setChallengeForm(p => ({ ...p, title: e.target.value }))}
+                                placeholder="VD: Xây dựng hệ thống AI quản lý học tập..."
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-orange-400 focus:outline-none"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-bold text-gray-700 mb-1.5 text-left">Nội dung / Mô tả chi tiết *</label>
+                              <textarea
+                                rows={6}
+                                required
+                                value={challengeForm.description}
+                                onChange={e => setChallengeForm(p => ({ ...p, description: e.target.value }))}
+                                placeholder="Mô tả bài toán, context, mục tiêu cần đạt được..."
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white resize-none focus:ring-2 focus:ring-orange-400 focus:outline-none"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-bold text-gray-700 mb-1.5 text-left">
+                                <FileText size={12} className="inline mr-1" />
+                                Tài nguyên / API mẫu / Links
+                              </label>
+                              <textarea
+                                rows={3}
+                                value={challengeForm.resources}
+                                onChange={e => setChallengeForm(p => ({ ...p, resources: e.target.value }))}
+                                placeholder="VD: Dataset: https://... | API docs: https://..."
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white resize-none focus:ring-2 focus:ring-orange-400 focus:outline-none"
+                              />
+                            </div>
+                            
+                            {/* FILE UPLOAD */}
+                            <div className="bg-gray-50 p-3 rounded-lg border border-dashed border-gray-300">
+                              <label className="block text-xs font-bold text-gray-700 mb-1.5 text-left">File đính kèm đề bài (PDF, ZIP, DOCX)</label>
+                              <div className="flex items-center gap-3">
+                                <label className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-300 rounded cursor-pointer hover:bg-gray-50 transition-colors text-sm font-medium">
+                                  {uploadingFile ? <Loader2 size={14} className="animate-spin" /> : <UploadCloud size={14} />}
+                                  Tải lên file
+                                  <input type="file" className="hidden" accept=".pdf,.zip,.docx" onChange={handleFileUpload} disabled={uploadingFile} />
+                                </label>
+                                {challenge?.fileUrl ? (
+                                  <a href={`http://localhost:8000${challenge.fileUrl}`} target="_blank" rel="noreferrer" className="text-sm text-blue-600 hover:underline flex-1 truncate text-left">
+                                    {challenge.fileName || 'Đã đính kèm file'}
+                                  </a>
+                                ) : (
+                                  <span className="text-xs text-gray-500 italic">Chưa có file đính kèm</span>
+                                )}
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="block text-xs font-bold text-gray-700 mb-1.5 text-left">Ràng buộc kỹ thuật</label>
+                              <textarea
+                                rows={3}
+                                value={challengeForm.constraints}
+                                onChange={e => setChallengeForm(p => ({ ...p, constraints: e.target.value }))}
+                                placeholder="VD: Sử dụng Python/JS, không dùng API trả phí..."
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white resize-none focus:ring-2 focus:ring-orange-400 focus:outline-none"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Right: Criteria */}
+                          <div>
+                            <div className="flex items-center justify-between mb-2">
+                              <label className="text-xs font-bold text-gray-700 text-left">Tiêu chí chấm điểm</label>
+                              <button
+                                type="button"
+                                onClick={() => setChallengeForm(p => ({
+                                  ...p,
+                                  criteriaItems: [...p.criteriaItems, { name: '', weight: 20 }]
+                                }))}
+                                className="text-xs text-orange-600 font-bold hover:underline cursor-pointer"
+                              >+ Thêm tiêu chí</button>
+                            </div>
+                            <div className="space-y-3">
+                              {challengeForm.criteriaItems.map((item, idx) => (
+                                <div key={idx} className="flex gap-2 items-center p-2.5 bg-gray-50 border border-gray-200 rounded-lg">
+                                  <div className="flex-1">
+                                    <input
+                                      type="text"
+                                      value={item.name}
+                                      onChange={e => {
+                                        const updated = [...challengeForm.criteriaItems];
+                                        updated[idx] = { ...updated[idx], name: e.target.value };
+                                        setChallengeForm(p => ({ ...p, criteriaItems: updated }));
+                                      }}
+                                      placeholder="Tên tiêu chí (VD: Sáng tạo)"
+                                      className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs bg-white focus:ring-1 focus:ring-orange-400 focus:outline-none"
+                                    />
+                                  </div>
+                                  <div className="flex items-center gap-1 flex-shrink-0">
+                                    <input
+                                      type="number"
+                                      min={0} max={100}
+                                      value={item.weight}
+                                      onChange={e => {
+                                        const updated = [...challengeForm.criteriaItems];
+                                        updated[idx] = { ...updated[idx], weight: Number(e.target.value) };
+                                        setChallengeForm(p => ({ ...p, criteriaItems: updated }));
+                                      }}
+                                      className="w-14 px-2 py-1.5 border border-gray-300 rounded text-xs text-center bg-white focus:ring-1 focus:ring-orange-400 focus:outline-none"
+                                    />
+                                    <span className="text-xs text-gray-500">%</span>
+                                    {challengeForm.criteriaItems.length > 1 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setChallengeForm(p => ({
+                                          ...p,
+                                          criteriaItems: p.criteriaItems.filter((_, i) => i !== idx)
+                                        }))}
+                                        className="text-gray-400 hover:text-red-500 transition-colors cursor-pointer p-0.5"
+                                      ><X size={13} /></button>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                              {/* Tổng trọng số */}
+                              <div className={`text-xs font-bold text-right pr-1 ${
+                                challengeForm.criteriaItems.reduce((s, c) => s + c.weight, 0) === 100
+                                  ? 'text-green-600' : 'text-red-500'
+                              }`}>
+                                Tổng: {challengeForm.criteriaItems.reduce((s, c) => s + c.weight, 0)}% 
+                                {challengeForm.criteriaItems.reduce((s, c) => s + c.weight, 0) === 100 ? '✓' : '(cần = 100%)'}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Save Button */}
+                        <div className="flex justify-end pt-2 border-t border-gray-100">
+                          <button
+                            type="submit"
+                            disabled={savingChallenge}
+                            className="flex items-center gap-2 px-5 py-2.5 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 text-white font-bold text-sm rounded-lg transition-colors shadow cursor-pointer"
+                          >
+                            {savingChallenge ? <Loader2 size={15} className="animate-spin" /> : <FileText size={15} />}
+                            {challenge ? 'Cập nhật đề bài' : 'Lưu đề bài'}
+                          </button>
+                        </div>
+                      </form>
+                    )}
+                  </div>
+                )}
+
+                {/* ══ TAB: MILESTONES & SCHEDULES ══ */}
+                {activeTimelineTab !== 'challenge' && (
+                  <>
                 {/* Left Column: Form */}
                 <div className="w-full lg:w-1/3 bg-gray-50 p-4 rounded-xl border border-gray-200 flex-shrink-0 self-start">
                   <h4 className="font-bold text-gray-900 text-sm mb-4">
@@ -1510,6 +1891,9 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
                     )
                   )}
                 </div>
+
+              </>
+              )}
 
               </div>
 

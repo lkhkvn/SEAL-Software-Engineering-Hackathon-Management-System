@@ -1,0 +1,158 @@
+<?php
+namespace App\Presentation;
+
+use App\Services\HackathonService;
+use App\Services\AuthService;
+use App\Services\NotificationService;
+use Exception;
+
+
+class HackathonController {
+    private HackathonService $hackathonService;
+    private AuthService $authService;
+    private NotificationService $notificationService;
+
+    public function __construct(HackathonService $hackathonService, AuthService $authService, NotificationService $notificationService) {
+        $this->hackathonService = $hackathonService;
+        $this->authService = $authService;
+        $this->notificationService = $notificationService;
+    }
+
+    public function getAllHackathons(): void {
+        $contests = $this->hackathonService->getAllHackathons();
+        http_response_code(200);
+        echo json_encode([
+            "status" => "success",
+            "data"   => $contests
+        ], JSON_UNESCAPED_UNICODE);
+    }
+
+    public function getHackathonById(int $id): void {
+        $contest = $this->hackathonService->getHackathonById($id);
+        if (!$contest) {
+            http_response_code(404);
+            echo json_encode(["status" => "error", "message" => "Cuộc thi không tồn tại!"], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+
+        http_response_code(200);
+        echo json_encode(["status" => "success", "data" => $contest], JSON_UNESCAPED_UNICODE);
+    }
+
+    public function registerTeam(int $contestId): void {
+        $headers = getallheaders();
+        $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+        
+        if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
+            http_response_code(401);
+            echo json_encode(["status" => "error", "message" => "Thiếu token!"], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+
+        try {
+            $currentUser = $this->authService->verifyToken($matches[1]);
+            $inputData = json_decode(file_get_contents('php://input'), true);
+            $teamId = $inputData['team_id'] ?? null;
+
+            if (!$teamId) {
+                http_response_code(400);
+                echo json_encode(["status" => "error", "message" => "Thiếu ID đội thi!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            $this->hackathonService->registerTeamToHackathon($contestId, $teamId, $currentUser->id);
+
+            http_response_code(200);
+            echo json_encode(["status" => "success", "message" => "Đăng ký cuộc thi thành công!"], JSON_UNESCAPED_UNICODE);
+        } catch (Exception $e) {
+            $code = $e->getMessage() === "Thiếu token!" || strpos($e->getMessage(), "Token") !== false ? 401 : 400;
+            if ($e->getMessage() === "Chỉ đội trưởng mới có quyền đăng ký thi đấu!") $code = 403;
+            if ($e->getMessage() === "Đội thi không tồn tại!" || $e->getMessage() === "Cuộc thi không tồn tại!") $code = 404;
+            
+            http_response_code($code);
+            echo json_encode(["status" => "error", "message" => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        }
+    }
+
+    public function startContest(int $id): void {
+        $this->requireAdmin();
+        try {
+            $result = $this->hackathonService->startContest($id, $this->notificationService);
+            http_response_code(200);
+            echo json_encode([
+                "status"  => "success",
+                "message" => "Đã bắt đầu cuộc thi và phát thông báo thành công!",
+                "data"    => $result
+            ], JSON_UNESCAPED_UNICODE);
+        } catch (Exception $e) {
+            http_response_code(400);
+            echo json_encode(["status" => "error", "message" => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        }
+    }
+
+    /** POST /api/admin/hackathons */
+    public function createHackathon(): void {
+        $this->requireAdmin();
+        $data = json_decode(file_get_contents('php://input'), true) ?? [];
+
+        $name     = trim($data['name']     ?? '');
+        $category = trim($data['category'] ?? '');
+        $start    = trim($data['start_date'] ?? '');
+        $end      = trim($data['end_date']   ?? '');
+
+        if (!$name || !$category || !$start || !$end) {
+            http_response_code(400);
+            echo json_encode(['status' => 'error', 'message' => 'Thiếu thông tin bắt buộc: tên, danh mục, ngày bắt đầu, ngày kết thúc!'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+
+        $newId = $this->hackathonService->createHackathon($data);
+        http_response_code(201);
+        echo json_encode(['status' => 'success', 'message' => 'Tạo cuộc thi mới thành công!', 'data' => ['id' => $newId, 'name' => $name]], JSON_UNESCAPED_UNICODE);
+    }
+
+    /** PUT /api/admin/hackathons/{id} */
+    public function updateHackathon(int $id): void {
+        $this->requireAdmin();
+        $data = json_decode(file_get_contents('php://input'), true) ?? [];
+
+        $name     = trim($data['name']     ?? '');
+        $category = trim($data['category'] ?? '');
+        $start    = trim($data['start_date'] ?? '');
+        $end      = trim($data['end_date']   ?? '');
+
+        if (!$name || !$category || !$start || !$end) {
+            http_response_code(400);
+            echo json_encode(['status' => 'error', 'message' => 'Thiếu thông tin bắt buộc!'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+
+        $this->hackathonService->updateHackathon($id, $data);
+        http_response_code(200);
+        echo json_encode(['status' => 'success', 'message' => 'Cập nhật cuộc thi thành công!', 'data' => ['id' => $id, 'name' => $name]], JSON_UNESCAPED_UNICODE);
+    }
+
+    /** DELETE /api/admin/hackathons/{id} */
+    public function deleteHackathon(int $id): void {
+        $this->requireAdmin();
+        $name = $this->hackathonService->deleteHackathon($id);
+        http_response_code(200);
+        echo json_encode(['status' => 'success', 'message' => "Đã xoá cuộc thi \"$name\" thành công!"], JSON_UNESCAPED_UNICODE);
+    }
+
+    private function requireAdmin(): void {
+        $headers = getallheaders();
+        $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+        if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
+            http_response_code(401);
+            echo json_encode(['status' => 'error', 'message' => 'Yêu cầu phải có Token xác thực!'], JSON_UNESCAPED_UNICODE);
+            exit(0);
+        }
+        $user = $this->authService->verifyToken($matches[1]);
+        if (!$user->isAdmin()) {
+            http_response_code(403);
+            echo json_encode(['status' => 'error', 'message' => 'Chỉ Ban tổ chức (ADMIN) mới có quyền thực hiện!'], JSON_UNESCAPED_UNICODE);
+            exit(0);
+        }
+    }
+}

@@ -16,6 +16,10 @@ import {
   Check,
   Sparkles,
   X,
+  UserCheck,
+  Download,
+  BookOpen,
+  Lock
 } from 'lucide-react';
 
 export function EventDetailPage() {
@@ -27,22 +31,62 @@ export function EventDetailPage() {
   const [schedules, setSchedules] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [challenge, setChallenge] = useState<any>(null);
 
   // Trạng thái modal đăng ký
   const [showRegisterModal, setShowRegisterModal] = useState(false);
-  const [registerType, setRegisterType] = useState<'create' | 'join'>('create');
+  const [registerType, setRegisterType] = useState<'create' | 'join' | 'existing'>('create');
   const [registerTeamName, setRegisterTeamName] = useState('');
   const [registerJoinCode, setRegisterJoinCode] = useState('');
   const [submittingRegistration, setSubmittingRegistration] = useState(false);
   const [registerError, setRegisterError] = useState<string | null>(null);
   const [successTeam, setSuccessTeam] = useState<{ name: string; joinCode: string } | null>(null);
   const [copied, setCopied] = useState(false);
+  const [myTeam, setMyTeam] = useState<{ id: number; name: string; joinCode: string; isLeader: boolean; memberCount: number; maxMembers: number } | null>(null);
 
   // Đọc thông tin user hiện tại từ localStorage
   const currentUser = (() => {
     const savedUser = localStorage.getItem('user');
     return savedUser ? JSON.parse(savedUser) : null;
   })();
+
+  const token = localStorage.getItem('auth_token');
+  const API = 'http://localhost:8000/index.php/api';
+
+  // Tải đội thi hiện tại của user qua API chính xác
+  const fetchMyTeam = async () => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API}/users/me/team`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok && data.status === 'success' && data.data) {
+        const t = data.data;
+        setMyTeam({
+          id: t.id,
+          name: t.name,
+          joinCode: t.joinCode,
+          isLeader: t.isLeader,
+          memberCount: t.memberCount,
+          maxMembers: t.maxMembers,
+        });
+      }
+    } catch {}
+  };
+
+  const handleOpenRegisterModal = () => {
+    setShowRegisterModal(true);
+    setRegisterType('create'); // reset về create trước, sau khi fetchMyTeam xong sẽ auto-switch
+    fetchMyTeam();
+  };
+
+  // Khi myTeam được load thành công, tự động chuyển sang tab "Đội của tôi"
+  useEffect(() => {
+    if (myTeam && showRegisterModal) {
+      setRegisterType('existing');
+    }
+  }, [myTeam]);
 
   const handleCopyCode = (code: string) => {
     navigator.clipboard.writeText(code);
@@ -56,58 +100,50 @@ export function EventDetailPage() {
     setSubmittingRegistration(true);
 
     try {
-      const token = localStorage.getItem('auth_token');
-      if (registerType === 'create') {
-        if (!registerTeamName.trim()) {
-          throw new Error('Vui lòng nhập tên đội thi!');
-        }
-
-        const response = await fetch('http://localhost:8000/index.php/api/teams', {
+      if (registerType === 'existing' && myTeam) {
+        // Chỉ leader mới được đăng ký đội vào cuộc thi
+        if (!myTeam.isLeader) throw new Error('Chỉ đội trưởng mới có quyền đăng ký đội vào cuộc thi!');
+        const response = await fetch(`${API}/hackathons/${id}/register`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            name: registerTeamName,
-            category: eventData?.category || 'AI & ML'
-          })
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ team_id: myTeam.id }),
         });
-
         const result = await response.json();
-        if (!response.ok || result.status === 'error') {
-          throw new Error(result.message || 'Tạo đội thi thất bại.');
-        }
+        if (!response.ok || result.status === 'error') throw new Error(result.message);
+        setSuccessTeam({ name: myTeam.name, joinCode: myTeam.joinCode });
 
-        setSuccessTeam({
-          name: result.data.teamName,
-          joinCode: result.data.joinCode
+      } else if (registerType === 'create') {
+        if (!registerTeamName.trim()) throw new Error('Vui lòng nhập tên đội thi!');
+        const response = await fetch(`${API}/teams`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ name: registerTeamName, category: eventData?.category || 'AI & ML' }),
         });
+        const result = await response.json();
+        if (!response.ok || result.status === 'error') throw new Error(result.message || 'Tạo đội thi thất bại.');
+        // Sau khi tạo đội xong, đăng ký đội mới vào cuộc thi
+        const newTeamId = result.data?.teamId;
+        if (newTeamId) {
+          await fetch(`${API}/hackathons/${id}/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ team_id: newTeamId }),
+          });
+        }
+        setSuccessTeam({ name: result.data.teamName, joinCode: result.data.joinCode });
+
       } else {
-        if (!registerJoinCode.trim()) {
-          throw new Error('Vui lòng nhập mã tham gia!');
-        }
-
-        const response = await fetch('http://localhost:8000/index.php/api/teams/join', {
+        // Tham gia đội bằng join code
+        if (!registerJoinCode.trim()) throw new Error('Vui lòng nhập mã tham gia!');
+        const joinRes = await fetch(`${API}/teams/join`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            joinCode: registerJoinCode
-          })
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ joinCode: registerJoinCode }),
         });
-
-        const result = await response.json();
-        if (!response.ok || result.status === 'error') {
-          throw new Error(result.message || 'Tham gia đội thi thất bại.');
-        }
-
-        setSuccessTeam({
-          name: result.data.teamName,
-          joinCode: result.data.joinCode
-        });
+        const joinResult = await joinRes.json();
+        if (!joinRes.ok || joinResult.status === 'error') throw new Error(joinResult.message || 'Tham gia đội thi thất bại.');
+        // Sau khi tham gia đội, cập nhật myTeam và để user đăng ký tiếp nếu muốn
+        setSuccessTeam({ name: joinResult.data.teamName, joinCode: joinResult.data.joinCode });
       }
     } catch (err: any) {
       setRegisterError(err.message || 'Có lỗi xảy ra, vui lòng thử lại.');
@@ -122,6 +158,8 @@ export function EventDetailPage() {
     setRegisterJoinCode('');
     setRegisterError(null);
     setSuccessTeam(null);
+    setMyTeam(null);
+    setRegisterType('create');
   };
 
   useEffect(() => {
@@ -145,16 +183,28 @@ export function EventDetailPage() {
           console.error("Lỗi tải milestones:", mErr);
         }
 
-        // Tải danh sách lịch trình (schedules)
-        try {
-          const schedulesRes = await fetch(`http://localhost:8000/index.php/api/schedules?hackathonId=${id}`);
-          const schedulesResult = await schedulesRes.json();
-          if (schedulesRes.ok && schedulesResult.status === 'success') {
-            setSchedules(schedulesResult.data || []);
+        // Lấy lịch trình thực tế
+        const schedRes = await fetch(`http://localhost:8000/index.php/api/schedules?contest_id=${id}`);
+        if (schedRes.ok) {
+          const schedData = await schedRes.json();
+          if (schedData.status === 'success') {
+            setSchedules(schedData.data);
           }
-        } catch (sErr) {
-          console.error("Lỗi tải schedules:", sErr);
         }
+
+        // Lấy đề bài (nếu đã release)
+        try {
+          const challRes = await fetch(`http://localhost:8000/index.php/api/hackathons/${id}/challenge`);
+          if (challRes.ok) {
+            const challData = await challRes.json();
+            if (challData.status === 'success') {
+              setChallenge(challData.data);
+            }
+          }
+        } catch (e) {
+          // Ignored
+        }
+
       } catch (e: any) {
         setError(e.message || 'Lỗi tải chi tiết cuộc thi');
       } finally {
@@ -254,7 +304,7 @@ export function EventDetailPage() {
         ? `${eventData.startDate.slice(0, 10)} → ${eventData.endDate.slice(0, 10)}` 
         : 'Chưa cập nhật'),
     location: eventData.location || 'Chưa cập nhật',
-    teams: 12, // Số lượng đội mẫu của cuộc thi
+    teams: eventData.registered_teams_count ?? eventData.registeredTeamsCount ?? 0,
     maxTeams: eventData.max_teams || eventData.maxTeams || 50,
     prize: eventData.prize || 'Cơ cấu giải thưởng hấp dẫn',
     status: eventData.status === 'ACTIVE' 
@@ -312,6 +362,7 @@ export function EventDetailPage() {
     { id: 'schedule', label: 'Lịch trình', icon: Clock },
     { id: 'prizes', label: 'Giải thưởng', icon: Trophy },
     { id: 'rules', label: 'Thể lệ', icon: FileText },
+    { id: 'challenge', label: 'Đề bài', icon: BookOpen },
   ];
 
   return (
@@ -529,6 +580,60 @@ export function EventDetailPage() {
                     )}
                   </div>
                 )}
+
+                {activeTab === 'challenge' && (
+                  <div className="space-y-6 text-left">
+                    {challenge && (challenge.title || challenge.available) ? (
+                      <div>
+                        <h3 className="text-xl font-bold text-gray-900 mb-4">{challenge.title}</h3>
+                        <div className="prose max-w-none text-gray-700 mb-6">
+                          {challenge.description?.split('\n').map((line: string, i: number) => (
+                            <p key={i} className="mb-2">{line}</p>
+                          ))}
+                        </div>
+                        
+                        {challenge.resources && (
+                          <div className="mb-6">
+                            <h4 className="font-semibold text-gray-900 mb-2">Tài nguyên & API:</h4>
+                            <div className="p-4 bg-gray-50 rounded-lg text-sm text-gray-700 whitespace-pre-wrap">
+                              {challenge.resources}
+                            </div>
+                          </div>
+                        )}
+
+                        {challenge.constraints && (
+                          <div className="mb-6">
+                            <h4 className="font-semibold text-gray-900 mb-2">Ràng buộc kỹ thuật:</h4>
+                            <div className="p-4 bg-red-50 text-red-800 rounded-lg text-sm whitespace-pre-wrap">
+                              {challenge.constraints}
+                            </div>
+                          </div>
+                        )}
+
+                        {challenge.file_url && (
+                          <div className="mt-8 pt-6 border-t border-gray-200">
+                            <h4 className="font-semibold text-gray-900 mb-3">Tệp đính kèm:</h4>
+                            <a
+                              href={`http://localhost:8000${challenge.file_url}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium rounded-lg transition-colors border border-blue-200"
+                            >
+                              <Download size={18} />
+                              Tải xuống {challenge.file_name || 'Đề bài'}
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="py-12 text-center">
+                        <Lock size={48} className="mx-auto text-gray-300 mb-4" />
+                        <h3 className="text-lg font-semibold text-gray-900 mb-2">Đề bài chưa được công bố</h3>
+                        <p className="text-gray-500">Đề bài sẽ được mở khóa khi cuộc thi chính thức bắt đầu.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -569,7 +674,7 @@ export function EventDetailPage() {
               </div>
 
               <button
-                onClick={() => setShowRegisterModal(true)}
+                onClick={handleOpenRegisterModal}
                 className="block w-full py-3 bg-blue-600 text-white text-center rounded-lg font-semibold hover:bg-blue-700 transition-colors cursor-pointer"
               >
                 Đăng ký ngay
@@ -686,32 +791,36 @@ export function EventDetailPage() {
 
                 {/* Tab selector */}
                 <div className="flex bg-gray-100 rounded-lg p-1 mb-5">
-                  <button
-                    onClick={() => {
-                      setRegisterType('create');
-                      setRegisterError(null);
-                    }}
-                    className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
-                      registerType === 'create'
-                        ? 'bg-white text-blue-600 shadow'
-                        : 'text-gray-500 hover:text-gray-700'
-                    }`}
-                  >
-                    Tạo đội thi mới
-                  </button>
-                  <button
-                    onClick={() => {
-                      setRegisterType('join');
-                      setRegisterError(null);
-                    }}
-                    className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
-                      registerType === 'join'
-                        ? 'bg-white text-blue-600 shadow'
-                        : 'text-gray-500 hover:text-gray-700'
-                    }`}
-                  >
-                    Tham gia đội hiện có
-                  </button>
+                  {myTeam && (
+                    <button
+                      onClick={() => { setRegisterType('existing'); setRegisterError(null); }}
+                      className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
+                        registerType === 'existing' ? 'bg-white text-blue-600 shadow' : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      Đội của tôi
+                    </button>
+                  )}
+                  {!myTeam && (
+                    <button
+                      onClick={() => { setRegisterType('create'); setRegisterError(null); }}
+                      className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
+                        registerType === 'create' ? 'bg-white text-blue-600 shadow' : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      Tạo đội thi mới
+                    </button>
+                  )}
+                  {!myTeam && (
+                    <button
+                      onClick={() => { setRegisterType('join'); setRegisterError(null); }}
+                      className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
+                        registerType === 'join' ? 'bg-white text-blue-600 shadow' : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      Tham gia đội có sẵn
+                    </button>
+                  )}
                 </div>
 
                 {registerError && (
@@ -720,8 +829,30 @@ export function EventDetailPage() {
                   </div>
                 )}
 
-                <form onSubmit={handleRegisterSubmit} className="space-y-4 text-left">
-                  {registerType === 'create' ? (
+                  <form onSubmit={handleRegisterSubmit} className="space-y-4 text-left">
+                    {registerType === 'existing' && myTeam ? (
+                      <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="text-xs text-gray-500 font-semibold uppercase tracking-wider mb-0.5">Đội của bạn</div>
+                            <div className="font-bold text-gray-800 text-base">{myTeam.name}</div>
+                          </div>
+                          <span className={`text-xs font-bold px-2 py-1 rounded-full ${
+                            myTeam.isLeader ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
+                          }`}>
+                            {myTeam.isLeader ? '👑 Đội trưởng' : '👤 Thành viên'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-mono bg-white border border-blue-200 text-blue-700 px-2 py-1 rounded font-bold tracking-widest">{myTeam.joinCode}</span>
+                          <span className="text-xs text-gray-500">{myTeam.memberCount}/{myTeam.maxMembers} thành viên</span>
+                        </div>
+                        {myTeam.isLeader
+                          ? <p className="text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">✅ Bạn là đội trưởng. Nhấn "Đăng ký cuộc thi" để đăng ký đội vào cuộc thi này.</p>
+                          : <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">⚠️ Chỉ đội trưởng mới có quyền đăng ký đội vào cuộc thi. Hãy nhờ đội trưởng thực hiện.</p>
+                        }
+                      </div>
+                    ) : registerType === 'create' ? (
                     <div>
                       <label className="block text-xs font-semibold text-gray-700 mb-1">
                         Tên đội thi mới của bạn
@@ -757,13 +888,15 @@ export function EventDetailPage() {
                   <div className="flex gap-3 pt-2">
                     <button
                       type="submit"
-                      disabled={submittingRegistration}
-                      className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg font-semibold text-sm flex items-center justify-center gap-1.5 cursor-pointer"
+                      disabled={submittingRegistration || (registerType === 'existing' && myTeam !== null && !myTeam.isLeader)}
+                      className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg font-semibold text-sm flex items-center justify-center gap-1.5 cursor-pointer"
                     >
                       {submittingRegistration && <Loader2 className="animate-spin" size={16} />}
                       <span>
                         {submittingRegistration
                           ? 'Đang đăng ký...'
+                          : registerType === 'existing'
+                          ? 'Đăng ký cuộc thi'
                           : registerType === 'create'
                           ? 'Tạo đội & Tham gia'
                           : 'Xác nhận tham gia'}

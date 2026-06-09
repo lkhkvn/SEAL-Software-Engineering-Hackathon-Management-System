@@ -1,78 +1,73 @@
 <?php
-
-namespace App\Presentation\Controllers;
+namespace App\Presentation;
 
 use App\Services\AuthService;
 use App\DTO\RegisterRequestDTO;
 use App\DTO\LoginRequestDTO;
-use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\HttpFoundation\JsonResponse;
-use Symfony\Component\Routing\Annotation\Route; // Khai báo thư viện Route để code chạy
 use Exception;
 
-class AuthController
-{
+class AuthController {
     private AuthService $authService;
 
-    public function __construct(AuthService $authService)
-    {
+    public function __construct(AuthService $authService) {
         $this->authService = $authService;
     }
 
-    /**
-     * Endpoint Đăng ký tài khoản
-     * Địa chỉ: POST http://localhost:8000/api/auth/register
-     */
-    #[Route('/api/auth/register', name: 'api_auth_register', methods: ['POST'])]
-    public function register(Request $request): JsonResponse
-    {
-        try {
-            $data = json_decode($request->getContent(), true) ?? [];
-            $dto = new RegisterRequestDTO($data);
+    public function register(): void {
+        $inputData = json_decode(file_get_contents('php://input'), true) ?? [];
+        $dto = new RegisterRequestDTO($inputData);
+        $user = $this->authService->register($dto);
 
-            $user = $this->authService->register($dto);
-
-            return new JsonResponse([
-                'status' => 'success',
-                'message' => 'Đăng ký tài khoản thành công!',
-                'data' => [
-                    'name' => $user->username,
-                    'email' => $user->email,
-                    'role' => $user->role
-                ]
-            ], 201);
-        } catch (Exception $e) {
-            return new JsonResponse([
-                'status' => 'error',
-                'message' => $e->getMessage()
-            ], 400);
-        }
+        http_response_code(201);
+        echo json_encode([
+            "status"  => "success",
+            "message" => "Đăng ký tài khoản thành công!",
+            "data"    => ["username" => $user->username, "email" => $user->email]
+        ], JSON_UNESCAPED_UNICODE);
     }
 
-    /**
-     * Endpoint Đăng nhập
-     * Địa chỉ: POST http://localhost:8000/api/auth/login
-     */
-    #[Route('/api/auth/login', name: 'api_auth_login', methods: ['POST'])]
-    public function login(Request $request): JsonResponse
-    {
-        try {
-            $data = json_decode($request->getContent(), true) ?? [];
-            $dto = new LoginRequestDTO($data);
+    public function login(): void {
+        $inputData = json_decode(file_get_contents('php://input'), true) ?? [];
+        $dto = new LoginRequestDTO($inputData);
+        $result = $this->authService->login($dto);
 
-            $result = $this->authService->login($dto);
+        http_response_code(200);
+        echo json_encode([
+            "status"  => "success",
+            "message" => "Đăng nhập thành công!",
+            "data"    => $result
+        ], JSON_UNESCAPED_UNICODE);
+    }
 
-            return new JsonResponse([
-                'status' => 'success',
-                'message' => 'Đăng nhập thành công!',
-                'token' => $result['token'],
-                'user' => $result['user']
-            ], 200);
-        } catch (Exception $e) {
-            return new JsonResponse([
-                'status' => 'error',
-                'message' => $e->getMessage()
-            ], 401);
+    public function createJudge(): void {
+        $currentUser = $this->requireAdmin();
+
+        $inputData = json_decode(file_get_contents('php://input'), true) ?? [];
+        $dto = new RegisterRequestDTO($inputData);
+        $judge = $this->authService->registerJudge($dto);
+
+        http_response_code(201);
+        echo json_encode([
+            "status"  => "success",
+            "message" => "Tạo tài khoản Giám khảo thành công!",
+            "data"    => ["username" => $judge->username, "email" => $judge->email, "role" => $judge->role]
+        ], JSON_UNESCAPED_UNICODE);
+    }
+
+    private function requireAdmin(): object {
+        $headers = getallheaders();
+        $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+        if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
+            http_response_code(401);
+            echo json_encode(["status" => "error", "message" => "Yêu cầu phải có Token xác thực!"], JSON_UNESCAPED_UNICODE);
+            exit(0);
         }
+        $user = $this->authService->verifyToken($matches[1]);
+        if (!$user->isAdmin()) {
+            http_response_code(403);
+            echo json_encode(["status" => "error", "message" => "Chỉ Ban tổ chức (ADMIN) mới có quyền thực hiện!"], JSON_UNESCAPED_UNICODE);
+            exit(0);
+        }
+        return $user;
     }
 }

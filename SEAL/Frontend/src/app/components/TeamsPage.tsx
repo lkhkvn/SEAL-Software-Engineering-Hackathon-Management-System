@@ -31,6 +31,7 @@ interface Team {
   id: number;
   name: string;
   members: number;
+  maxMembers: number;
   category: string;
   status: string;
   joinCode: string;
@@ -54,6 +55,7 @@ function StatChip({ icon, label, value, accent = false }: { icon: React.ReactNod
 function CreateTeamModal({ onClose, onCreated }: { onClose: () => void; onCreated: (res: any) => void }) {
   const [name, setName] = useState('');
   const [category, setCategory] = useState('AI & ML');
+  const [maxMembers, setMaxMembers] = useState(5);
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [customSkill, setCustomSkill] = useState('');
   const [loading, setLoading] = useState(false);
@@ -97,7 +99,7 @@ function CreateTeamModal({ onClose, onCreated }: { onClose: () => void; onCreate
       const res = await fetch(`${API}/teams`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-        body: JSON.stringify({ name: name.trim(), category, skills: selectedSkills }),
+        body: JSON.stringify({ name: name.trim(), category, max_members: maxMembers, skills: selectedSkills }),
       });
       const data = await res.json();
       if (!res.ok || data.status === 'error') throw new Error(data.message);
@@ -162,6 +164,19 @@ function CreateTeamModal({ onClose, onCreated }: { onClose: () => void; onCreate
             >
               {categories.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
+          </div>
+
+          {/* Số lượng thành viên */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1.5">Số lượng thành viên tối đa <span className="text-red-500">*</span></label>
+            <input
+              type="number"
+              min={1}
+              max={10}
+              value={maxMembers}
+              onChange={e => setMaxMembers(Number(e.target.value))}
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+            />
           </div>
 
           {/* Công nghệ sử dụng */}
@@ -411,7 +426,7 @@ function TeamDetailModal({ team, onClose }: { team: Team; onClose: () => void })
 
         {/* Stats row */}
         <div className="flex gap-2 p-4 border-b border-gray-100">
-          <StatChip icon={<Users size={13} />} label="Thành viên" value={`${team.members}/5`} />
+          <StatChip icon={<Users size={13} />} label="Thành viên" value={`${team.members}/${team.maxMembers}`} />
           <StatChip icon={<Target size={13} />} label="Điểm" value={team.score > 0 ? team.score : 'Chưa có'} />
           <StatChip icon={<Hash size={13} />} label="Mã mời" value={<span className="font-mono">{team.joinCode}</span>} accent />
         </div>
@@ -699,7 +714,7 @@ export function TeamsPage() {
                   <div className="space-y-2 mb-4">
                     <div className="flex items-center gap-2 text-gray-500 text-xs">
                       <Users size={13} />
-                      <span><span className="font-semibold text-gray-800">{team.members}</span> thành viên — Trưởng nhóm: <span className="font-semibold text-gray-800">{team.leaderName || 'N/A'}</span></span>
+                      <span><span className="font-semibold text-gray-800">{team.members}/{team.maxMembers}</span> thành viên — Trưởng nhóm: <span className="font-semibold text-gray-800">{team.leaderName || 'N/A'}</span></span>
                     </div>
                     <div className="flex items-center gap-2 text-gray-500 text-xs">
                       <Trophy size={13} />

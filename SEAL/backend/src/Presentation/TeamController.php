@@ -42,6 +42,11 @@ class TeamController {
                 $skills = array_values($skills);
             }
             $skillsStr = implode(', ', $skills);
+            
+            $maxMembers = (int)($inputData['max_members'] ?? 5);
+            if ($maxMembers < 1 || $maxMembers > 10) {
+                $maxMembers = 5;
+            }
 
             if (empty($teamName)) {
                 http_response_code(400);
@@ -66,12 +71,13 @@ class TeamController {
 
             // Lưu vào bảng teams
             $conn->executeStatement("
-                INSERT INTO teams (team_name, category, join_code, status, leader_id)
-                VALUES (:teamName, :category, :joinCode, 'APPROVED', :leaderId)
+                INSERT INTO teams (team_name, category, join_code, status, max_members, leader_id)
+                VALUES (:teamName, :category, :joinCode, 'APPROVED', :maxMembers, :leaderId)
             ", [
                 'teamName' => $teamName,
                 'category' => $category,
                 'joinCode' => $joinCode,
+                'maxMembers' => $maxMembers,
                 'leaderId' => $currentUser->id,
             ]);
             $teamId = (int)$conn->lastInsertId();
@@ -132,7 +138,7 @@ class TeamController {
 
             // Tìm đội theo join_code
             $team = $conn->executeQuery("
-                SELECT t.id, t.team_name,
+                SELECT t.id, t.team_name, t.max_members,
                     (SELECT COUNT(*) FROM team_members tm WHERE tm.team_id = t.id) as member_count
                 FROM teams t WHERE t.join_code = :joinCode
             ", ['joinCode' => $joinCode])->fetchAssociative();
@@ -143,9 +149,9 @@ class TeamController {
                 return;
             }
 
-            if ($team['member_count'] >= 5) {
+            if ($team['member_count'] >= $team['max_members']) {
                 http_response_code(409);
-                echo json_encode(["status" => "error", "message" => "Đội này đã đủ 5 thành viên!"], JSON_UNESCAPED_UNICODE);
+                echo json_encode(["status" => "error", "message" => "Đội này đã đạt số lượng tối đa (" . $team['max_members'] . " người)!"], JSON_UNESCAPED_UNICODE);
                 return;
             }
 
@@ -180,6 +186,42 @@ class TeamController {
                 "data" => $result
             ], JSON_UNESCAPED_UNICODE);
             
+        } catch (Exception $e) {
+            http_response_code(400);
+            echo json_encode(["status" => "error", "message" => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        }
+    }
+
+    /** POST /api/teams/match */
+    public function matchTeam(): void {
+        try {
+            $headers = getallheaders();
+            $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+
+            if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
+                http_response_code(401);
+                echo json_encode(["status" => "error", "message" => "Yêu cầu phải có Token xác thực!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            $currentUser = $this->authService->verifyToken($matches[1]);
+            $inputData   = json_decode(file_get_contents('php://input'), true) ?? [];
+            $isLooking   = (bool)($inputData['isLookingForTeam'] ?? false);
+
+            $this->teamService->toggleLookingForTeam($currentUser, $isLooking);
+
+            $match = null;
+            if ($isLooking) {
+                $match = $this->teamService->autoMatch($currentUser);
+            }
+
+            http_response_code(200);
+            echo json_encode([
+                "status"  => "success",
+                "message" => "Cập nhật trạng thái thành công!",
+                "match"   => $match
+            ], JSON_UNESCAPED_UNICODE);
+
         } catch (Exception $e) {
             http_response_code(400);
             echo json_encode(["status" => "error", "message" => $e->getMessage()], JSON_UNESCAPED_UNICODE);

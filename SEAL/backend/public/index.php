@@ -1,1003 +1,266 @@
 <?php
 // ============================================================================
-// 1. CẤU HÌNH BẢO MẬT CORS & HIỂN THỊ LỖI ĐỂ DEBUG
+// CORS & ERROR CONFIGURATION
 // ============================================================================
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With");
 header("Access-Control-Allow-Methods: POST, GET, OPTIONS, PUT, DELETE");
 header("Content-Type: application/json; charset=UTF-8");
 
-// TẮT HIỂN THỊ LỖI RA RESPONSE (tránh làm hỏng JSON)
-// Warning/Notice sẽ được ghi vào error log thay vì in ra màn hình
 ini_set('html_errors', 0);
-ini_set('display_errors', 0);   // <-- TẮT: không in error ra response body
-ini_set('log_errors', 1);       // Ghi lỗi vào PHP error log để debug
+ini_set('display_errors', 0);
+ini_set('log_errors', 1);
 error_reporting(E_ALL);
 
-// Giải quyết Preflight Request (Request OPTIONS tự động từ trình duyệt)
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit(0);
 }
 
-// Thêm App\ vào đầu các Namespace để khớp với cấu trúc thư mục trong src/
+// ============================================================================
+// AUTOLOAD & BOOTSTRAP
+// ============================================================================
 use App\Services\AuthService;
 use App\Services\TeamService;
+use App\Services\HackathonService;
+use App\Services\LeaderboardService;
+use App\Services\MilestoneService;
+use App\Services\ScheduleService;
+use App\Services\ChallengeService;
 use App\Infrastructure\Persistence\DoctrineTeamRepository;
-use App\DTO\CreateTeamRequestDTO;
-use App\DTO\JoinTeamRequestDTO;
-use App\DTO\MatchTeamRequestDTO;
-use App\Infrastructure\Persistence\DoctrineUserRepository; 
-use App\DTO\RegisterRequestDTO;
-use App\DTO\LoginRequestDTO;
+use App\Infrastructure\Persistence\DoctrineUserRepository;
+use App\Infrastructure\Persistence\DoctrineChallengeRepository;
+use App\Presentation\AuthController;
+use App\Presentation\AdminUserController;
+use App\Presentation\TeamController;
+use App\Presentation\HackathonController;
+use App\Presentation\LeaderboardController;
+use App\Presentation\MilestoneController;
+use App\Presentation\ScheduleController;
+use App\Presentation\UserController;
+use App\Presentation\ChallengeController;
+use App\Services\NotificationService;
+use App\Services\FileUploadService;
+use App\Presentation\NotificationController;
 
 try {
-    // ============================================================================
-    // 2. IMPORT CÁC THƯ VIỆN & TỰ ĐỘNG TẢI CLASS (AUTOLOAD)
-    // ============================================================================
-    // Lùi lại 1 cấp thư mục (/../) vì file index.php đang nằm trong thư mục public/
     if (file_exists(__DIR__ . '/../vendor/autoload.php')) {
         require_once __DIR__ . '/../vendor/autoload.php';
     } else {
-        throw new Exception("Không tìm thấy thư mục vendor. Hãy chạy lệnh 'composer install' bên trong container backend.");
+        throw new Exception("Không tìm thấy thư mục vendor. Hãy chạy lệnh 'composer install'.");
     }
 
-    // Nạp file cấu hình Doctrine từ gốc dự án
     if (file_exists(__DIR__ . '/../cli-config.php')) {
         $entityManager = require __DIR__ . '/../cli-config.php';
     } else {
-        throw new Exception("Không tìm thấy file cấu hình cli-config.php ở thư mục gốc.");
+        throw new Exception("Không tìm thấy file cấu hình cli-config.php.");
     }
 
-    // Kiểm tra an toàn xem biến trả về có phải EntityManager hợp lệ không
     if (!($entityManager instanceof \Doctrine\ORM\EntityManagerInterface)) {
-        throw new Exception("File cli-config.php chưa trả về một thực thể (instance) hợp lệ của EntityManager.");
+        throw new Exception("cli-config.php chưa trả về EntityManager hợp lệ.");
     }
-
-    // Khởi tạo tầng hạ tầng (Repository) và tầng nghiệp vụ (Service)
-    $userRepository = new DoctrineUserRepository($entityManager);
-    $authService = new AuthService($userRepository);
-    $teamRepository = new DoctrineTeamRepository($entityManager);
-    $teamService = new TeamService($teamRepository, $entityManager);
-    $teamController = new \App\Presentation\TeamController($teamService, $authService, $entityManager);
 
     // ============================================================================
-    // 3. BỘ ĐỊNH TUYẾN ROUTER THỦ CÔNG (ĐỌC ĐƯỜNG DẪN URL)
+    // DEPENDENCY INJECTION (Khởi tạo Services & Controllers)
     // ============================================================================
-    $requestUri = $_SERVER['REQUEST_URI'];
-    $requestMethod = $_SERVER['REQUEST_METHOD'];
+    $userRepository       = new DoctrineUserRepository($entityManager);
+    $authService          = new AuthService($userRepository);
+    $teamRepository       = new DoctrineTeamRepository($entityManager);
+    $teamService          = new TeamService($teamRepository, $entityManager);
+    $hackathonService     = new HackathonService($entityManager);
+    $leaderboardService   = new LeaderboardService($entityManager);
+    $milestoneService     = new MilestoneService($entityManager);
+    $scheduleService      = new ScheduleService($entityManager);
+    $challengeRepository  = new DoctrineChallengeRepository($entityManager);
+    $challengeService     = new ChallengeService($challengeRepository, $entityManager);
+    $notificationService  = new NotificationService($entityManager);
+    $fileUploadService    = new FileUploadService();
 
-    // Loại bỏ "index.php" ra khỏi chuỗi URL nếu có để lọc chính xác path
-    $path = parse_url($requestUri, PHP_URL_PATH);
-    $path = str_replace('/index.php', '', $path);
+    $authController        = new AuthController($authService);
+    $adminUserController   = new AdminUserController($authService, $userRepository);
+    $teamController        = new TeamController($teamService, $authService, $entityManager);
+    $hackathonController   = new HackathonController($hackathonService, $authService, $notificationService);
+    $leaderboardController = new LeaderboardController($leaderboardService);
+    $milestoneController   = new MilestoneController($milestoneService, $authService);
+    $scheduleController    = new ScheduleController($scheduleService, $authService);
+    $userController        = new UserController($authService, $entityManager);
+    $challengeController   = new ChallengeController($challengeService, $authService, $fileUploadService);
+    $notificationController= new NotificationController($notificationService, $authService);
 
-    // ------------------------------------------------------------------------
-    // ROUTE 1: ĐĂNG KÝ TÀI KHOẢN
-    // ------------------------------------------------------------------------
-    if ($path === '/api/auth/register' && $requestMethod === 'POST') {
-        // Đọc dữ liệu JSON thô gửi từ React lên
-        $inputData = json_decode(file_get_contents('php://input'), true) ?? [];
-        
-        // ĐÃ SỬA: Truyền trực tiếp $inputData vào hàm khởi tạo của DTO
-        $dto = new RegisterRequestDTO($inputData);
+    // ============================================================================
+    // ROUTER
+    // ============================================================================
+    $path   = str_replace('/index.php', '', parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH));
+    $method = $_SERVER['REQUEST_METHOD'];
 
-        // Thực thi nghiệp vụ đăng ký tài khoản
-        $user = $authService->register($dto);
-
-        // Phản hồi kết quả về dạng JSON cho React nhận diện
-        http_response_code(201); // 201 Created
-        echo json_encode([
-            "status" => "success",
-            "message" => "Đăng ký tài khoản thành công!",
-            "data" => [
-                "username" => $user->username,
-                "email" => $user->email
-            ]
-        ], JSON_UNESCAPED_UNICODE);
-        exit(0);
+    // ------------------------------------------------------------------
+    // AUTH ROUTES
+    // ------------------------------------------------------------------
+    if ($path === '/api/auth/register' && $method === 'POST') {
+        $authController->register(); exit(0);
+    }
+    if ($path === '/api/auth/login' && $method === 'POST') {
+        $authController->login(); exit(0);
+    }
+    // ------------------------------------------------------------------
+    // USER ROUTES
+    // ------------------------------------------------------------------
+    if ($path === '/api/users/me/team' && $method === 'GET') {
+        $userController->getMyTeam(); exit(0);
     }
 
-    // ------------------------------------------------------------------------
-    // ROUTE 2: ĐĂNG NHẬP
-    // ------------------------------------------------------------------------
-    if ($path === '/api/auth/login' && $requestMethod === 'POST') {
-        // Đọc dữ liệu JSON thô gửi từ React lên
-        $inputData = json_decode(file_get_contents('php://input'), true) ?? [];
-
-        // Khởi tạo DTO đăng nhập từ dữ liệu JSON nhận được
-        $dto = new LoginRequestDTO($inputData);
-
-        // Thực thi nghiệp vụ xác thực đăng nhập
-        $result = $authService->login($dto);
-
-        // Phản hồi token về cho React lưu vào localStorage
-        http_response_code(200); // 200 OK
-        echo json_encode([
-            "status" => "success",
-            "message" => "Đăng nhập thành công!",
-            "data" => $result
-        ], JSON_UNESCAPED_UNICODE);
-        exit(0);
+    if ($path === '/api/auth/create-judge' && $method === 'POST') {
+        $authController->createJudge(); exit(0);
     }
 
-    // ------------------------------------------------------------------------
-    // ROUTE 3: ADMIN TẠO TÀI KHOẢN GIÁM KHẢO (JUDGE)
-    // ------------------------------------------------------------------------
-    if ($path === '/api/auth/create-judge' && $requestMethod === 'POST') {
-        $headers = getallheaders();
-        $authHeader = $headers['Authorization'] ?? '';
-        if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
-            throw new Exception("Yêu cầu phải có Token xác thực hợp lệ!");
-        }
-
-        // Lấy Token và xác minh bằng AuthService
-        $token = $matches[1];
-        $currentUser = $authService->verifyToken($token);
-
-        // Kiểm tra quyền Admin
-        if (!$currentUser->isAdmin()) {
-            http_response_code(403);
-            echo json_encode([
-                "status" => "error",
-                "message" => "Chỉ Ban tổ chức (ADMIN) mới có quyền tạo Giám khảo!"
-            ], JSON_UNESCAPED_UNICODE);
-            exit(0);
-        }
-
-        // Thực thi nghiệp vụ tạo Giám khảo
-        $inputData = json_decode(file_get_contents('php://input'), true) ?? [];
-        $dto = new RegisterRequestDTO($inputData);
-        $judge = $authService->registerJudge($dto);
-
-        http_response_code(201);
-        echo json_encode([
-            "status" => "success",
-            "message" => "Tạo tài khoản Giám khảo thành công!",
-            "data" => [
-                "username" => $judge->username,
-                "email" => $judge->email,
-                "role" => $judge->role
-            ]
-        ], JSON_UNESCAPED_UNICODE);
-        exit(0);
+    // ------------------------------------------------------------------
+    // ADMIN USER ROUTES
+    // ------------------------------------------------------------------
+    if ($path === '/api/admin/users' && $method === 'GET') {
+        $adminUserController->getAllUsers(); exit(0);
+    }
+    if ($path === '/api/admin/users/update-role' && $method === 'POST') {
+        $adminUserController->updateRole(); exit(0);
     }
 
-    // ------------------------------------------------------------------------
-    // ROUTE 4: LẤY DANH SÁCH TẤT CẢ NGƯỜI DÙNG (YÊU CẦU QUYỀN ADMIN)
-    // ------------------------------------------------------------------------
-    if ($path === '/api/admin/users' && $requestMethod === 'GET') {
-        $headers = getallheaders();
-        $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
-        if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
-            throw new Exception("Yêu cầu phải có Token xác thực hợp lệ!");
-        }
-
-        $token = $matches[1];
-        $currentUser = $authService->verifyToken($token);
-
-        if (!$currentUser->isAdmin()) {
-            http_response_code(403);
-            echo json_encode([
-                "status" => "error",
-                "message" => "Chỉ Ban tổ chức (ADMIN) mới có quyền truy cập!"
-            ], JSON_UNESCAPED_UNICODE);
-            exit(0);
-        }
-
-        $users = $userRepository->findAll();
-        $userDataList = array_map(function($user) {
-            return [
-                "id" => $user->id,
-                "username" => $user->username,
-                "email" => $user->email,
-                "role" => $user->role,
-                "phone" => $user->phone,
-                "skills" => $user->skills,
-                "teamId" => $user->teamId
-            ];
-        }, $users);
-
-        http_response_code(200);
-        echo json_encode([
-            "status" => "success",
-            "data" => $userDataList
-        ], JSON_UNESCAPED_UNICODE);
-        exit(0);
+    // ------------------------------------------------------------------
+    // LEADERBOARD & TEAMS LIST
+    // ------------------------------------------------------------------
+    if ($path === '/api/leaderboard' && $method === 'GET') {
+        $leaderboardController->getLeaderboard(); exit(0);
+    }
+    if ($path === '/api/teams' && $method === 'GET') {
+        $leaderboardController->getTeamsList(); exit(0);
     }
 
-    // ------------------------------------------------------------------------
-    // ROUTE 5: CẬP NHẬT VAI TRÒ NGƯỜI DÙNG (YÊU CẦU QUYỀN ADMIN)
-    // ------------------------------------------------------------------------
-    if ($path === '/api/admin/users/update-role' && $requestMethod === 'POST') {
-        $headers = getallheaders();
-        $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
-        if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
-            throw new Exception("Yêu cầu phải có Token xác thực hợp lệ!");
-        }
-
-        $token = $matches[1];
-        $currentUser = $authService->verifyToken($token);
-
-        if (!$currentUser->isAdmin()) {
-            http_response_code(403);
-            echo json_encode([
-                "status" => "error",
-                "message" => "Chỉ Ban tổ chức (ADMIN) mới có quyền thay đổi vai trò!"
-            ], JSON_UNESCAPED_UNICODE);
-            exit(0);
-        }
-
-        $inputData = json_decode(file_get_contents('php://input'), true) ?? [];
-        $userId = $inputData['userId'] ?? null;
-        $newRole = $inputData['role'] ?? null;
-
-        if (!$userId || !$newRole) {
-            throw new Exception("Thiếu thông tin userId hoặc vai trò (role)!");
-        }
-
-        $allowedRoles = ['ADMIN', 'JUDGE', 'PARTICIPANT'];
-        if (!in_array(strtoupper($newRole), $allowedRoles)) {
-            throw new Exception("Vai trò mới không hợp lệ!");
-        }
-
-        $targetUser = $userRepository->findById((int)$userId);
-        if (!$targetUser) {
-            throw new Exception("Người dùng không tồn tại!");
-        }
-
-        $updatedUser = $targetUser->withRole(strtoupper($newRole));
-        $userRepository->save($updatedUser);
-
-        http_response_code(200);
-        echo json_encode([
-            "status" => "success",
-            "message" => "Cập nhật vai trò người dùng thành công!",
-            "data" => [
-                "id" => $updatedUser->id,
-                "username" => $updatedUser->username,
-                "email" => $updatedUser->email,
-                "role" => $updatedUser->role
-            ]
-        ], JSON_UNESCAPED_UNICODE);
-        exit(0);
+    // ------------------------------------------------------------------
+    // TEAM ROUTES
+    // ------------------------------------------------------------------
+    if ($path === '/api/teams' && $method === 'POST') {
+        $teamController->createTeam(); exit(0);
+    }
+    if ($path === '/api/teams/join' && $method === 'POST') {
+        $teamController->joinTeam(); exit(0);
+    }
+    if ($path === '/api/teams/match' && $method === 'POST') {
+        $teamController->matchTeam(); exit(0);
     }
 
-    // ------------------------------------------------------------------------
-    // ROUTE 6: LẤY DANH SÁCH ĐỘI THI (REAL DATA)
-    // ------------------------------------------------------------------------
-    if ($path === '/api/teams' && $requestMethod === 'GET') {
-        $conn = $entityManager->getConnection();
-        
-        // Lấy danh sách đội thi kèm số thành viên, trưởng nhóm và thông tin dự án
-        $teamsQuery = "
-            SELECT t.id, t.team_name as name, t.category, t.status, t.join_code as joinCode,
-                   u.name as leaderName,
-                   (SELECT COUNT(*) FROM users m WHERE m.team_id = t.id) as members,
-                   (
-                       SELECT GROUP_CONCAT(m.skills SEPARATOR ', ') 
-                       FROM users m 
-                       WHERE m.team_id = t.id AND m.skills IS NOT NULL
-                   ) as skillsCombined,
-                   s.project_name as projectName,
-                   s.description as projectDescription,
-                   s.github_url as githubUrl,
-                   s.demo_video_url as demoVideoUrl
-            FROM teams t
-            LEFT JOIN users u ON t.leader_id = u.id
-            LEFT JOIN submissions s ON s.team_id = t.id
-        ";
-        
-        $teams = $conn->executeQuery($teamsQuery)->fetchAllAssociative();
-        
-        // Định dạng lại các trường cho khớp với Frontend
-        $formattedTeams = array_map(function($team) use ($conn) {
-            $teamId = (int)$team['id'];
-            
-            // Tính tổng điểm trung bình các tiêu chí chấm điểm
-            $scoreQuery = "
-                SELECT COALESCE(SUM(avg_score), 0) as total_score
-                FROM (
-                    SELECT AVG(score) as avg_score
-                    FROM scores
-                    WHERE team_id = :teamId
-                    GROUP BY criteria_id
-                ) as crit_scores
-            ";
-            $totalScore = $conn->executeQuery($scoreQuery, ['teamId' => $teamId])->fetchOne();
-            
-            // Lấy danh sách công nghệ chính từ kỹ năng thành viên
-            $techList = [];
-            if (!empty($team['skillsCombined'])) {
-                $skills = explode(',', $team['skillsCombined']);
-                foreach ($skills as $skill) {
-                    $trimmed = trim($skill);
-                    if (!empty($trimmed) && !in_array($trimmed, $techList)) {
-                        $techList[] = $trimmed;
-                    }
-                }
-            }
-            if (empty($techList)) {
-                $techList = ['HTML', 'CSS', 'Javascript'];
-            }
-            $techList = array_slice($techList, 0, 4);
-
-            return [
-                "id" => $teamId,
-                "name" => $team['name'],
-                "members" => (int)$team['members'],
-                "category" => $team['category'],
-                "status" => $team['status'],
-                "joinCode" => $team['joinCode'],
-                "leaderName" => $team['leaderName'],
-                "score" => (float)number_format((float)$totalScore, 1),
-                "tech" => $techList,
-                "project" => $team['projectName'] ? [
-                    "name" => $team['projectName'],
-                    "description" => $team['projectDescription'],
-                    "githubUrl" => $team['githubUrl'],
-                    "demoVideoUrl" => $team['demoVideoUrl']
-                ] : null
-            ];
-        }, $teams);
-
-        http_response_code(200);
-        echo json_encode([
-            "status" => "success",
-            "data" => $formattedTeams
-        ], JSON_UNESCAPED_UNICODE);
-        exit(0);
+    // ------------------------------------------------------------------
+    // HACKATHON PUBLIC ROUTES
+    // ------------------------------------------------------------------
+    if ($path === '/api/hackathons' && $method === 'GET') {
+        $hackathonController->getAllHackathons(); exit(0);
+    }
+    if (preg_match('#^/api/hackathons/(\d+)$#', $path, $m) && $method === 'GET') {
+        $hackathonController->getHackathonById((int)$m[1]); exit(0);
+    }
+    if (preg_match('#^/api/hackathons/(\d+)/register$#', $path, $m) && $method === 'POST') {
+        $hackathonController->registerTeam((int)$m[1]); exit(0);
     }
 
-    // ------------------------------------------------------------------------
-    // ROUTE 7: LẤY BẢNG XẾP HẠNG (REAL DATA)
-    // ------------------------------------------------------------------------
-    if ($path === '/api/leaderboard' && $requestMethod === 'GET') {
-        $conn = $entityManager->getConnection();
-        
-        $teams = $conn->executeQuery("SELECT id, team_name as name, category FROM teams")->fetchAllAssociative();
-        
-        $leaderboard = array_map(function($team) use ($conn) {
-            $teamId = (int)$team['id'];
-            
-            // Lấy điểm trung bình từng tiêu chí của đội
-            $innovation = $conn->executeQuery("SELECT COALESCE(AVG(score), 0) FROM scores WHERE team_id = :teamId AND criteria_id = 1", ['teamId' => $teamId])->fetchOne();
-            $technical = $conn->executeQuery("SELECT COALESCE(AVG(score), 0) FROM scores WHERE team_id = :teamId AND criteria_id = 2", ['teamId' => $teamId])->fetchOne();
-            $presentation = $conn->executeQuery("SELECT COALESCE(AVG(score), 0) FROM scores WHERE team_id = :teamId AND criteria_id = 3", ['teamId' => $teamId])->fetchOne();
-            $feasibility = $conn->executeQuery("SELECT COALESCE(AVG(score), 0) FROM scores WHERE team_id = :teamId AND criteria_id = 4", ['teamId' => $teamId])->fetchOne();
-            
-            // Lấy thông tin thành viên & công nghệ
-            $memberCount = $conn->executeQuery("SELECT COUNT(*) FROM users WHERE team_id = :teamId", ['teamId' => $teamId])->fetchOne();
-            
-            $skillsQuery = "SELECT GROUP_CONCAT(skills SEPARATOR ', ') FROM users WHERE team_id = :teamId AND skills IS NOT NULL";
-            $skillsCombined = $conn->executeQuery($skillsQuery, ['teamId' => $teamId])->fetchOne();
-            
-            $techList = [];
-            if (!empty($skillsCombined)) {
-                $skills = explode(',', $skillsCombined);
-                foreach ($skills as $skill) {
-                    $trimmed = trim($skill);
-                    if (!empty($trimmed) && !in_array($trimmed, $techList)) {
-                        $techList[] = $trimmed;
-                    }
-                }
-            }
-            if (empty($techList)) {
-                $techList = ['React', 'Node.js'];
-            }
-            $techList = array_slice($techList, 0, 3);
-            
-            $totalScore = (float)$innovation + (float)$technical + (float)$presentation + (float)$feasibility;
-
-            return [
-                "teamId" => $teamId,
-                "team" => $team['name'],
-                "category" => $team['category'],
-                "innovation" => round((float)$innovation, 1),
-                "technical" => round((float)$technical, 1),
-                "presentation" => round((float)$presentation, 1),
-                "feasibility" => round((float)$feasibility, 1),
-                "score" => round($totalScore, 1),
-                "members" => (int)$memberCount,
-                "tech" => $techList
-            ];
-        }, $teams);
-        
-        // Sắp xếp bảng xếp hạng theo tổng điểm giảm dần
-        usort($leaderboard, function($a, $b) {
-            if ($b['score'] == $a['score']) {
-                return 0;
-            }
-            return ($b['score'] < $a['score']) ? -1 : 1;
-        });
-        
-        // Gán thứ hạng
-        foreach ($leaderboard as $index => &$entry) {
-            $entry['rank'] = $index + 1;
-        }
-
-        http_response_code(200);
-        echo json_encode([
-            "status" => "success",
-            "data" => $leaderboard
-        ], JSON_UNESCAPED_UNICODE);
-        exit(0);
+    // ------------------------------------------------------------------
+    // HACKATHON ADMIN ROUTES
+    // ------------------------------------------------------------------
+    if ($path === '/api/admin/hackathons' && $method === 'POST') {
+        $hackathonController->createHackathon(); exit(0);
+    }
+    if (preg_match('#^/api/admin/hackathons/(\d+)/start$#', $path, $m) && $method === 'POST') {
+        $hackathonController->startContest((int)$m[1]); exit(0);
+    }
+    if (preg_match('#^/api/admin/hackathons/(\d+)$#', $path, $m) && $method === 'PUT') {
+        $hackathonController->updateHackathon((int)$m[1]); exit(0);
+    }
+    if (preg_match('#^/api/admin/hackathons/(\d+)$#', $path, $m) && $method === 'DELETE') {
+        $hackathonController->deleteHackathon((int)$m[1]); exit(0);
     }
 
-    // ------------------------------------------------------------------------
-    // ROUTE 8: LẤY DANH SÁCH CUỘC THI (CÔNG KHAI - KHÔNG CẦN TOKEN)
-    // GET /api/hackathons
-    // ------------------------------------------------------------------------
-    if ($path === '/api/hackathons' && $requestMethod === 'GET') {
-        $conn = $entityManager->getConnection();
-
-        $contests = $conn->executeQuery("
-            SELECT id, name, category, description, location,
-                   start_date, end_date, max_teams, status, prize, image, schedule, prize_details, rules, organizer, registration_deadline, criteria, created_at
-            FROM contests
-            ORDER BY created_at DESC
-        ")->fetchAllAssociative();
-
-        http_response_code(200);
-        echo json_encode([
-            "status" => "success",
-            "data"   => $contests
-        ], JSON_UNESCAPED_UNICODE);
-        exit(0);
+    // ------------------------------------------------------------------
+    // MILESTONE ROUTES
+    // ------------------------------------------------------------------
+    if (preg_match('#^/api/hackathons/(\d+)/milestones$#', $path, $m) && $method === 'GET') {
+        $milestoneController->getByHackathon((int)$m[1]); exit(0);
+    }
+    if (preg_match('#^/api/hackathons/(\d+)/milestones$#', $path, $m) && $method === 'POST') {
+        $milestoneController->create((int)$m[1]); exit(0);
+    }
+    if (preg_match('#^/api/milestones/(\d+)$#', $path, $m) && $method === 'PUT') {
+        $milestoneController->update((int)$m[1]); exit(0);
+    }
+    if (preg_match('#^/api/milestones/(\d+)$#', $path, $m) && $method === 'DELETE') {
+        $milestoneController->delete((int)$m[1]); exit(0);
     }
 
-    // ------------------------------------------------------------------------
-    // ROUTE 7: TẠO ĐỘI THI (THÍ SINH TẠO ĐỘI)
-    // POST /api/teams
-    // ------------------------------------------------------------------------
-    if ($path === '/api/teams' && $requestMethod === 'POST') {
-        $teamController->createTeam();
-        exit(0);
+    // ------------------------------------------------------------------
+    // SCHEDULE ROUTES
+    // ------------------------------------------------------------------
+    if ($path === '/api/schedules' && $method === 'GET') {
+        $scheduleController->getAll(); exit(0);
+    }
+    if ($path === '/api/schedules' && $method === 'POST') {
+        $scheduleController->create(); exit(0);
+    }
+    if (preg_match('#^/api/schedules/(\d+)$#', $path, $m) && $method === 'PUT') {
+        $scheduleController->update((int)$m[1]); exit(0);
+    }
+    if (preg_match('#^/api/schedules/(\d+)$#', $path, $m) && $method === 'DELETE') {
+        $scheduleController->delete((int)$m[1]); exit(0);
     }
 
-    // ------------------------------------------------------------------------
-    // ROUTE 8: THAM GIA ĐỘI THI (NHẬP MÃ MỜI)
-    // POST /api/teams/join
-    // ------------------------------------------------------------------------
-    if ($path === '/api/teams/join' && $requestMethod === 'POST') {
-        $teamController->joinTeam();
-        exit(0);
+    // ------------------------------------------------------------------
+    // CHALLENGE (ĐỀ BÀI) ROUTES
+    // ------------------------------------------------------------------
+    // Public: Thí sinh lấy đề bài (kiểm tra thời gian start_date)
+    if (preg_match('#^/api/hackathons/(\d+)/challenge$#', $path, $m) && $method === 'GET') {
+        $challengeController->getForParticipant((int)$m[1]); exit(0);
+    }
+    // Admin: Xem đề bài đầy đủ
+    if (preg_match('#^/api/admin/hackathons/(\d+)/challenge$#', $path, $m) && $method === 'GET') {
+        $challengeController->getForAdmin((int)$m[1]); exit(0);
+    }
+    // Admin: Tạo / cập nhật đề bài
+    if (preg_match('#^/api/admin/hackathons/(\d+)/challenge$#', $path, $m) && $method === 'POST') {
+        $challengeController->upsert((int)$m[1]); exit(0);
+    }
+    // Admin: Phát đề thủ công ngay lập tức
+    if (preg_match('#^/api/admin/hackathons/(\d+)/challenge/release$#', $path, $m) && $method === 'POST') {
+        $challengeController->release((int)$m[1]); exit(0);
     }
 
-    // ------------------------------------------------------------------------
-    // ROUTE 9: LẤY CHI TIẾT MỘT CUỘC THI (CÔNG KHAI)
-    // GET /api/hackathons/{id}
-    // ------------------------------------------------------------------------
-    if (preg_match('#^/api/hackathons/(\d+)$#', $path, $m) && $requestMethod === 'GET') {
-        $contestId = (int)$m[1];
-        $conn = $entityManager->getConnection();
-
-        $contest = $conn->executeQuery("
-            SELECT id, name, category, description, location,
-                   start_date, end_date, max_teams, status, prize, image, schedule, prize_details, rules, organizer, registration_deadline, criteria, created_at
-            FROM contests WHERE id = :id
-        ", ['id' => $contestId])->fetchAssociative();
-
-        if (!$contest) {
-            http_response_code(404);
-            echo json_encode(["status" => "error", "message" => "Cuộc thi không tồn tại!"], JSON_UNESCAPED_UNICODE);
-            exit(0);
-        }
-
-        http_response_code(200);
-        echo json_encode(["status" => "success", "data" => $contest], JSON_UNESCAPED_UNICODE);
-        exit(0);
+    // Admin: Upload file đề bài
+    if (preg_match('#^/api/admin/hackathons/(\d+)/challenge/upload$#', $path, $m) && $method === 'POST') {
+        $challengeController->uploadFile((int)$m[1]); exit(0);
     }
 
-    // ------------------------------------------------------------------------
-    // ROUTE 10: TẠO CUỘC THI MỚI (YÊU CẦU QUYỀN ADMIN)
-    // POST /api/admin/hackathons
-    // ------------------------------------------------------------------------
-    if ($path === '/api/admin/hackathons' && $requestMethod === 'POST') {
-        $headers = getallheaders();
-        $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
-        if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
-            http_response_code(401);
-            echo json_encode(["status" => "error", "message" => "Yêu cầu phải có Token xác thực!"], JSON_UNESCAPED_UNICODE);
-            exit(0);
-        }
-        $currentUser = $authService->verifyToken($matches[1]);
-        if (!$currentUser->isAdmin()) {
-            http_response_code(403);
-            echo json_encode(["status" => "error", "message" => "Chỉ Ban tổ chức (ADMIN) mới có quyền tạo cuộc thi!"], JSON_UNESCAPED_UNICODE);
-            exit(0);
-        }
-
-        $data = json_decode(file_get_contents('php://input'), true) ?? [];
-        $name        = trim($data['name'] ?? '');
-        $category    = trim($data['category'] ?? '');
-        $description = trim($data['description'] ?? '');
-        $location    = trim($data['location'] ?? '');
-        $startDate   = trim($data['start_date'] ?? '');
-        $endDate     = trim($data['end_date'] ?? '');
-        $maxTeams    = (int)($data['max_teams'] ?? 50);
-        $status      = strtoupper(trim($data['status'] ?? 'UPCOMING'));
-        $prize       = trim($data['prize'] ?? '');
-        $image       = trim($data['image'] ?? '');
-        $schedule    = trim($data['schedule'] ?? '');
-        $prizeDetails= trim($data['prize_details'] ?? '');
-        $rules       = trim($data['rules'] ?? '');
-        $organizer   = trim($data['organizer'] ?? '');
-        $registrationDeadline = trim($data['registration_deadline'] ?? '');
-        $criteria    = trim($data['criteria'] ?? '');
-
-        if (!$name || !$category || !$startDate || !$endDate) {
-            http_response_code(400);
-            echo json_encode(["status" => "error", "message" => "Thiếu thông tin bắt buộc: tên, danh mục, ngày bắt đầu, ngày kết thúc!"], JSON_UNESCAPED_UNICODE);
-            exit(0);
-        }
-
-        $allowedStatuses = ['UPCOMING', 'ACTIVE', 'COMPLETED', 'CANCELLED'];
-        if (!in_array($status, $allowedStatuses)) {
-            $status = 'UPCOMING';
-        }
-
-        $conn = $entityManager->getConnection();
-        $conn->executeStatement("
-            INSERT INTO contests (name, category, description, location, start_date, end_date, max_teams, status, prize, image, schedule, prize_details, rules, organizer, registration_deadline, criteria, created_at)
-            VALUES (:name, :category, :description, :location, :startDate, :endDate, :maxTeams, :status, :prize, :image, :schedule, :prizeDetails, :rules, :organizer, :registrationDeadline, :criteria, NOW())
-        ", [
-            'name'        => $name,
-            'category'    => $category,
-            'description' => $description,
-            'location'    => $location,
-            'startDate'   => $startDate,
-            'endDate'     => $endDate,
-            'maxTeams'    => $maxTeams,
-            'status'      => $status,
-            'prize'       => $prize,
-            'image'       => $image,
-            'schedule'    => $schedule,
-            'prizeDetails'=> $prizeDetails,
-            'rules'       => $rules,
-            'organizer'   => $organizer,
-            'registrationDeadline' => $registrationDeadline ?: null,
-            'criteria'    => $criteria,
-        ]);
-
-        $newId = $conn->lastInsertId();
-
-        http_response_code(201);
-        echo json_encode([
-            "status"  => "success",
-            "message" => "Tạo cuộc thi mới thành công!",
-            "data"    => ["id" => (int)$newId, "name" => $name]
-        ], JSON_UNESCAPED_UNICODE);
-        exit(0);
+    // ------------------------------------------------------------------
+    // NOTIFICATION ROUTES
+    // ------------------------------------------------------------------
+    if ($path === '/api/notifications' && $method === 'GET') {
+        $notificationController->list(); exit(0);
+    }
+    if (preg_match('#^/api/notifications/(\d+)/read$#', $path, $m) && $method === 'POST') {
+        $notificationController->markRead((int)$m[1]); exit(0);
+    }
+    if ($path === '/api/notifications/read-all' && $method === 'POST') {
+        $notificationController->markAllRead(); exit(0);
     }
 
-    // ------------------------------------------------------------------------
-    // ROUTE 11: CẬP NHẬT CUỘC THI (YÊU CẦU QUYỀN ADMIN)
-    // PUT /api/admin/hackathons/{id}
-    // ------------------------------------------------------------------------
-    if (preg_match('#^/api/admin/hackathons/(\d+)$#', $path, $m) && $requestMethod === 'PUT') {
-        $contestId = (int)$m[1];
-        $headers = getallheaders();
-        $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
-        if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
-            http_response_code(401);
-            echo json_encode(["status" => "error", "message" => "Yêu cầu phải có Token xác thực!"], JSON_UNESCAPED_UNICODE);
-            exit(0);
-        }
-        $currentUser = $authService->verifyToken($matches[1]);
-        if (!$currentUser->isAdmin()) {
-            http_response_code(403);
-            echo json_encode(["status" => "error", "message" => "Chỉ Ban tổ chức (ADMIN) mới có quyền cập nhật cuộc thi!"], JSON_UNESCAPED_UNICODE);
-            exit(0);
-        }
-
-        $conn = $entityManager->getConnection();
-        $existing = $conn->executeQuery("SELECT id FROM contests WHERE id = :id", ['id' => $contestId])->fetchAssociative();
-        if (!$existing) {
-            http_response_code(404);
-            echo json_encode(["status" => "error", "message" => "Cuộc thi không tồn tại!"], JSON_UNESCAPED_UNICODE);
-            exit(0);
-        }
-
-        $data = json_decode(file_get_contents('php://input'), true) ?? [];
-        $name        = trim($data['name'] ?? '');
-        $category    = trim($data['category'] ?? '');
-        $description = trim($data['description'] ?? '');
-        $location    = trim($data['location'] ?? '');
-        $startDate   = trim($data['start_date'] ?? '');
-        $endDate     = trim($data['end_date'] ?? '');
-        $maxTeams    = (int)($data['max_teams'] ?? 50);
-        $status      = strtoupper(trim($data['status'] ?? 'UPCOMING'));
-        $prize       = trim($data['prize'] ?? '');
-        $image       = trim($data['image'] ?? '');
-        $schedule    = trim($data['schedule'] ?? '');
-        $prizeDetails= trim($data['prize_details'] ?? '');
-        $rules       = trim($data['rules'] ?? '');
-        $organizer   = trim($data['organizer'] ?? '');
-        $registrationDeadline = trim($data['registration_deadline'] ?? '');
-        $criteria    = trim($data['criteria'] ?? '');
-
-        if (!$name || !$category || !$startDate || !$endDate) {
-            http_response_code(400);
-            echo json_encode(["status" => "error", "message" => "Thiếu thông tin bắt buộc!"], JSON_UNESCAPED_UNICODE);
-            exit(0);
-        }
-
-        $allowedStatuses = ['UPCOMING', 'ACTIVE', 'COMPLETED', 'CANCELLED'];
-        if (!in_array($status, $allowedStatuses)) {
-            $status = 'UPCOMING';
-        }
-
-        $conn->executeStatement("
-            UPDATE contests
-            SET name=:name, category=:category, description=:description,
-                location=:location, start_date=:startDate, end_date=:endDate,
-                max_teams=:maxTeams, status=:status, prize=:prize, image=:image,
-                schedule=:schedule, prize_details=:prizeDetails, rules=:rules,
-                organizer=:organizer, registration_deadline=:registrationDeadline, criteria=:criteria
-            WHERE id=:id
-        ", [
-            'name'        => $name,
-            'category'    => $category,
-            'description' => $description,
-            'location'    => $location,
-            'startDate'   => $startDate,
-            'endDate'     => $endDate,
-            'maxTeams'    => $maxTeams,
-            'status'      => $status,
-            'prize'       => $prize,
-            'image'       => $image,
-            'schedule'    => $schedule,
-            'prizeDetails'=> $prizeDetails,
-            'rules'       => $rules,
-            'organizer'   => $organizer,
-            'registrationDeadline' => $registrationDeadline ?: null,
-            'criteria'    => $criteria,
-            'id'          => $contestId,
-        ]);
-
-        http_response_code(200);
-        echo json_encode([
-            "status"  => "success",
-            "message" => "Cập nhật cuộc thi thành công!",
-            "data"    => ["id" => $contestId, "name" => $name]
-        ], JSON_UNESCAPED_UNICODE);
-        exit(0);
-    }
-
-    // ------------------------------------------------------------------------
-    // ROUTE 12: XOÁ CUỘC THI (YÊU CẦU QUYỀN ADMIN)
-    // DELETE /api/admin/hackathons/{id}
-    // ------------------------------------------------------------------------
-    if (preg_match('#^/api/admin/hackathons/(\d+)$#', $path, $m) && $requestMethod === 'DELETE') {
-        $contestId = (int)$m[1];
-        $headers = getallheaders();
-        $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
-        if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
-            http_response_code(401);
-            echo json_encode(["status" => "error", "message" => "Yêu cầu phải có Token xác thực!"], JSON_UNESCAPED_UNICODE);
-            exit(0);
-        }
-        $currentUser = $authService->verifyToken($matches[1]);
-        if (!$currentUser->isAdmin()) {
-            http_response_code(403);
-            echo json_encode(["status" => "error", "message" => "Chỉ Ban tổ chức (ADMIN) mới có quyền xoá cuộc thi!"], JSON_UNESCAPED_UNICODE);
-            exit(0);
-        }
-
-        $conn = $entityManager->getConnection();
-        $existing = $conn->executeQuery("SELECT id, name FROM contests WHERE id = :id", ['id' => $contestId])->fetchAssociative();
-        if (!$existing) {
-            http_response_code(404);
-            echo json_encode(["status" => "error", "message" => "Cuộc thi không tồn tại!"], JSON_UNESCAPED_UNICODE);
-            exit(0);
-        }
-
-        $conn->executeStatement("DELETE FROM contests WHERE id = :id", ['id' => $contestId]);
-
-        http_response_code(200);
-        echo json_encode([
-            "status"  => "success",
-            "message" => "Đã xoá cuộc thi \"" . $existing['name'] . "\" thành công!"
-        ], JSON_UNESCAPED_UNICODE);
-        exit(0);
-    }
-
-
-    // ------------------------------------------------------------------------
-    // API TEAM FORMATION (TẠO, THAM GIA, TÌM ĐỘI)
-    // ------------------------------------------------------------------------
-    if ($path === '/api/teams' && $requestMethod === 'POST') {
-        $headers = getallheaders();
-        $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
-        if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
-            throw new Exception("Yêu cầu phải có Token xác thực hợp lệ!");
-        }
-        $currentUser = $authService->verifyToken($matches[1]);
-        $inputData = json_decode(file_get_contents('php://input'), true) ?? [];
-        $dto = new CreateTeamRequestDTO(
-            $inputData['name'] ?? '',
-            $inputData['category'] ?? 'General',
-            $currentUser->id
-        );
-        $result = $teamService->createTeam($dto, $currentUser);
-        http_response_code(201);
-        echo json_encode(["status" => "success", "message" => "Tạo đội thi thành công!", "data" => $result], JSON_UNESCAPED_UNICODE);
-        exit(0);
-    }
-
-    if ($path === '/api/teams/join' && $requestMethod === 'POST') {
-        $headers = getallheaders();
-        $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
-        if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
-            throw new Exception("Yêu cầu phải có Token xác thực hợp lệ!");
-        }
-        $currentUser = $authService->verifyToken($matches[1]);
-        $inputData = json_decode(file_get_contents('php://input'), true) ?? [];
-        $dto = new JoinTeamRequestDTO($inputData['joinCode'] ?? '');
-        $result = $teamService->joinTeam($dto, $currentUser);
-        http_response_code(200);
-        echo json_encode(["status" => "success", "message" => "Tham gia đội thi thành công!", "data" => $result], JSON_UNESCAPED_UNICODE);
-        exit(0);
-    }
-
-    if ($path === '/api/teams/match' && $requestMethod === 'POST') {
-        $headers = getallheaders();
-        $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
-        if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
-            throw new Exception("Yêu cầu phải có Token xác thực hợp lệ!");
-        }
-        $currentUser = $authService->verifyToken($matches[1]);
-        $inputData = json_decode(file_get_contents('php://input'), true) ?? [];
-        $status = $inputData['isLookingForTeam'] ?? false;
-        
-        $teamService->toggleLookingForTeam($currentUser, $status);
-        
-        $match = null;
-        if ($status) {
-            $match = $teamService->autoMatch($currentUser);
-        }
-        
-        http_response_code(200);
-        echo json_encode(["status" => "success", "message" => "Cập nhật trạng thái thành công!", "match" => $match], JSON_UNESCAPED_UNICODE);
-        exit(0);
-    }
-
-
-    // ------------------------------------------------------------------------
-    // ------------------------------------------------------------------------
-    // API: MILESTONES
-    // ------------------------------------------------------------------------
-    if (preg_match('#^/api/hackathons/(\d+)/milestones$#', $path, $matches)) {
-        $hackathonId = (int)$matches[1];
-        $repo = $entityManager->getRepository(\App\Infrastructure\Model\MilestoneModel::class);
-
-        if ($requestMethod === 'POST') {
-            // Xác thực Admin
-            $headers = getallheaders();
-            $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
-            if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches_token)) {
-                throw new Exception("Yêu cầu phải có Token xác thực hợp lệ!");
-            }
-            $currentUser = $authService->verifyToken($matches_token[1]);
-            if (!$currentUser->isAdmin()) {
-                http_response_code(403);
-                echo json_encode(["status" => "error", "message" => "Chỉ Ban tổ chức (ADMIN) mới có quyền tạo mốc thời gian!"], JSON_UNESCAPED_UNICODE);
-                exit(0);
-            }
-
-            $inputData = json_decode(file_get_contents('php://input'), true) ?? [];
-            $milestone = new \App\Infrastructure\Model\MilestoneModel();
-            $milestone->hackathonId = $hackathonId;
-            $milestone->name = $inputData['name'] ?? 'Untitled Milestone';
-            $milestone->description = $inputData['description'] ?? null;
-            if (!empty($inputData['dueDate'])) $milestone->dueDate = new \DateTime($inputData['dueDate']);
-
-            $entityManager->persist($milestone);
-            $entityManager->flush();
-
-            http_response_code(201);
-            echo json_encode(["status" => "success", "message" => "Milestone created", "id" => $milestone->id], JSON_UNESCAPED_UNICODE);
-            exit(0);
-        }
-
-        if ($requestMethod === 'GET') {
-            $milestones = $repo->findBy(['hackathonId' => $hackathonId]);
-            $data = array_map(function($m) {
-                return [
-                    "id" => $m->id,
-                    "hackathonId" => $m->hackathonId,
-                    "name" => $m->name,
-                    "description" => $m->description,
-                    "dueDate" => $m->dueDate ? $m->dueDate->format('c') : null
-                ];
-            }, $milestones);
-            http_response_code(200);
-            echo json_encode(["status" => "success", "data" => $data], JSON_UNESCAPED_UNICODE);
-            exit(0);
-        }
-    }
-
-    if (preg_match('#^/api/milestones/(\d+)$#', $path, $matches)) {
-        $id = (int)$matches[1];
-        $repo = $entityManager->getRepository(\App\Infrastructure\Model\MilestoneModel::class);
-        $milestone = $repo->find($id);
-
-        if (!$milestone) {
-            http_response_code(404);
-            echo json_encode(["status" => "error", "message" => "Mốc thời gian không tồn tại!"], JSON_UNESCAPED_UNICODE);
-            exit(0);
-        }
-
-        // Xác thực Admin cho các thao tác thay đổi
-        $headers = getallheaders();
-        $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
-        if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches_token)) {
-            throw new Exception("Yêu cầu phải có Token xác thực hợp lệ!");
-        }
-        $currentUser = $authService->verifyToken($matches_token[1]);
-        if (!$currentUser->isAdmin()) {
-            http_response_code(403);
-            echo json_encode(["status" => "error", "message" => "Chỉ Ban tổ chức (ADMIN) mới có quyền thực hiện!"], JSON_UNESCAPED_UNICODE);
-            exit(0);
-        }
-
-        if ($requestMethod === 'PUT') {
-            $inputData = json_decode(file_get_contents('php://input'), true) ?? [];
-            if (isset($inputData['name'])) $milestone->name = $inputData['name'];
-            if (isset($inputData['description'])) $milestone->description = $inputData['description'];
-            if (isset($inputData['dueDate'])) {
-                $milestone->dueDate = !empty($inputData['dueDate']) ? new \DateTime($inputData['dueDate']) : null;
-            }
-
-            $entityManager->flush();
-            http_response_code(200);
-            echo json_encode(["status" => "success", "message" => "Cập nhật mốc thời gian thành công!"], JSON_UNESCAPED_UNICODE);
-            exit(0);
-        }
-
-        if ($requestMethod === 'DELETE') {
-            $entityManager->remove($milestone);
-            $entityManager->flush();
-            http_response_code(200);
-            echo json_encode(["status" => "success", "message" => "Xoá mốc thời gian thành công!"], JSON_UNESCAPED_UNICODE);
-            exit(0);
-        }
-    }
-
-    // ------------------------------------------------------------------------
-    // API: SCHEDULES
-    // ------------------------------------------------------------------------
-    if ($path === '/api/schedules') {
-        $repo = $entityManager->getRepository(\App\Infrastructure\Model\ScheduleModel::class);
-
-        if ($requestMethod === 'POST') {
-            // Xác thực Admin
-            $headers = getallheaders();
-            $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
-            if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches_token)) {
-                throw new Exception("Yêu cầu phải có Token xác thực hợp lệ!");
-            }
-            $currentUser = $authService->verifyToken($matches_token[1]);
-            if (!$currentUser->isAdmin()) {
-                http_response_code(403);
-                echo json_encode(["status" => "error", "message" => "Chỉ Ban tổ chức (ADMIN) mới có quyền tạo lịch trình!"], JSON_UNESCAPED_UNICODE);
-                exit(0);
-            }
-
-            $inputData = json_decode(file_get_contents('php://input'), true) ?? [];
-            $schedule = new \App\Infrastructure\Model\ScheduleModel();
-            $schedule->title = $inputData['title'] ?? 'Untitled Event';
-            $schedule->description = $inputData['description'] ?? null;
-            if (!empty($inputData['hackathonId'])) $schedule->hackathonId = (int)$inputData['hackathonId'];
-            if (!empty($inputData['startTime'])) $schedule->startTime = new \DateTime($inputData['startTime']);
-            else $schedule->startTime = new \DateTime(); // Require start time
-            if (!empty($inputData['endTime'])) $schedule->endTime = new \DateTime($inputData['endTime']);
-            $schedule->location = $inputData['location'] ?? null;
-
-            $entityManager->persist($schedule);
-            $entityManager->flush();
-
-            http_response_code(201);
-            echo json_encode(["status" => "success", "message" => "Schedule created", "id" => $schedule->id], JSON_UNESCAPED_UNICODE);
-            exit(0);
-        }
-
-        if ($requestMethod === 'GET') {
-            // Optional filter by hackathonId
-            $hackathonId = $_GET['hackathonId'] ?? null;
-            $criteria = [];
-            if ($hackathonId) {
-                $criteria['hackathonId'] = (int)$hackathonId;
-            }
-            $schedules = $repo->findBy($criteria);
-            
-            $data = array_map(function($s) {
-                return [
-                    "id" => $s->id,
-                    "hackathonId" => $s->hackathonId,
-                    "title" => $s->title,
-                    "description" => $s->description,
-                    "startTime" => $s->startTime ? $s->startTime->format('c') : null,
-                    "endTime" => $s->endTime ? $s->endTime->format('c') : null,
-                    "location" => $s->location
-                ];
-            }, $schedules);
-
-            http_response_code(200);
-            echo json_encode(["status" => "success", "data" => $data], JSON_UNESCAPED_UNICODE);
-            exit(0);
-        }
-    }
-
-    if (preg_match('#^/api/schedules/(\d+)$#', $path, $matches)) {
-        $id = (int)$matches[1];
-        $repo = $entityManager->getRepository(\App\Infrastructure\Model\ScheduleModel::class);
-        $schedule = $repo->find($id);
-
-        if (!$schedule) {
-            http_response_code(404);
-            echo json_encode(["status" => "error", "message" => "Lịch trình không tồn tại!"], JSON_UNESCAPED_UNICODE);
-            exit(0);
-        }
-
-        // Xác thực Admin cho các thao tác thay đổi
-        $headers = getallheaders();
-        $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
-        if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches_token)) {
-            throw new Exception("Yêu cầu phải có Token xác thực hợp lệ!");
-        }
-        $currentUser = $authService->verifyToken($matches_token[1]);
-        if (!$currentUser->isAdmin()) {
-            http_response_code(403);
-            echo json_encode(["status" => "error", "message" => "Chỉ Ban tổ chức (ADMIN) mới có quyền thực hiện!"], JSON_UNESCAPED_UNICODE);
-            exit(0);
-        }
-
-        if ($requestMethod === 'PUT') {
-            $inputData = json_decode(file_get_contents('php://input'), true) ?? [];
-            if (isset($inputData['title'])) $schedule->title = $inputData['title'];
-            if (isset($inputData['description'])) $schedule->description = $inputData['description'];
-            if (isset($inputData['startTime'])) $schedule->startTime = new \DateTime($inputData['startTime']);
-            if (isset($inputData['endTime'])) {
-                $schedule->endTime = !empty($inputData['endTime']) ? new \DateTime($inputData['endTime']) : null;
-            }
-            if (isset($inputData['location'])) $schedule->location = $inputData['location'];
-
-            $entityManager->flush();
-            http_response_code(200);
-            echo json_encode(["status" => "success", "message" => "Cập nhật lịch trình thành công!"], JSON_UNESCAPED_UNICODE);
-            exit(0);
-        }
-
-        if ($requestMethod === 'DELETE') {
-            $entityManager->remove($schedule);
-            $entityManager->flush();
-            http_response_code(200);
-            echo json_encode(["status" => "success", "message" => "Xoá lịch trình thành công!"], JSON_UNESCAPED_UNICODE);
-            exit(0);
-        }
-    }
-
-    // ------------------------------------------------------------------------
-
-    // LỖI 404: KHÔNG TÌM THẤY ENDPOINT PHÙ HỢP
-    // ------------------------------------------------------------------------
+    // ------------------------------------------------------------------
+    // 404 - NOT FOUND
+    // ------------------------------------------------------------------
     http_response_code(404);
     echo json_encode([
-        "status" => "error",
+        "status"  => "error",
         "message" => "Endpoint API không tồn tại trên hệ thống!"
     ], JSON_UNESCAPED_UNICODE);
 
 } catch (Throwable $e) {
-    // ============================================================================
-    // 4. BỘ ĐÓN ĐẦU VÀ XỬ LÝ LỖI TOÀN CỤC (BAO GỒM CẢ EXCEPTION VÀ FATAL ERROR)
-    // ============================================================================
-    http_response_code(500); // Trả về lỗi hệ thống nhưng đóng gói bằng JSON sạch
+    http_response_code(500);
     echo json_encode([
-        "status" => "error",
+        "status"  => "error",
         "message" => "Lỗi Backend: " . $e->getMessage(),
-        "file" => $e->getFile(),
-        "line" => $e->getLine()
+        "file"    => $e->getFile(),
+        "line"    => $e->getLine()
     ], JSON_UNESCAPED_UNICODE);
     exit(1);
 }
