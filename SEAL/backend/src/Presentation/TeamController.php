@@ -227,4 +227,74 @@ class TeamController {
             echo json_encode(["status" => "error", "message" => $e->getMessage()], JSON_UNESCAPED_UNICODE);
         }
     }
+
+    /** GET /api/teams/{id} */
+    public function getTeamById(int $teamId): void {
+        try {
+            $conn = $this->em->getConnection();
+
+            $team = $conn->executeQuery(
+                "SELECT t.id, t.team_name as name, t.category, t.status, t.join_code as joinCode, t.max_members as maxMembers,
+                        u.id as leaderId, u.name as leaderName, u.email as leaderEmail
+                 FROM teams t
+                 LEFT JOIN users u ON t.leader_id = u.id
+                 WHERE t.id = :teamId",
+                ['teamId' => $teamId]
+            )->fetchAssociative();
+
+            if (!$team) {
+                http_response_code(404);
+                echo json_encode(["status" => "error", "message" => "Đội không tồn tại!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            $members = $conn->executeQuery(
+                "SELECT u.id, u.name, u.email, u.skills, tm.role_in_team as role
+                 FROM team_members tm
+                 JOIN users u ON tm.user_id = u.id
+                 WHERE tm.team_id = :teamId",
+                ['teamId' => $teamId]
+            )->fetchAllAssociative();
+
+            $memberCount = count($members);
+
+            $leader = null;
+            if (!empty($team['leaderId'])) {
+                $leader = [
+                    'id' => (int)$team['leaderId'],
+                    'name' => $team['leaderName'],
+                    'email' => $team['leaderEmail'] ?? null
+                ];
+            }
+
+            $membersClean = array_map(function($m) {
+                return [
+                    'id' => (int)$m['id'],
+                    'name' => $m['name'],
+                    'email' => $m['email'] ?? null,
+                    'skills' => $m['skills'] ?? null,
+                    'role' => $m['role'] ?? 'MEMBER'
+                ];
+            }, $members);
+
+            $result = [
+                'id' => (int)$team['id'],
+                'name' => $team['name'],
+                'category' => $team['category'],
+                'status' => $team['status'],
+                'joinCode' => $team['joinCode'],
+                'maxMembers' => (int)$team['maxMembers'],
+                'membersCount' => $memberCount,
+                'leader' => $leader,
+                'members' => $membersClean
+            ];
+
+            http_response_code(200);
+            echo json_encode(["status" => "success", "data" => $result], JSON_UNESCAPED_UNICODE);
+
+        } catch (Exception $e) {
+            http_response_code(400);
+            echo json_encode(["status" => "error", "message" => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        }
+    }
 }

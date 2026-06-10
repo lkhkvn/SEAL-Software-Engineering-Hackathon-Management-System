@@ -1,7 +1,7 @@
-version: "3.8"
+﻿version: "3.8"
 
 services:
-  # 1. Cấu hình Container Backend (PHP + Apache)
+  # 1. Cáº¥u hĂ¬nh Container Backend (PHP + Apache)
   backend:
     build:
       context: ./backend
@@ -12,28 +12,28 @@ services:
       - "8000:80"
     volumes:
       - ./backend:/var/www/html
-      - backend_vendor:/var/www/html/vendor  # Named volume: giữ vendor trong Linux container, tránh lỗi symlink Windows
+      - backend_vendor:/var/www/html/vendor  # Named volume: giá»¯ vendor trong Linux container, trĂ¡nh lá»—i symlink Windows
       - ./logs:/var/www/logs
     depends_on:
       - db
     networks:
       - project_network
 
-  # 2. Cấu hình Container Database (MySQL 8.0)
+  # 2. Cáº¥u hĂ¬nh Container Database (MySQL 8.0)
   db:
     image: mysql:8.0
     container_name: mysql_clean_db
     restart: unless-stopped
     ports:
-      - "3307:3306" # Mở cổng để bạn có thể dùng các app như Navicat/DBeaver kết nối từ máy thật
+      - "3307:3306" # Má»Ÿ cá»•ng Ä‘á»ƒ báº¡n cĂ³ thá»ƒ dĂ¹ng cĂ¡c app nhÆ° Navicat/DBeaver káº¿t ná»‘i tá»« mĂ¡y tháº­t
     environment:
       MYSQL_DATABASE: CleanDb
       MYSQL_ROOT_PASSWORD: root_secret_password
       MYSQL_USER: clean_user
       MYSQL_PASSWORD: user_secret_password
     volumes:
-      - mysql_data:/var/lib/mysql # Giữ lại dữ liệu database không bị mất khi tắt Docker
-      - ./database:/docker-entrypoint-initdb.d # Tự động nạp dữ liệu mẫu khi khởi tạo Database mới
+      - mysql_data:/var/lib/mysql # Giá»¯ láº¡i dá»¯ liá»‡u database khĂ´ng bá»‹ máº¥t khi táº¯t Docker
+      - ./database:/docker-entrypoint-initdb.d # Tá»± Ä‘á»™ng náº¡p dá»¯ liá»‡u máº«u khi khá»Ÿi táº¡o Database má»›i
     networks:
       - project_network
 
@@ -43,4 +43,4 @@ networks:
 
 volumes:
   mysql_data:
-  backend_vendor:  # Named volume cho thư mục vendor của PHP (tránh lỗi symlink Windows)
+  backend_vendor:  # Named volume cho thÆ° má»¥c vendor cá»§a PHP (trĂ¡nh lá»—i symlink Windows)

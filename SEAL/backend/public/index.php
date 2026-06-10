@@ -145,6 +145,9 @@ try {
     if ($path === '/api/teams/match' && $method === 'POST') {
         $teamController->matchTeam(); exit(0);
     }
+    if (preg_match('#^/api/teams/(\d+)$#', $path, $m) && $method === 'GET') {
+        $teamController->getTeamById((int)$m[1]); exit(0);
+    }
 
     // ------------------------------------------------------------------
     // HACKATHON PUBLIC ROUTES
