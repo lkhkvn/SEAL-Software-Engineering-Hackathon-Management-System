@@ -124,6 +124,9 @@ class AuthService
         
         $payload = base64_encode(json_encode([
             'id'   => $user->id,
+            'name' => $user->username,
+            'email'=> $user->email,
+            'role' => $user->role,
             'exp'  => time() + 86400 // Token có giá trị trong 24 giờ
         ]));
 
