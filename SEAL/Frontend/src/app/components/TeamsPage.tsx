@@ -2,8 +2,137 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   Users, Search, Trophy, Code, Target, Loader2, X,
   Github, Video, FileText, User, Plus, LogIn, Sparkles,
-  Copy, Check, AlertCircle, Crown, Shield, Hash
+  Copy, Check, AlertCircle, Crown, Shield, Hash,
+  Briefcase, GraduationCap, Link as LinkIcon
 } from 'lucide-react';
+import confetti from 'canvas-confetti';
+
+const CV_THEMES: Record<string, {
+  headerBg: string;
+  accentText: string;
+  tagBg: string;
+  badgeBg: string;
+  timelineBorder: string;
+}> = {
+  ocean: {
+    headerBg: 'linear-gradient(135deg, #2563eb, #4f46e5)',
+    accentText: 'text-blue-600',
+    tagBg: 'bg-blue-50 text-blue-700 border-blue-100',
+    badgeBg: 'bg-blue-600 text-white',
+    timelineBorder: 'border-blue-200'
+  },
+  emerald: {
+    headerBg: 'linear-gradient(135deg, #059669, #0d9488)',
+    accentText: 'text-emerald-600',
+    tagBg: 'bg-emerald-50 text-emerald-700 border-emerald-100',
+    badgeBg: 'bg-emerald-600 text-white',
+    timelineBorder: 'border-emerald-200'
+  },
+  sunset: {
+    headerBg: 'linear-gradient(135deg, #f97316, #e11d48)',
+    accentText: 'text-rose-600',
+    tagBg: 'bg-rose-50 text-rose-700 border-rose-100',
+    badgeBg: 'bg-rose-600 text-white',
+    timelineBorder: 'border-rose-200'
+  },
+  midnight: {
+    headerBg: 'linear-gradient(135deg, #1f2937, #111827)',
+    accentText: 'text-gray-800',
+    tagBg: 'bg-gray-100 text-gray-800 border-gray-200',
+    badgeBg: 'bg-gray-900 text-white',
+    timelineBorder: 'border-gray-300'
+  }
+};
+
+function CVViewLayout({ name, email, summary, education, experience, portfolioUrl, theme, skills }: {
+  name: string;
+  email: string;
+  summary: string;
+  education: string;
+  experience: string;
+  portfolioUrl: string;
+  theme: string;
+  skills: string[];
+}) {
+  const currentTheme = CV_THEMES[theme] || CV_THEMES.ocean;
+
+  return (
+    <div className="bg-white text-gray-800 rounded-2xl overflow-hidden shadow-sm">
+      {/* Header Banner */}
+      <div className="p-6 text-white" style={{ background: currentTheme.headerBg }}>
+        <h3 className="text-2xl font-bold tracking-tight">{name}</h3>
+        <p className="text-white/80 text-xs mt-1">{email}</p>
+        {portfolioUrl && (
+          <a
+            href={portfolioUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 text-xs text-white/90 hover:text-white mt-2 font-medium bg-white/10 px-2.5 py-1 rounded-lg transition-colors"
+          >
+            <Github size={12} />
+            <span>GitHub / Portfolio</span>
+          </a>
+        )}
+      </div>
+
+      {/* Main Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 p-6">
+        {/* Sidebar */}
+        <div className="md:col-span-1 space-y-5">
+          {/* Học vấn */}
+          <div>
+            <h4 className={`text-xs font-bold uppercase tracking-wider mb-2 ${currentTheme.accentText}`}>Học Vấn</h4>
+            <div className="flex gap-2 items-start">
+              <GraduationCap size={15} className="text-gray-400 mt-0.5 shrink-0" />
+              <p className="text-xs text-gray-700 font-semibold leading-relaxed">
+                {education || 'Chưa cập nhật trường học.'}
+              </p>
+            </div>
+          </div>
+
+          {/* Kỹ năng */}
+          <div>
+            <h4 className={`text-xs font-bold uppercase tracking-wider mb-2 ${currentTheme.accentText}`}>Kỹ Năng</h4>
+            {skills.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5">
+                {skills.map((s, i) => (
+                  <span key={i} className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${currentTheme.tagBg}`}>
+                    {s}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <span className="text-xs text-gray-400 italic">Chưa chọn kỹ năng.</span>
+            )}
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="md:col-span-2 space-y-5 border-t md:border-t-0 md:border-l border-gray-100 pt-5 md:pt-0 md:pl-6">
+          {/* Giới thiệu */}
+          <div>
+            <h4 className={`text-xs font-bold uppercase tracking-wider mb-2 ${currentTheme.accentText}`}>Giới Thiệu Bản Thân</h4>
+            <p className="text-xs text-gray-600 leading-relaxed whitespace-pre-line">
+              {summary || 'Chưa cập nhật thông tin giới thiệu bản thân.'}
+            </p>
+          </div>
+
+          {/* Kinh nghiệm */}
+          <div>
+            <h4 className={`text-xs font-bold uppercase tracking-wider mb-2 ${currentTheme.accentText}`}>Kinh Nghiệm & Dự Án</h4>
+            {experience ? (
+              <p className="text-xs text-gray-600 leading-relaxed whitespace-pre-line">
+                {experience}
+              </p>
+            ) : (
+              <p className="text-xs text-gray-400 italic">Chưa cập nhật kinh nghiệm và dự án.</p>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const API = 'http://localhost:8000/index.php/api';
 
@@ -314,42 +443,389 @@ function InviteCodeModal({ data, onClose }: { data: { teamId: number; teamName: 
   );
 }
 
-// ────────── Modal: Tham gia đội ──────────
-function JoinTeamModal({ onClose, onJoined }: { onClose: () => void; onJoined: () => void }) {
+// ────────── Modal: Thiết lập CV Cá nhân ──────────
+function MyCVModal({ onClose }: { onClose: () => void }) {
+  const [activeTab, setActiveTab] = useState<'edit' | 'preview'>('edit');
+  const [summary, setSummary] = useState('');
+  const [education, setEducation] = useState('');
+  const [experience, setExperience] = useState('');
+  const [portfolioUrl, setPortfolioUrl] = useState('');
+  const [theme, setTheme] = useState('ocean');
+  const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
+  const [customSkill, setCustomSkill] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const PRESET_SKILLS = [
+    'React', 'Vue.js', 'Angular', 'Next.js',
+    'Node.js', 'Express', 'Laravel', 'Django', 'Spring Boot',
+    'Python', 'TypeScript', 'Java', 'Go', 'Rust',
+    'MySQL', 'PostgreSQL', 'MongoDB', 'Redis',
+    'Docker', 'Kubernetes', 'AWS', 'Firebase',
+  ];
+
+  useEffect(() => {
+    const fetchCV = async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(`${API}/users/me/cv`, {
+          headers: { Authorization: `Bearer ${getToken()}` }
+        });
+        const data = await res.json();
+        if (res.ok && data.status === 'success') {
+          const cv = data.data;
+          setSummary(cv.summary || '');
+          setEducation(cv.education || '');
+          setExperience(cv.experience || '');
+          setPortfolioUrl(cv.portfolioUrl || '');
+          setTheme(cv.theme || 'ocean');
+          if (cv.skills) {
+            setSelectedSkills(cv.skills.split(',').map((s: string) => s.trim()).filter(Boolean));
+          }
+        }
+      } catch (err) {
+        setError('Không thể lấy thông tin CV của bạn.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchCV();
+  }, []);
+
+  const toggleSkill = (skill: string) => {
+    setSelectedSkills(prev =>
+      prev.includes(skill) ? prev.filter(s => s !== skill) : [...prev, skill]
+    );
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    setError('');
+    try {
+      const res = await fetch(`${API}/users/me/cv`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+        body: JSON.stringify({
+          summary,
+          education,
+          experience,
+          portfolioUrl,
+          theme,
+          skills: selectedSkills.join(', ')
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || data.status === 'error') throw new Error(data.message);
+      alert('🎉 Lưu thông tin CV thành công!');
+      setActiveTab('preview');
+    } catch (err: any) {
+      setError(err.message || 'Lỗi khi lưu CV. Vui lòng thử lại.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl w-full max-w-4xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+        {/* Header */}
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 shrink-0 flex items-center justify-between text-white">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+              <FileText size={20} />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold">Hồ Sơ Năng Lực (CV Cá Nhân)</h2>
+              <p className="text-blue-100 text-xs">Cập nhật hồ sơ của bạn để ứng tuyển vào các đội thi</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-white/70 hover:text-white p-1">
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Navigation Tabs */}
+        <div className="border-b border-gray-200 px-6 py-2 flex justify-between items-center bg-gray-50 shrink-0">
+          <div className="flex gap-4">
+            <button
+              onClick={() => setActiveTab('edit')}
+              className={`pb-2 pt-1 font-semibold text-sm border-b-2 transition-all ${
+                activeTab === 'edit' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Thiết kế CV
+            </button>
+            <button
+              onClick={() => setActiveTab('preview')}
+              className={`pb-2 pt-1 font-semibold text-sm border-b-2 transition-all ${
+                activeTab === 'preview' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Xem trước CV (Live Preview)
+            </button>
+          </div>
+          
+          {activeTab === 'edit' && (
+            <div className="flex items-center gap-2 text-xs text-gray-500">
+              <span>Chủ đề màu:</span>
+              <select
+                value={theme}
+                onChange={e => setTheme(e.target.value)}
+                className="border border-gray-200 rounded-lg px-2 py-1 bg-white font-semibold text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                <option value="ocean">🌊 Ocean Wave</option>
+                <option value="emerald">🍃 Emerald Mint</option>
+                <option value="sunset">🌅 Sunset Glow</option>
+                <option value="midnight">🕶️ Midnight Sleek</option>
+              </select>
+            </div>
+          )}
+        </div>
+
+        {/* Content Area */}
+        <div className="flex-1 overflow-y-auto p-6 min-h-0 bg-gray-50">
+          {error && (
+            <div className="mb-4 flex items-start gap-2 p-3 bg-red-50 text-red-700 rounded-xl text-sm border border-red-100">
+              <AlertCircle size={16} className="mt-0.5 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-20 gap-3">
+              <Loader2 className="text-blue-600 animate-spin" size={36} />
+              <span className="text-sm text-gray-500">Đang tải hồ sơ CV...</span>
+            </div>
+          ) : activeTab === 'edit' ? (
+            <form onSubmit={handleSave} className="space-y-6 bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
+              {/* Giới thiệu bản thân */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5 flex items-center gap-1.5">
+                  <User size={15} className="text-blue-600" />
+                  Tóm tắt / Giới thiệu bản thân
+                </label>
+                <textarea
+                  value={summary}
+                  onChange={e => setSummary(e.target.value)}
+                  placeholder="VD: Mình là nhà phát triển Frontend với hơn 1 năm kinh nghiệm phát triển các ứng dụng Web sử dụng React và Tailwind CSS. Có khả năng tự học tốt và sẵn sàng cống hiến..."
+                  rows={3}
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                  maxLength={500}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Học vấn */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1.5 flex items-center gap-1.5">
+                    <GraduationCap size={16} className="text-blue-600" />
+                    Trường học / Học vấn
+                  </label>
+                  <input
+                    type="text"
+                    value={education}
+                    onChange={e => setEducation(e.target.value)}
+                    placeholder="VD: Đại học Công nghệ thông tin - ĐHQG TP.HCM"
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    maxLength={150}
+                  />
+                </div>
+
+                {/* Portfolio URL */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1.5 flex items-center gap-1.5">
+                    <LinkIcon size={15} className="text-blue-600" />
+                    Liên kết cá nhân (Github, Portfolio...)
+                  </label>
+                  <input
+                    type="url"
+                    value={portfolioUrl}
+                    onChange={e => setPortfolioUrl(e.target.value)}
+                    placeholder="VD: https://github.com/myusername"
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                  />
+                </div>
+              </div>
+
+              {/* Kinh nghiệm và dự án */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5 flex items-center gap-1.5">
+                  <Briefcase size={15} className="text-blue-600" />
+                  Kinh nghiệm & Dự án nổi bật
+                </label>
+                <textarea
+                  value={experience}
+                  onChange={e => setExperience(e.target.value)}
+                  placeholder="Mô tả ngắn gọn về các dự án bạn đã từng làm hoặc kinh nghiệm làm việc thực tế..."
+                  rows={4}
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                />
+              </div>
+
+              {/* Tag kỹ năng */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5 flex items-center gap-1.5">
+                  <Code size={15} className="text-blue-600" />
+                  Kỹ năng chuyên môn
+                </label>
+                <div className="flex flex-wrap gap-1.5 mb-2.5">
+                  {PRESET_SKILLS.map(s => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => toggleSkill(s)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all ${
+                        selectedSkills.includes(s)
+                          ? 'bg-blue-600 text-white border-blue-600'
+                          : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-blue-300 hover:text-blue-600'
+                      }`}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+                {/* Custom skill input */}
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={customSkill}
+                    onChange={e => setCustomSkill(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const s = customSkill.trim();
+                        if (s && !selectedSkills.includes(s)) {
+                          setSelectedSkills(prev => [...prev, s]);
+                        }
+                        setCustomSkill('');
+                      }
+                    }}
+                    placeholder="Gõ kỹ năng khác rồi nhấn Enter..."
+                    className="flex-1 max-w-xs px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const s = customSkill.trim();
+                      if (s && !selectedSkills.includes(s)) {
+                        setSelectedSkills(prev => [...prev, s]);
+                      }
+                      setCustomSkill('');
+                    }}
+                    className="px-3 py-2 bg-gray-100 hover:bg-blue-100 text-gray-600 hover:text-blue-700 rounded-xl text-xs font-semibold transition-colors"
+                  >
+                    Thêm
+                  </button>
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex gap-3 justify-end pt-4 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-6 py-2.5 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition-colors font-semibold text-sm"
+                >
+                  Đóng
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="px-6 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-60 transition-colors font-semibold text-sm flex items-center gap-2"
+                >
+                  {saving ? <Loader2 size={16} className="animate-spin" /> : null}
+                  {saving ? 'Đang lưu...' : 'Lưu & Xem trước'}
+                </button>
+              </div>
+            </form>
+          ) : (
+            /* Live Preview Layout */
+            <div className="border border-gray-200 rounded-2xl overflow-hidden shadow-md max-w-3xl mx-auto">
+              <CVViewLayout
+                name={parseJwt(getToken()).name || 'Thí sinh'}
+                email={parseJwt(getToken()).email || 'candidate@gmail.com'}
+                summary={summary}
+                education={education}
+                experience={experience}
+                portfolioUrl={portfolioUrl}
+                theme={theme}
+                skills={selectedSkills}
+              />
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ────────── Modal: Tham gia đội (Có Skill Matching & Cover Letter) ──────────
+function JoinTeamModal({ teams, onClose, onJoined }: { teams: Team[]; onClose: () => void; onJoined: () => void }) {
   const [code, setCode] = useState('');
+  const [message, setMessage] = useState('');
+  const [userSkills, setUserSkills] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Lấy kỹ năng của user hiện tại từ CV
+  useEffect(() => {
+    const fetchUserCV = async () => {
+      try {
+        const res = await fetch(`${API}/users/me/cv`, {
+          headers: { Authorization: `Bearer ${getToken()}` }
+        });
+        const data = await res.json();
+        if (res.ok && data.status === 'success' && data.data.skills) {
+          setUserSkills(data.data.skills.split(',').map((s: string) => s.trim()).filter(Boolean));
+        }
+      } catch (err) {
+        console.error('Không thể load kỹ năng của ứng viên:', err);
+      }
+    };
+    fetchUserCV();
+  }, []);
+
+  // Tìm kiếm đội cục bộ dựa trên mã mời
+  const matchedTeam = code.length >= 4 ? teams.find(t => t.joinCode === code.trim().toUpperCase()) : null;
+
+  // Tính toán đối khớp kỹ năng
+  const matchingSkills = matchedTeam ? userSkills.filter(s => matchedTeam.tech.some(t => t.toLowerCase() === s.toLowerCase())) : [];
+  const missingSkills = matchedTeam ? matchedTeam.tech.filter(t => !userSkills.some(s => s.toLowerCase() === t.toLowerCase())) : [];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!code.trim()) { setError('Vui lòng nhập mã mời.'); return; }
     setLoading(true); setError('');
     try {
-      const res = await fetch(`${API}/teams/join`, {
+      const res = await fetch(`${API}/teams/apply`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-        body: JSON.stringify({ joinCode: code.trim().toUpperCase() }),
+        body: JSON.stringify({ joinCode: code.trim().toUpperCase(), message }),
       });
       const data = await res.json();
       if (!res.ok || data.status === 'error') throw new Error(data.message);
+      
+      alert('🎉 Gửi đơn ứng tuyển thành công! Vui lòng chờ đội trưởng duyệt.');
       onJoined();
     } catch (err: any) {
-      setError(err.message || 'Mã mời không hợp lệ hoặc đội đã đầy.');
+      setError(err.message || 'Lỗi hệ thống khi ứng tuyển.');
     } finally { setLoading(false); }
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
-        <div className="bg-gradient-to-r from-violet-600 to-purple-600 p-6">
-          <div className="flex items-center justify-between">
+      <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+        <div className="bg-gradient-to-r from-violet-600 to-purple-600 p-6 shrink-0">
+          <div className="flex items-center justify-between text-white">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
-                <LogIn className="text-white" size={20} />
+                <LogIn size={20} />
               </div>
               <div>
-                <h2 className="text-xl font-bold text-white">Tham Gia Đội</h2>
-                <p className="text-purple-100 text-xs mt-0.5">Nhập mã mời từ Đội trưởng</p>
+                <h2 className="text-xl font-bold">Ứng Tuyển Vào Đội</h2>
+                <p className="text-purple-100 text-xs mt-0.5">Nhập mã mời từ Đội trưởng để gửi CV ứng tuyển</p>
               </div>
             </div>
             <button onClick={onClose} className="text-white/70 hover:text-white p-1">
@@ -358,7 +834,7 @@ function JoinTeamModal({ onClose, onJoined }: { onClose: () => void; onJoined: (
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-6 space-y-5 overflow-y-auto">
           {error && (
             <div className="flex items-start gap-2 p-3 bg-red-50 text-red-700 rounded-xl text-sm border border-red-100">
               <AlertCircle size={16} className="mt-0.5 shrink-0" />
@@ -366,6 +842,7 @@ function JoinTeamModal({ onClose, onJoined }: { onClose: () => void; onJoined: (
             </div>
           )}
 
+          {/* Mã mời */}
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-1.5">Mã mời (Invite Code) <span className="text-red-500">*</span></label>
             <div className="relative">
@@ -375,7 +852,7 @@ function JoinTeamModal({ onClose, onJoined }: { onClose: () => void; onJoined: (
                 type="text"
                 value={code}
                 onChange={e => setCode(e.target.value.toUpperCase())}
-                placeholder="VD: AL1234"
+                placeholder="VD: UE2383"
                 className="w-full pl-9 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 text-base font-mono tracking-widest text-center uppercase font-bold"
                 maxLength={8}
                 autoFocus
@@ -383,6 +860,69 @@ function JoinTeamModal({ onClose, onJoined }: { onClose: () => void; onJoined: (
             </div>
           </div>
 
+          {/* Đối khớp kỹ năng (Skill Matching Panel) */}
+          {matchedTeam && (
+            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-4 border border-blue-100 space-y-3">
+              <div>
+                <span className="text-[10px] font-bold text-blue-500 uppercase tracking-wider">Đội ứng tuyển</span>
+                <h4 className="font-bold text-gray-900 text-sm">{matchedTeam.name} ({matchedTeam.category})</h4>
+              </div>
+              
+              <div className="space-y-1.5">
+                <span className="text-[10px] font-bold text-blue-500 uppercase tracking-wider block">Mức độ tương thích công nghệ (Skill Matching)</span>
+                
+                {/* Khớp */}
+                {matchingSkills.length > 0 && (
+                  <div className="flex flex-wrap gap-1 items-center">
+                    <span className="text-[10px] text-green-700 font-semibold shrink-0 mr-1">Khớp:</span>
+                    {matchingSkills.map((s, idx) => (
+                      <span key={idx} className="text-[9px] font-bold bg-green-100 text-green-700 px-2 py-0.5 rounded border border-green-200">
+                        {s}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Thiếu */}
+                {missingSkills.length > 0 ? (
+                  <div className="flex flex-wrap gap-1 items-center">
+                    <span className="text-[10px] text-amber-700 font-semibold shrink-0 mr-1">Thiếu:</span>
+                    {missingSkills.map((s, idx) => (
+                      <span key={idx} className="text-[9px] font-bold bg-amber-50 text-amber-600 px-2 py-0.5 rounded border border-amber-100">
+                        {s}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-green-700 font-semibold flex items-center gap-1">
+                    ✨ Tuyệt vời! Bạn có đầy đủ công nghệ nhóm này đang cần.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Thư xin việc / Lời chào */}
+          {matchedTeam && (
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1.5 flex items-center gap-1.5">
+                Lời nhắn gửi đến Đội trưởng <span className="text-xs text-gray-400 font-normal">(tùy chọn)</span>
+              </label>
+              <textarea
+                value={message}
+                onChange={e => setMessage(e.target.value)}
+                placeholder="VD: Chào bạn, mình có kỹ năng về React và mong muốn ứng tuyển vị trí làm Frontend cho dự án..."
+                rows={3}
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 text-sm"
+                maxLength={300}
+              />
+              <p className="text-[10px] text-gray-400 mt-1 flex items-center gap-1">
+                <FileText size={10} /> Hồ sơ CV cá nhân của bạn sẽ được tự động gửi kèm cùng đơn xin gia nhập này.
+              </p>
+            </div>
+          )}
+
+          {/* Nút bấm */}
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="flex-1 py-2.5 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition-colors font-semibold text-sm">
               Hủy
@@ -390,11 +930,11 @@ function JoinTeamModal({ onClose, onJoined }: { onClose: () => void; onJoined: (
             <button
               id="join-team-submit-btn"
               type="submit"
-              disabled={loading}
+              disabled={loading || !matchedTeam}
               className="flex-1 py-2.5 bg-violet-600 text-white rounded-xl hover:bg-violet-700 disabled:opacity-60 transition-colors font-semibold text-sm flex items-center justify-center gap-2"
             >
               {loading ? <Loader2 size={16} className="animate-spin" /> : <LogIn size={16} />}
-              {loading ? 'Đang xử lý...' : 'Tham gia'}
+              {loading ? 'Đang gửi...' : 'Gửi đơn ứng tuyển'}
             </button>
           </div>
         </form>
@@ -515,10 +1055,17 @@ export function TeamsPage() {
   const [toggling, setToggling] = useState(false);
   const [matchResult, setMatchResult] = useState<any | null>(null);
 
+  // States nâng cấp cho CV & Yêu cầu gia nhập
+  const [userTeam, setUserTeam] = useState<any | null>(null);
+  const [showCV, setShowCV] = useState(false);
+  const [requests, setRequests] = useState<any[]>([]);
+  const [loadingRequests, setLoadingRequests] = useState(false);
+  const [selectedCV, setSelectedCV] = useState<any | null>(null);
+
   const token = getToken();
   const payload = parseJwt(token);
   const userRole: string = payload.role || '';
-  const isParticipant = !!token; // Hiện nút cho bất kỳ user đã đăng nhập
+  const isParticipant = !!token && userRole === 'PARTICIPANT';
 
   const fetchTeams = useCallback(async () => {
     setLoading(true); setError(null);
@@ -532,7 +1079,49 @@ export function TeamsPage() {
     } finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { fetchTeams(); }, [fetchTeams]);
+  const fetchUserTeam = useCallback(async () => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API}/users/me/team`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok && data.status === 'success') {
+        setUserTeam(data.data);
+      }
+    } catch (err) {
+      console.error('Lỗi lấy thông tin đội của người dùng:', err);
+    }
+  }, [token]);
+
+  const fetchRequests = useCallback(async () => {
+    if (!token || !userTeam?.isLeader) return;
+    setLoadingRequests(true);
+    try {
+      const res = await fetch(`${API}/teams/my-team/requests`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok && data.status === 'success') {
+        setRequests(data.data || []);
+      }
+    } catch (err) {
+      console.error('Lỗi lấy danh sách yêu cầu ứng tuyển:', err);
+    } finally {
+      setLoadingRequests(false);
+    }
+  }, [token, userTeam]);
+
+  useEffect(() => {
+    fetchTeams();
+    fetchUserTeam();
+  }, [fetchTeams, fetchUserTeam]);
+
+  useEffect(() => {
+    if (userTeam?.isLeader) {
+      fetchRequests();
+    }
+  }, [userTeam, fetchRequests]);
 
   const handleToggleAutoMatch = async () => {
     setToggling(true);
@@ -555,13 +1144,54 @@ export function TeamsPage() {
   const handleCreated = (result: any) => {
     setShowCreate(false);
     setInviteResult(result);
+    fetchUserTeam();
     fetchTeams();
   };
 
   const handleJoined = () => {
     setShowJoin(false);
-    alert('🎉 Tham gia đội thành công! Danh sách đội sẽ được làm mới.');
+    fetchUserTeam();
     fetchTeams();
+  };
+
+  const handleApproveRequest = async (requestId: number, userName: string) => {
+    try {
+      const res = await fetch(`${API}/teams/requests/${requestId}/approve`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok || data.status === 'error') throw new Error(data.message);
+      
+      confetti({
+        particleCount: 100,
+        spread: 70,
+        origin: { y: 0.6 }
+      });
+      
+      alert(`🎉 Đã nhận ${userName} vào đội thi thành công!`);
+      fetchUserTeam();
+      fetchTeams();
+    } catch (err: any) {
+      alert(err.message || 'Lỗi khi duyệt yêu cầu.');
+    }
+  };
+
+  const handleRejectRequest = async (requestId: number) => {
+    if (!confirm('Bạn có chắc chắn muốn từ chối ứng viên này không?')) return;
+    try {
+      const res = await fetch(`${API}/teams/requests/${requestId}/reject`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok || data.status === 'error') throw new Error(data.message);
+      
+      alert('Đã từ chối đơn ứng tuyển.');
+      fetchRequests();
+    } catch (err: any) {
+      alert(err.message || 'Lỗi khi từ chối yêu cầu.');
+    }
   };
 
   const sorted = [...teams].sort((a, b) => b.score - a.score).map((t, i) => ({ ...t, rank: i + 1 }));
@@ -608,21 +1238,38 @@ export function TeamsPage() {
 
             {/* Action buttons for participants */}
             {isParticipant && (
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-center">
                 <button
-                  id="join-team-btn"
-                  onClick={() => setShowJoin(true)}
-                  className="flex items-center gap-2 px-4 py-2.5 border-2 border-violet-200 text-violet-700 rounded-xl hover:bg-violet-50 font-semibold text-sm transition-colors"
+                  id="my-cv-btn"
+                  onClick={() => setShowCV(true)}
+                  className="flex items-center gap-2 px-4 py-2.5 border border-gray-300 text-gray-700 bg-white rounded-xl hover:bg-gray-50 font-semibold text-sm transition-colors shadow-sm"
                 >
-                  <LogIn size={16} /> Tham gia đội
+                  <FileText size={16} className="text-blue-600" /> Hồ sơ CV của tôi
                 </button>
-                <button
-                  id="create-team-btn"
-                  onClick={() => setShowCreate(true)}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-semibold text-sm transition-colors shadow-sm"
-                >
-                  <Plus size={16} /> Tạo đội mới
-                </button>
+
+                {!userTeam ? (
+                  <>
+                    <button
+                      id="join-team-btn"
+                      onClick={() => setShowJoin(true)}
+                      className="flex items-center gap-2 px-4 py-2.5 border-2 border-violet-200 text-violet-700 rounded-xl hover:bg-violet-50 font-semibold text-sm transition-colors"
+                    >
+                      <LogIn size={16} /> Tham gia đội
+                    </button>
+                    <button
+                      id="create-team-btn"
+                      onClick={() => setShowCreate(true)}
+                      className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-semibold text-sm transition-colors shadow-sm"
+                    >
+                      <Plus size={16} /> Tạo đội mới
+                    </button>
+                  </>
+                ) : (
+                  <div className="px-4 py-2.5 bg-gray-100 border border-gray-200 text-gray-700 font-bold text-sm rounded-xl flex items-center gap-1.5">
+                    {userTeam.isLeader ? <Crown size={15} className="text-yellow-500" /> : <User size={15} className="text-blue-500" />}
+                    <span>Đã tham gia: {userTeam.name}</span>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -641,7 +1288,7 @@ export function TeamsPage() {
           </div>
 
           {/* Auto-match toggle (Participants only) */}
-          {isParticipant && (
+          {isParticipant && !userTeam && (
             <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div className="flex items-start gap-3">
                 <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center shrink-0 mt-0.5">
@@ -674,6 +1321,79 @@ export function TeamsPage() {
           )}
         </div>
       </div>
+
+      {/* Join Requests Section for Team Leaders */}
+      {userTeam?.isLeader && requests.length > 0 && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-4 mt-6">
+          <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
+            <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+              <Users className="text-blue-600" size={20} />
+              Đơn Gia Nhập Đội Đang Chờ Duyệt ({requests.length})
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {requests.map(req => {
+                const reqSkills = req.userSkills ? req.userSkills.split(',').map((s: string) => s.trim()).filter(Boolean) : [];
+                const myTeamData = teams.find(t => t.id === userTeam.id);
+                const matchingSkillsCount = myTeamData ? reqSkills.filter((s: string) => myTeamData.tech.some(t => t.toLowerCase() === s.toLowerCase())).length : 0;
+                const totalTeamSkills = myTeamData ? myTeamData.tech.length : 0;
+
+                return (
+                  <div key={req.requestId} className="border border-gray-200 rounded-xl p-4 bg-gray-50 flex flex-col justify-between hover:shadow-md transition-shadow">
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-bold text-gray-800 text-sm">{req.userName}</span>
+                        {totalTeamSkills > 0 && (
+                          <span className="text-[10px] font-semibold bg-green-50 text-green-700 px-2 py-0.5 rounded-full border border-green-100">
+                            Khớp {matchingSkillsCount}/{totalTeamSkills} công nghệ
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-gray-400 mb-2 truncate">{req.userEmail}</p>
+                      {req.message && (
+                        <p className="text-xs text-gray-600 bg-white border border-gray-100 p-2.5 rounded-lg mb-3 italic">
+                          "{req.message}"
+                        </p>
+                      )}
+                      
+                      {/* Candidate Skills */}
+                      {reqSkills.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mb-4">
+                          {reqSkills.slice(0, 4).map((s: string, idx: number) => (
+                            <span key={idx} className="text-[9px] font-bold bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">
+                              {s}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex gap-2 pt-2 border-t border-gray-200/60 mt-auto">
+                      <button
+                        onClick={() => setSelectedCV(req)}
+                        className="flex-1 py-1.5 text-xs bg-white border border-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition-colors"
+                      >
+                        Xem CV
+                      </button>
+                      <button
+                        onClick={() => handleRejectRequest(req.requestId)}
+                        className="px-3 py-1.5 text-xs bg-red-50 text-red-600 border border-red-100 font-semibold rounded-lg hover:bg-red-100 transition-colors"
+                      >
+                        Từ chối
+                      </button>
+                      <button
+                        onClick={() => handleApproveRequest(req.requestId, req.userName)}
+                        className="px-3 py-1.5 text-xs bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors"
+                      >
+                        Đồng ý
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Team grid */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -753,9 +1473,69 @@ export function TeamsPage() {
 
       {/* Modals */}
       {showCreate && <CreateTeamModal onClose={() => setShowCreate(false)} onCreated={handleCreated} />}
-      {showJoin && <JoinTeamModal onClose={() => setShowJoin(false)} onJoined={handleJoined} />}
+      {showJoin && <JoinTeamModal teams={teams} onClose={() => setShowJoin(false)} onJoined={handleJoined} />}
       {inviteResult && <InviteCodeModal data={inviteResult} onClose={() => { setInviteResult(null); }} />}
       {selectedTeam && <TeamDetailModal team={selectedTeam} onClose={() => setSelectedTeam(null)} />}
+      {showCV && <MyCVModal onClose={() => setShowCV(false)} />}
+
+      {/* Modal: Xem CV Ứng Viên */}
+      {selectedCV && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl w-full max-w-3xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col">
+            <div className="bg-gray-900 p-5 shrink-0 flex items-center justify-between text-white">
+              <h3 className="text-lg font-bold">Hồ sơ ứng viên: {selectedCV.userName}</h3>
+              <button onClick={() => setSelectedCV(null)} className="text-white/70 hover:text-white p-1">
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
+              <div className="border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
+                <CVViewLayout
+                  name={selectedCV.userName}
+                  email={selectedCV.userEmail}
+                  summary={selectedCV.cvSummary || ''}
+                  education={selectedCV.cvEducation || ''}
+                  experience={selectedCV.cvExperience || ''}
+                  portfolioUrl={selectedCV.cvPortfolioUrl || ''}
+                  theme={selectedCV.cvTheme || 'ocean'}
+                  skills={selectedCV.userSkills ? selectedCV.userSkills.split(',').map((s: string) => s.trim()).filter(Boolean) : []}
+                />
+              </div>
+            </div>
+            
+            <div className="p-4 border-t border-gray-100 flex gap-2 justify-end bg-white">
+              <button
+                onClick={() => setSelectedCV(null)}
+                className="px-5 py-2 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition-colors font-semibold text-sm"
+              >
+                Đóng
+              </button>
+              <button
+                onClick={() => {
+                  const reqId = selectedCV.requestId;
+                  setSelectedCV(null);
+                  handleRejectRequest(reqId);
+                }}
+                className="px-5 py-2 bg-red-50 text-red-600 border border-red-100 rounded-xl hover:bg-red-100 transition-colors font-semibold text-sm"
+              >
+                Từ chối
+              </button>
+              <button
+                onClick={() => {
+                  const reqId = selectedCV.requestId;
+                  const name = selectedCV.userName;
+                  setSelectedCV(null);
+                  handleApproveRequest(reqId, name);
+                }}
+                className="px-5 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors font-semibold text-sm"
+              >
+                Đồng ý nhận
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

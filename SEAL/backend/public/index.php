@@ -108,6 +108,12 @@ try {
     if ($path === '/api/users/me/team' && $method === 'GET') {
         $userController->getMyTeam(); exit(0);
     }
+    if ($path === '/api/users/me/cv' && $method === 'GET') {
+        $userController->getCV(); exit(0);
+    }
+    if ($path === '/api/users/me/cv' && $method === 'POST') {
+        $userController->updateCV(); exit(0);
+    }
 
     if ($path === '/api/auth/create-judge' && $method === 'POST') {
         $authController->createJudge(); exit(0);
@@ -147,6 +153,18 @@ try {
     }
     if (preg_match('#^/api/teams/(\d+)$#', $path, $m) && $method === 'GET') {
         $teamController->getTeamById((int)$m[1]); exit(0);
+    }
+    if ($path === '/api/teams/apply' && $method === 'POST') {
+        $teamController->applyTeam(); exit(0);
+    }
+    if ($path === '/api/teams/my-team/requests' && $method === 'GET') {
+        $teamController->getMyTeamRequests(); exit(0);
+    }
+    if (preg_match('#^/api/teams/requests/(\d+)/approve$#', $path, $m) && $method === 'POST') {
+        $teamController->approveRequest((int)$m[1]); exit(0);
+    }
+    if (preg_match('#^/api/teams/requests/(\d+)/reject$#', $path, $m) && $method === 'POST') {
+        $teamController->rejectRequest((int)$m[1]); exit(0);
     }
 
     // ------------------------------------------------------------------

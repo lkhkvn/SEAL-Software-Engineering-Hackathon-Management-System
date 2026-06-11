@@ -297,4 +297,302 @@ class TeamController {
             echo json_encode(["status" => "error", "message" => $e->getMessage()], JSON_UNESCAPED_UNICODE);
         }
     }
+    public function applyTeam(): void {
+        try {
+            $headers = getallheaders();
+            $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+
+            if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
+                http_response_code(401);
+                echo json_encode(["status" => "error", "message" => "Yêu cầu phải có Token xác thực!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            $currentUser = $this->authService->verifyToken($matches[1]);
+            
+            // Check if user is already in a team
+            if ($currentUser->teamId !== null) {
+                http_response_code(400);
+                echo json_encode(["status" => "error", "message" => "Bạn đã tham gia một đội thi rồi!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            $input = json_decode(file_get_contents('php://input'), true) ?? [];
+            $joinCode = trim($input['joinCode'] ?? '');
+            $message = trim($input['message'] ?? '');
+
+            if (empty($joinCode)) {
+                http_response_code(400);
+                echo json_encode(["status" => "error", "message" => "Vui lòng nhập mã tham gia!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            $conn = $this->em->getConnection();
+
+            // Find team
+            $team = $conn->executeQuery("
+                SELECT t.id, t.team_name, t.max_members, t.leader_id,
+                    (SELECT COUNT(*) FROM team_members tm WHERE tm.team_id = t.id) as member_count
+                FROM teams t WHERE t.join_code = :joinCode
+            ", ['joinCode' => $joinCode])->fetchAssociative();
+
+            if (!$team) {
+                http_response_code(404);
+                echo json_encode(["status" => "error", "message" => "Mã tham gia không hợp lệ hoặc đội không tồn tại!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            if ($team['leader_id'] === $currentUser->id) {
+                http_response_code(400);
+                echo json_encode(["status" => "error", "message" => "Bạn là trưởng nhóm này rồi!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            if ($team['member_count'] >= $team['max_members']) {
+                http_response_code(400);
+                echo json_encode(["status" => "error", "message" => "Đội này đã đạt số lượng tối đa thành viên!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            // Check if there is already a pending request for this team
+            $existing = $conn->executeQuery("
+                SELECT id, status FROM team_join_requests 
+                WHERE team_id = :teamId AND user_id = :userId AND status = 'PENDING'
+            ", ['teamId' => $team['id'], 'userId' => $currentUser->id])->fetchOne();
+
+            if ($existing) {
+                http_response_code(400);
+                echo json_encode(["status" => "error", "message" => "Bạn đã gửi yêu cầu ứng tuyển và đang chờ duyệt!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            // Create join request
+            $conn->executeStatement("
+                INSERT INTO team_join_requests (team_id, user_id, message, status, created_at)
+                VALUES (:teamId, :userId, :message, 'PENDING', NOW())
+            ", [
+                'teamId' => $team['id'],
+                'userId' => $currentUser->id,
+                'message' => $message ?: null
+            ]);
+
+            http_response_code(201);
+            echo json_encode([
+                "status" => "success",
+                "message" => "Gửi đơn ứng tuyển thành công! Vui lòng chờ đội trưởng duyệt."
+            ], JSON_UNESCAPED_UNICODE);
+
+        } catch (Exception $e) {
+            http_response_code(400);
+            echo json_encode(["status" => "error", "message" => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        }
+    }
+
+    public function getMyTeamRequests(): void {
+        try {
+            $headers = getallheaders();
+            $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+
+            if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
+                http_response_code(401);
+                echo json_encode(["status" => "error", "message" => "Yêu cầu phải có Token xác thực!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            $currentUser = $this->authService->verifyToken($matches[1]);
+            $conn = $this->em->getConnection();
+
+            // Find if this user is a leader of any team
+            $team = $conn->executeQuery("
+                SELECT id, team_name, max_members
+                FROM teams WHERE leader_id = :leaderId
+            ", ['leaderId' => $currentUser->id])->fetchAssociative();
+
+            if (!$team) {
+                http_response_code(403);
+                echo json_encode(["status" => "error", "message" => "Bạn không phải trưởng nhóm!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            // Get pending requests with candidate details (including CV and skills)
+            $requests = $conn->executeQuery("
+                SELECT r.id as requestId, r.message, r.created_at as createdAt,
+                       u.id as userId, u.name as userName, u.email as userEmail, u.skills as userSkills,
+                       u.cv_summary as cvSummary, u.cv_education as cvEducation, 
+                       u.cv_experience as cvExperience, u.cv_portfolio_url as cvPortfolioUrl, u.cv_theme as cvTheme
+                FROM team_join_requests r
+                INNER JOIN users u ON u.id = r.user_id
+                WHERE r.team_id = :teamId AND r.status = 'PENDING'
+                ORDER BY r.created_at ASC
+            ", ['teamId' => $team['id']])->fetchAllAssociative();
+
+            http_response_code(200);
+            echo json_encode([
+                "status" => "success",
+                "data" => $requests
+            ], JSON_UNESCAPED_UNICODE);
+
+        } catch (Exception $e) {
+            http_response_code(400);
+            echo json_encode(["status" => "error", "message" => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        }
+    }
+
+    public function approveRequest(int $requestId): void {
+        try {
+            $headers = getallheaders();
+            $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+
+            if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
+                http_response_code(401);
+                echo json_encode(["status" => "error", "message" => "Yêu cầu phải có Token xác thực!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            $currentUser = $this->authService->verifyToken($matches[1]);
+            $conn = $this->em->getConnection();
+
+            // Find request
+            $request = $conn->executeQuery("
+                SELECT r.id, r.team_id, r.user_id, r.status,
+                       t.leader_id, t.max_members,
+                       (SELECT COUNT(*) FROM team_members tm WHERE tm.team_id = t.id) as member_count
+                FROM team_join_requests r
+                INNER JOIN teams t ON t.id = r.team_id
+                WHERE r.id = :id
+            ", ['id' => $requestId])->fetchAssociative();
+
+            if (!$request) {
+                http_response_code(404);
+                echo json_encode(["status" => "error", "message" => "Yêu cầu không tồn tại!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            if ($request['leader_id'] !== $currentUser->id) {
+                http_response_code(403);
+                echo json_encode(["status" => "error", "message" => "Bạn không có quyền duyệt yêu cầu của đội này!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            if ($request['status'] !== 'PENDING') {
+                http_response_code(400);
+                echo json_encode(["status" => "error", "message" => "Yêu cầu này đã được xử lý rồi!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            if ($request['member_count'] >= $request['max_members']) {
+                http_response_code(400);
+                echo json_encode(["status" => "error", "message" => "Đội của bạn đã đạt số lượng tối đa thành viên!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            // Check if applicant is already in a team
+            $applicantTeam = $conn->executeQuery("
+                SELECT team_id FROM users WHERE id = :userId
+            ", ['userId' => $request['user_id']])->fetchOne();
+
+            if ($applicantTeam !== null) {
+                // Applicant already joined another team in the meantime. We should reject this request.
+                $conn->executeStatement("
+                    UPDATE team_join_requests SET status = 'REJECTED' WHERE id = :id
+                ", ['id' => $requestId]);
+
+                http_response_code(400);
+                echo json_encode(["status" => "error", "message" => "Thí sinh này đã gia nhập đội khác!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            // Start transaction
+            $conn->beginTransaction();
+            try {
+                // 1. Update request status to APPROVED
+                $conn->executeStatement("
+                    UPDATE team_join_requests SET status = 'APPROVED' WHERE id = :id
+                ", ['id' => $requestId]);
+
+                // 2. Reject all other pending requests for this user
+                $conn->executeStatement("
+                    UPDATE team_join_requests SET status = 'REJECTED' 
+                    WHERE user_id = :userId AND id != :id AND status = 'PENDING'
+                ", ['userId' => $request['user_id'], 'id' => $requestId]);
+
+                // 3. Add to team_members
+                $conn->executeStatement("
+                    INSERT INTO team_members (team_id, user_id, role_in_team, joined_at)
+                    VALUES (:teamId, :userId, 'MEMBER', NOW())
+                ", ['teamId' => $request['team_id'], 'userId' => $request['user_id']]);
+
+                // 4. Update users.team_id
+                $conn->executeStatement("
+                    UPDATE users SET team_id = :teamId WHERE id = :userId
+                ", ['teamId' => $request['team_id'], 'userId' => $request['user_id']]);
+
+                $conn->commit();
+            } catch (Exception $txEx) {
+                $conn->rollBack();
+                throw $txEx;
+            }
+
+            http_response_code(200);
+            echo json_encode(["status" => "success", "message" => "Duyệt thành viên thành công!"], JSON_UNESCAPED_UNICODE);
+
+        } catch (Exception $e) {
+            http_response_code(400);
+            echo json_encode(["status" => "error", "message" => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        }
+    }
+
+    public function rejectRequest(int $requestId): void {
+        try {
+            $headers = getallheaders();
+            $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+
+            if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
+                http_response_code(401);
+                echo json_encode(["status" => "error", "message" => "Yêu cầu phải có Token xác thực!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            $currentUser = $this->authService->verifyToken($matches[1]);
+            $conn = $this->em->getConnection();
+
+            // Find request
+            $request = $conn->executeQuery("
+                SELECT r.id, r.team_id, r.status, t.leader_id
+                FROM team_join_requests r
+                INNER JOIN teams t ON t.id = r.team_id
+                WHERE r.id = :id
+            ", ['id' => $requestId])->fetchAssociative();
+
+            if (!$request) {
+                http_response_code(404);
+                echo json_encode(["status" => "error", "message" => "Yêu cầu không tồn tại!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            if ($request['leader_id'] !== $currentUser->id) {
+                http_response_code(403);
+                echo json_encode(["status" => "error", "message" => "Bạn không có quyền từ chối yêu cầu của đội này!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            if ($request['status'] !== 'PENDING') {
+                http_response_code(400);
+                echo json_encode(["status" => "error", "message" => "Yêu cầu này đã được xử lý rồi!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            // Update status to REJECTED
+            $conn->executeStatement("
+                UPDATE team_join_requests SET status = 'REJECTED' WHERE id = :id
+            ", ['id' => $requestId]);
+
+            http_response_code(200);
+            echo json_encode(["status" => "success", "message" => "Từ chối yêu cầu thành công!"], JSON_UNESCAPED_UNICODE);
+
+        } catch (Exception $e) {
+            http_response_code(400);
+            echo json_encode(["status" => "error", "message" => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        }
+    }
 }

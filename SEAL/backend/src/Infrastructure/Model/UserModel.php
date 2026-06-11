@@ -35,4 +35,19 @@ class UserModel
 
     #[ORM\Column(name: 'team_id', type: 'integer', nullable: true)]
     public ?int $teamId = null;
+
+    #[ORM\Column(name: 'cv_summary', type: 'text', nullable: true)]
+    public ?string $cvSummary = null;
+
+    #[ORM\Column(name: 'cv_education', type: 'string', length: 255, nullable: true)]
+    public ?string $cvEducation = null;
+
+    #[ORM\Column(name: 'cv_experience', type: 'text', nullable: true)]
+    public ?string $cvExperience = null;
+
+    #[ORM\Column(name: 'cv_portfolio_url', type: 'string', length: 255, nullable: true)]
+    public ?string $cvPortfolioUrl = null;
+
+    #[ORM\Column(name: 'cv_theme', type: 'string', length: 30, options: ['default' => 'ocean'])]
+    public string $cvTheme = 'ocean';
 }

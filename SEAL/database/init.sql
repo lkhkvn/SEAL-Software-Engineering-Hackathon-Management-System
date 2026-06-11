@@ -336,6 +336,35 @@ INSERT INTO `team_members` VALUES (1,1,4,'LEAD','2026-06-08 08:26:50'),(2,1,5,'M
 UNLOCK TABLES;
 
 --
+-- Table structure for table `team_join_requests`
+--
+
+DROP TABLE IF EXISTS `team_join_requests`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `team_join_requests` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+  `team_id` INT NOT NULL,
+  `user_id` INT NOT NULL,
+  `message` TEXT DEFAULT NULL,
+  `status` VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  CONSTRAINT `fk_tjr_team` FOREIGN KEY (`team_id`) REFERENCES `teams` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_tjr_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `team_join_requests`
+--
+
+LOCK TABLES `team_join_requests` WRITE;
+/*!40000 ALTER TABLE `team_join_requests` DISABLE KEYS */;
+/*!40000 ALTER TABLE `team_join_requests` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
 -- Table structure for table `teams`
 --
 
@@ -386,6 +415,11 @@ CREATE TABLE `users` (
   `skills` longtext,
   `team_id` int DEFAULT NULL,
   `is_looking_for_team` tinyint(1) DEFAULT '0',
+  `cv_summary` text DEFAULT NULL,
+  `cv_education` varchar(255) DEFAULT NULL,
+  `cv_experience` text DEFAULT NULL,
+  `cv_portfolio_url` varchar(255) DEFAULT NULL,
+  `cv_theme` varchar(30) DEFAULT 'ocean',
   PRIMARY KEY (`id`),
   UNIQUE KEY `UNIQ_1483A5E9E7927C74` (`email`),
   KEY `idx_user_role` (`role`),
