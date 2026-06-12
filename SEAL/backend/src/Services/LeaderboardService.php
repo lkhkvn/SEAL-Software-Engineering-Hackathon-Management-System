@@ -14,15 +14,28 @@ class LeaderboardService {
     public function getLeaderboard(): array {
         $conn = $this->em->getConnection();
 
+        $criteria = $conn->executeQuery("SELECT id, name, max_score FROM criteria")->fetchAllAssociative();
+
         $teams = $conn->executeQuery("SELECT id, team_name as name, category FROM teams")->fetchAllAssociative();
 
-        $leaderboard = array_map(function($team) use ($conn) {
+        $leaderboard = array_map(function($team) use ($conn, $criteria) {
             $teamId = (int)$team['id'];
 
-            $innovation   = $conn->executeQuery("SELECT COALESCE(AVG(score), 0) FROM scores WHERE team_id = :teamId AND criteria_id = 1", ['teamId' => $teamId])->fetchOne();
-            $technical    = $conn->executeQuery("SELECT COALESCE(AVG(score), 0) FROM scores WHERE team_id = :teamId AND criteria_id = 2", ['teamId' => $teamId])->fetchOne();
-            $presentation = $conn->executeQuery("SELECT COALESCE(AVG(score), 0) FROM scores WHERE team_id = :teamId AND criteria_id = 3", ['teamId' => $teamId])->fetchOne();
-            $feasibility  = $conn->executeQuery("SELECT COALESCE(AVG(score), 0) FROM scores WHERE team_id = :teamId AND criteria_id = 4", ['teamId' => $teamId])->fetchOne();
+            $totalScore = 0;
+            $criteriaScores = [];
+            foreach ($criteria as $criterion) {
+                $score = $conn->executeQuery("SELECT COALESCE(AVG(score), 0) FROM scores WHERE team_id = :teamId AND criteria_id = :critId", [
+                    'teamId' => $teamId,
+                    'critId' => $criterion['id']
+                ])->fetchOne();
+                $criteriaScores[] = [
+                    'id' => $criterion['id'],
+                    'name' => $criterion['name'],
+                    'score' => round((float)$score, 1),
+                    'max_score' => (int)$criterion['max_score']
+                ];
+                $totalScore += (float)$score;
+            }
 
             $memberCount = $conn->executeQuery("SELECT COUNT(*) FROM users WHERE team_id = :teamId", ['teamId' => $teamId])->fetchOne();
 
@@ -38,21 +51,13 @@ class LeaderboardService {
                     }
                 }
             }
-            if (empty($techList)) {
-                $techList = ['React', 'Node.js'];
-            }
             $techList = array_slice($techList, 0, 3);
-
-            $totalScore = (float)$innovation + (float)$technical + (float)$presentation + (float)$feasibility;
 
             return [
                 "teamId"       => $teamId,
                 "team"         => $team['name'],
                 "category"     => $team['category'],
-                "innovation"   => round((float)$innovation, 1),
-                "technical"    => round((float)$technical, 1),
-                "presentation" => round((float)$presentation, 1),
-                "feasibility"  => round((float)$feasibility, 1),
+                "criteriaScores" => $criteriaScores,
                 "score"        => round($totalScore, 1),
                 "members"      => (int)$memberCount,
                 "tech"         => $techList
@@ -117,9 +122,6 @@ class LeaderboardService {
                         $techList[] = $trimmed;
                     }
                 }
-            }
-            if (empty($techList)) {
-                $techList = ['HTML', 'CSS', 'Javascript'];
             }
             $techList = array_slice($techList, 0, 4);
 

@@ -45,9 +45,9 @@ export function EventsPage() {
             startDate: item.startDate,
             endDate: item.endDate,
             location: item.location,
-            teams: Math.floor(Math.random() * ((item.maxTeams || 50) / 2)), // Dữ liệu giả lập cho số đội đã tham gia
+            teams: item.registered_teams_count || 0,
             maxTeams: item.maxTeams || 50,
-            prize: '₫' + ((item.maxTeams || 50) * 1000000).toLocaleString('vi-VN'), // Giả lập giải thưởng dựa trên quy mô đội thi
+            prize: item.prize || 'Liên hệ BTC',
             status: mapStatus(item.status),
             category: item.category,
             image: gradients[item.id % gradients.length], // Dùng gradient mặc định
@@ -200,11 +200,11 @@ export function EventsPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <Users size={16} />
-                    <span>0/{event.maxTeams || '∞'} đội</span>
+                    <span>{event.teams}/{event.maxTeams || '∞'} đội</span>
                     <div className="flex-1 bg-gray-200 rounded-full h-2 ml-2">
                       <div
                         className="bg-blue-600 h-2 rounded-full"
-                        style={{ width: '0%' }}
+                        style={{ width: `${Math.min(100, ((event.teams || 0) / (event.maxTeams || 1)) * 100)}%` }}
                       ></div>
                     </div>
                   </div>

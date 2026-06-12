@@ -28,6 +28,10 @@ export function LeaderboardPage() {
   // Lọc danh mục động từ dữ liệu thật
   const categories = ['all', ...Array.from(new Set(leaderboard.map(item => item.category)))];
 
+  const dynamicCriteria = leaderboard.length > 0 && leaderboard[0].criteriaScores 
+    ? leaderboard[0].criteriaScores 
+    : [];
+
   const filteredLeaderboard = selectedCategory === 'all'
     ? leaderboard
     : leaderboard.filter((entry) => entry.category === selectedCategory);
@@ -139,22 +143,24 @@ export function LeaderboardPage() {
                   <p className="text-sm text-gray-500 mb-4 font-semibold">Danh mục: {entry.category}</p>
 
                   <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div className="bg-blue-50 rounded p-2">
-                      <div className="text-gray-600 font-medium">Sáng tạo</div>
-                      <div className="font-bold text-blue-600">{entry.innovation}/30</div>
-                    </div>
-                    <div className="bg-green-50 rounded p-2">
-                      <div className="text-gray-600 font-medium">Kỹ thuật</div>
-                      <div className="font-bold text-green-600">{entry.technical}/25</div>
-                    </div>
-                    <div className="bg-purple-50 rounded p-2">
-                      <div className="text-gray-600 font-medium">Trình bày</div>
-                      <div className="font-bold text-purple-600">{entry.presentation}/20</div>
-                    </div>
-                    <div className="bg-orange-50 rounded p-2">
-                      <div className="text-gray-600 font-medium">Khả thi</div>
-                      <div className="font-bold text-orange-600">{entry.feasibility}/25</div>
-                    </div>
+                    {entry.criteriaScores?.map((crit: any, idx: number) => {
+                      const colors = [
+                        'bg-blue-50 text-blue-600',
+                        'bg-green-50 text-green-600',
+                        'bg-purple-50 text-purple-600',
+                        'bg-orange-50 text-orange-600',
+                        'bg-red-50 text-red-600'
+                      ];
+                      const colorClass = colors[idx % colors.length];
+                      const bgClass = colorClass.split(' ')[0];
+                      const textClass = colorClass.split(' ')[1];
+                      return (
+                        <div key={crit.id} className={`${bgClass} rounded p-2`}>
+                          <div className="text-gray-600 font-medium">{crit.name}</div>
+                          <div className={`font-bold ${textClass}`}>{crit.score}/{crit.max_score}</div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -177,18 +183,11 @@ export function LeaderboardPage() {
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">
                     Danh mục
                   </th>
-                  <th className="px-6 py-4 text-center text-sm font-semibold text-gray-900">
-                    Sáng tạo
-                  </th>
-                  <th className="px-6 py-4 text-center text-sm font-semibold text-gray-900">
-                    Kỹ thuật
-                  </th>
-                  <th className="px-6 py-4 text-center text-sm font-semibold text-gray-900">
-                    Trình bày
-                  </th>
-                  <th className="px-6 py-4 text-center text-sm font-semibold text-gray-900">
-                    Khả thi
-                  </th>
+                  {dynamicCriteria.map((crit: any) => (
+                    <th key={crit.id} className="px-6 py-4 text-center text-sm font-semibold text-gray-900">
+                      {crit.name}
+                    </th>
+                  ))}
                   <th className="px-6 py-4 text-center text-sm font-semibold text-gray-900">
                     Tổng điểm
                   </th>
@@ -229,24 +228,12 @@ export function LeaderboardPage() {
                     <td className="px-6 py-4">
                       <span className="text-sm text-gray-600 font-medium">{entry.category}</span>
                     </td>
-                    <td className="px-6 py-4 text-center">
-                      <span className="text-sm font-semibold text-gray-900">{entry.innovation}</span>
-                      <span className="text-xs text-gray-500">/30</span>
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      <span className="text-sm font-semibold text-gray-900">{entry.technical}</span>
-                      <span className="text-xs text-gray-500">/25</span>
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      <span className="text-sm font-semibold text-gray-900">
-                        {entry.presentation}
-                      </span>
-                      <span className="text-xs text-gray-500">/20</span>
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      <span className="text-sm font-semibold text-gray-900">{entry.feasibility}</span>
-                      <span className="text-xs text-gray-500">/25</span>
-                    </td>
+                    {entry.criteriaScores?.map((crit: any) => (
+                      <td key={crit.id} className="px-6 py-4 text-center">
+                        <span className="text-sm font-semibold text-gray-900">{crit.score}</span>
+                        <span className="text-xs text-gray-500">/{crit.max_score}</span>
+                      </td>
+                    ))}
                     <td className="px-6 py-4 text-center">
                       <span className="text-2xl font-bold text-blue-600">{entry.score}</span>
                     </td>
