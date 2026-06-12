@@ -140,6 +140,32 @@ class HackathonController {
         echo json_encode(['status' => 'success', 'message' => "Đã xoá cuộc thi \"$name\" thành công!"], JSON_UNESCAPED_UNICODE);
     }
 
+    /** GET /api/admin/hackathons/{id}/teams */
+    public function getRegisteredTeams(int $id): void {
+        $this->requireAdmin();
+        try {
+            $teams = $this->hackathonService->getRegisteredTeams($id);
+            http_response_code(200);
+            echo json_encode(['status' => 'success', 'data' => $teams], JSON_UNESCAPED_UNICODE);
+        } catch (\Exception $e) {
+            http_response_code(400);
+            echo json_encode(['status' => 'error', 'message' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        }
+    }
+
+    /** DELETE /api/admin/hackathons/{id}/teams/{teamId} */
+    public function removeTeam(int $contestId, int $teamId): void {
+        $this->requireAdmin();
+        try {
+            $this->hackathonService->removeTeam($contestId, $teamId);
+            http_response_code(200);
+            echo json_encode(['status' => 'success', 'message' => 'Đã xóa đội thi khỏi cuộc thi thành công!'], JSON_UNESCAPED_UNICODE);
+        } catch (\Exception $e) {
+            http_response_code(400);
+            echo json_encode(['status' => 'error', 'message' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        }
+    }
+
     private function requireAdmin(): void {
         $headers = getallheaders();
         $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';

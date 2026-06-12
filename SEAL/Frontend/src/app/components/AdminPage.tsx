@@ -136,6 +136,13 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
   const [deletingId, setDeletingId]     = useState<number | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Hackathon | null>(null);
 
+  // ── Quản lý Đội thi ──
+  const [showTeamsModal, setShowTeamsModal] = useState(false);
+  const [selectedHackathonForTeams, setSelectedHackathonForTeams] = useState<Hackathon | null>(null);
+  const [registeredTeams, setRegisteredTeams] = useState<any[]>([]);
+  const [loadingTeams, setLoadingTeams] = useState(false);
+  const [removingTeamId, setRemovingTeamId] = useState<number | null>(null);
+
   // Toast
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -368,6 +375,47 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
     } finally {
       setDeletingId(null);
       setConfirmDelete(null);
+    }
+  };
+
+  // ── Teams Management ──
+  const handleOpenTeams = async (contest: Hackathon) => {
+    setSelectedHackathonForTeams(contest);
+    setShowTeamsModal(true);
+    setLoadingTeams(true);
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch(`http://localhost:8000/index.php/api/admin/hackathons/${contest.id}/teams`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const result = await res.json();
+      if (!res.ok || result.status === 'error') throw new Error(result.message);
+      setRegisteredTeams(result.data || []);
+    } catch (e: any) {
+      toast('error', e.message || 'Lỗi tải danh sách đội thi.');
+    } finally {
+      setLoadingTeams(false);
+    }
+  };
+
+  const handleRemoveTeam = async (teamId: number) => {
+    if (!selectedHackathonForTeams) return;
+    if (!confirm('Bạn có chắc muốn xoá đội thi này khỏi sự kiện? Hành động này sẽ xoá luôn bài nộp (nếu có) của đội này trong sự kiện.')) return;
+    setRemovingTeamId(teamId);
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch(`http://localhost:8000/index.php/api/admin/hackathons/${selectedHackathonForTeams.id}/teams/${teamId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const result = await res.json();
+      if (!res.ok || result.status === 'error') throw new Error(result.message);
+      toast('success', result.message || 'Đã xoá đội thi thành công!');
+      setRegisteredTeams(prev => prev.filter(t => t.id !== teamId));
+    } catch (e: any) {
+      toast('error', e.message || 'Không thể xoá đội thi.');
+    } finally {
+      setRemovingTeamId(null);
     }
   };
 
@@ -719,6 +767,79 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
                 {deletingId === confirmDelete.id ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}
                 Xoá vĩnh viễn
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Teams Modal ── */}
+      {showTeamsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl border border-gray-200 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 flex-shrink-0">
+              <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                <Users size={18} className="text-indigo-600" />
+                Đội thi tham gia: {selectedHackathonForTeams?.name}
+              </h3>
+              <button onClick={() => setShowTeamsModal(false)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+                <X size={20} className="text-gray-500" />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-6">
+              {loadingTeams ? (
+                <div className="flex flex-col items-center justify-center py-12 gap-3">
+                  <Loader2 className="animate-spin text-indigo-600" size={32} />
+                  <span className="text-sm text-gray-500">Đang tải danh sách đội thi...</span>
+                </div>
+              ) : registeredTeams.length === 0 ? (
+                <div className="text-center py-12">
+                  <Users size={48} className="mx-auto text-gray-300 mb-3" />
+                  <p className="text-gray-500 font-medium">Chưa có đội thi nào đăng ký sự kiện này.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto border border-gray-100 rounded-lg">
+                  <table className="w-full border-collapse">
+                    <thead className="bg-gray-50 border-b border-gray-200">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Tên Đội</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Đội Trưởng</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Mô tả</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Đăng ký lúc</th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-24">Thao tác</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {registeredTeams.map(team => (
+                        <tr key={team.id} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-4 py-3 text-sm font-semibold text-gray-900">{team.name}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600">
+                            <div>{team.leader_name}</div>
+                            <div className="text-xs text-gray-400">{team.leader_email}</div>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-500 max-w-[200px] truncate" title={team.description}>
+                            {team.description || '-'}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-500">
+                            {new Date(team.registered_at).toLocaleString('vi-VN')}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <button
+                              onClick={() => handleRemoveTeam(team.id)}
+                              disabled={removingTeamId === team.id}
+                              className="px-3 py-1.5 bg-red-50 text-red-600 rounded hover:bg-red-100 transition-colors text-xs font-semibold flex items-center gap-1 mx-auto disabled:opacity-50 cursor-pointer"
+                              title="Xoá đội khỏi sự kiện"
+                            >
+                              {removingTeamId === team.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                              Xoá
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1187,6 +1308,13 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
                         <div className="border-t border-gray-100 px-5 py-3 flex items-center justify-between bg-gray-50">
                           <span className="text-xs text-gray-400">#{c.id}</span>
                           <div className="flex gap-2">
+                            <button
+                              onClick={() => handleOpenTeams(c)}
+                              className="p-1.5 hover:bg-white hover:shadow rounded-lg transition-all text-gray-400 hover:text-indigo-600 cursor-pointer"
+                              title="Quản lý Đội thi"
+                            >
+                              <Users size={16} />
+                            </button>
                             <button
                               onClick={() => setSelectedHackathonForTimeline(c)}
                               className="p-1.5 hover:bg-white hover:shadow rounded-lg transition-all text-gray-400 hover:text-blue-600 cursor-pointer"

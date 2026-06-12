@@ -2,68 +2,86 @@
 
 namespace App\Presentation;
 
-use App\Services\ScoringService;
-use App\DTO\CreateScoreDTO;
-use App\Domain\Entity\Feedback;
-use App\Domain\Repositories\FeedbackRepositoryInterface;
-use Exception;
+use App\Services\ScoreService;
+use App\Services\AuthService;
 
-class ScoreController
-{
-    public function __construct(
-        private ScoringService $scoringService,
-        private FeedbackRepositoryInterface $feedbackRepository
-    ) {}
+class ScoreController {
+    private ScoreService $scoreService;
+    private AuthService $authService;
 
-    public function handleSubmitScore(): void
-    {
-        header('Content-Type: application/json');
-        $inputData = json_decode(file_get_contents('php://input'), true);
+    public function __construct(ScoreService $scoreService, AuthService $authService) {
+        $this->scoreService = $scoreService;
+        $this->authService = $authService;
+    }
 
+    /**
+     * Lấy danh sách đội thi kèm dự án cho Giám khảo chấm điểm
+     */
+    public function getTeamsForJudging(): void {
         try {
-            $dto = CreateScoreDTO::fromArray($inputData);
-            $this->scoringService->submitScore($dto);
+            $user = $this->getCurrentUser();
+            if (!$user || (!$user->isJudge() && !$user->isAdmin())) {
+                http_response_code(403);
+                echo json_encode(["status" => "error", "message" => "Forbidden"]);
+                return;
+            }
+
+            $teams = $this->scoreService->getTeamsForJudging();
+            $criteria = $this->scoreService->getCriteria();
 
             echo json_encode([
-                'status' => 'success',
-                'message' => 'Lưu điểm số của giám khảo thành công!'
+                "status" => "success",
+                "data" => [
+                    "teams" => $teams,
+                    "criteria" => $criteria
+                ]
             ]);
-        } catch (Exception $e) {
-            header('HTTP/1.1 400 Bad Request');
-            echo json_encode([
-                'status' => 'error',
-                'message' => $e->getMessage()
-            ]);
+        } catch (\Exception $e) {
+            http_response_code(500);
+            echo json_encode(["status" => "error", "message" => ltrim($e->getMessage())]);
         }
     }
 
-    public function handleSubmitFeedback(): void
-    {
-        header('Content-Type: application/json');
-        $inputData = json_decode(file_get_contents('php://input'), true);
-
+    /**
+     * Nộp điểm cho một đội
+     */
+    public function submitScores(): void {
         try {
-            if (empty($inputData['comment'])) {
-                throw new Exception("Nội dung nhận xét không được để trống.");
+            $user = $this->getCurrentUser();
+            if (!$user || !$user->isJudge()) {
+                http_response_code(403);
+                echo json_encode(["status" => "error", "message" => "Chỉ giám khảo mới được nhập điểm"]);
+                return;
             }
 
-            $feedback = new Feedback();
-            $feedback->setJudgeId((int)$inputData['judge_id']);
-            $feedback->setTeamId((int)$inputData['team_id']);
-            $feedback->setComment($inputData['comment']);
+            $input = json_decode(file_get_contents('php://input'), true);
+            $teamId = $input['teamId'] ?? null;
+            $scores = $input['scores'] ?? null; // Array of ['criteria_id' => X, 'score' => Y, 'feedback' => '']
 
-            $this->feedbackRepository->save($feedback);
+            if (!$teamId || !is_array($scores)) {
+                http_response_code(400);
+                echo json_encode(["status" => "error", "message" => "Thiếu teamId hoặc scores"]);
+                return;
+            }
+
+            $this->scoreService->submitScores($user->id, $teamId, $scores);
 
             echo json_encode([
-                'status' => 'success',
-                'message' => 'Lưu nhận xét của giám khảo thành công!'
+                "status" => "success",
+                "message" => "Đã lưu điểm thành công"
             ]);
-        } catch (Exception $e) {
-            header('HTTP/1.1 400 Bad Request');
-            echo json_encode([
-                'status' => 'error',
-                'message' => $e->getMessage()
-            ]);
+        } catch (\Exception $e) {
+            http_response_code(500);
+            echo json_encode(["status" => "error", "message" => $e->getMessage()]);
         }
+    }
+
+    private function getCurrentUser() {
+        $headers = getallheaders();
+        $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+        if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
+            throw new \Exception("Yêu cầu phải có Token xác thực!");
+        }
+        return $this->authService->verifyToken($matches[1]);
     }
 }

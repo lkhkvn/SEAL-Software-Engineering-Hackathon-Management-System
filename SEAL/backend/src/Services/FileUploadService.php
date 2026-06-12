@@ -100,4 +100,47 @@ class FileUploadService
             'name' => $originalName,
         ];
     }
+    public function uploadSubmissionFile(array $file, int $teamId, int $contestId): array
+    {
+        if (!isset($file['tmp_name']) || $file['error'] !== UPLOAD_ERR_OK) {
+            $errMessages = [
+                UPLOAD_ERR_INI_SIZE   => 'File vượt quá giới hạn upload_max_filesize.',
+                UPLOAD_ERR_FORM_SIZE  => 'File vượt quá giới hạn MAX_FILE_SIZE.',
+                UPLOAD_ERR_PARTIAL    => 'File chỉ được upload một phần.',
+                UPLOAD_ERR_NO_FILE    => 'Không có file nào được upload.',
+                UPLOAD_ERR_NO_TMP_DIR => 'Thiếu thư mục tạm trên server.',
+                UPLOAD_ERR_CANT_WRITE => 'Không thể ghi file lên server.',
+            ];
+            $errCode = $file['error'] ?? UPLOAD_ERR_NO_FILE;
+            throw new Exception($errMessages[$errCode] ?? 'Lỗi upload không xác định.');
+        }
+
+        if ($file['size'] > self::MAX_SIZE_BYTES) {
+            throw new Exception('File quá lớn! Giới hạn tối đa là 20MB.');
+        }
+
+        $originalName = $file['name'];
+        $ext          = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
+        if (!in_array($ext, self::ALLOWED_EXTENSIONS)) {
+            throw new Exception('Định dạng file không được hỗ trợ. Cho phép: PDF, ZIP, DOCX, DOC, RAR.');
+        }
+
+        $submissionDir = __DIR__ . '/../../public/uploads/submissions/' . $contestId . '/';
+        if (!is_dir($submissionDir)) {
+            mkdir($submissionDir, 0755, true);
+        }
+
+        $safeBase   = preg_replace('/[^a-zA-Z0-9_\-]/', '_', pathinfo($originalName, PATHINFO_FILENAME));
+        $uniqueName = 'team_' . $teamId . '_' . $safeBase . '_' . time() . '.' . $ext;
+        $destPath   = $submissionDir . $uniqueName;
+
+        if (!move_uploaded_file($file['tmp_name'], $destPath)) {
+            throw new Exception('Không thể lưu file lên server. Kiểm tra quyền thư mục uploads/.');
+        }
+
+        return [
+            'url'  => '/uploads/submissions/' . $contestId . '/' . $uniqueName,
+            'name' => $originalName,
+        ];
+    }
 }

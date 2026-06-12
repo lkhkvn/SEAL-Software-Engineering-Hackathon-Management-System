@@ -9,6 +9,9 @@ import { LeaderboardPage } from './components/LeaderboardPage';
 import { AdminPage } from './components/AdminPage';
 import { LoginPage } from './components/LoginPage';
 import { RegisterPage } from './components/RegisterPage';
+import { ProfilePage } from './components/ProfilePage';
+import { JudgingPage } from './components/JudgingPage';
+import { SubmissionPage } from './components/SubmissionPage';
 
 // Component Layout chung bọc thanh điều hướng Navigation
 function MainLayout({ currentUser, onLogout }: { currentUser: any, onLogout: () => void }) {
@@ -56,6 +59,9 @@ function AppRoutes() {
         <Route path="/events/:id" element={<EventDetailPage />} />
         <Route path="/teams" element={<TeamsPage />} />
         <Route path="/leaderboard" element={<LeaderboardPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/judging" element={<JudgingPage />} />
+        <Route path="/submit" element={<SubmissionPage />} />
         <Route path="/admin" element={<AdminPage currentUser={currentUser} onLogout={handleLogout} />} />
       </Route>
 

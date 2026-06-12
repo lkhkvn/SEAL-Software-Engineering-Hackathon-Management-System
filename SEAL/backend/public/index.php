@@ -42,6 +42,8 @@ use App\Presentation\ChallengeController;
 use App\Services\NotificationService;
 use App\Services\FileUploadService;
 use App\Presentation\NotificationController;
+use App\Services\ScoreService;
+use App\Presentation\ScoreController;
 
 try {
     if (file_exists(__DIR__ . '/../vendor/autoload.php')) {
@@ -86,6 +88,9 @@ try {
     $userController        = new UserController($authService, $entityManager);
     $challengeController   = new ChallengeController($challengeService, $authService, $fileUploadService);
     $notificationController= new NotificationController($notificationService, $authService);
+    
+    $scoreService          = new ScoreService($entityManager);
+    $scoreController       = new ScoreController($scoreService, $authService);
 
     // ============================================================================
     // ROUTER
@@ -160,11 +165,17 @@ try {
     if ($path === '/api/teams/my-team/requests' && $method === 'GET') {
         $teamController->getMyTeamRequests(); exit(0);
     }
+    if ($path === '/api/teams/my-team/submit' && $method === 'POST') {
+        $teamController->submitProject(); exit(0);
+    }
     if (preg_match('#^/api/teams/requests/(\d+)/approve$#', $path, $m) && $method === 'POST') {
         $teamController->approveRequest((int)$m[1]); exit(0);
     }
     if (preg_match('#^/api/teams/requests/(\d+)/reject$#', $path, $m) && $method === 'POST') {
         $teamController->rejectRequest((int)$m[1]); exit(0);
+    }
+    if ($path === '/api/teams/my-team/contests' && $method === 'GET') {
+        $teamController->getMyTeamContests(); exit(0);
     }
 
     // ------------------------------------------------------------------
@@ -194,6 +205,12 @@ try {
     }
     if (preg_match('#^/api/admin/hackathons/(\d+)$#', $path, $m) && $method === 'DELETE') {
         $hackathonController->deleteHackathon((int)$m[1]); exit(0);
+    }
+    if (preg_match('#^/api/admin/hackathons/(\d+)/teams$#', $path, $m) && $method === 'GET') {
+        $hackathonController->getRegisteredTeams((int)$m[1]); exit(0);
+    }
+    if (preg_match('#^/api/admin/hackathons/(\d+)/teams/(\d+)$#', $path, $m) && $method === 'DELETE') {
+        $hackathonController->removeTeam((int)$m[1], (int)$m[2]); exit(0);
     }
 
     // ------------------------------------------------------------------
@@ -264,6 +281,16 @@ try {
     }
     if ($path === '/api/notifications/read-all' && $method === 'POST') {
         $notificationController->markAllRead(); exit(0);
+    }
+
+    // ------------------------------------------------------------------
+    // SCORE & JUDGING ROUTES
+    // ------------------------------------------------------------------
+    if ($path === '/api/judging/teams' && $method === 'GET') {
+        $scoreController->getTeamsForJudging(); exit(0);
+    }
+    if ($path === '/api/scores' && $method === 'POST') {
+        $scoreController->submitScores(); exit(0);
     }
 
     // ------------------------------------------------------------------

@@ -595,4 +595,183 @@ class TeamController {
             echo json_encode(["status" => "error", "message" => $e->getMessage()], JSON_UNESCAPED_UNICODE);
         }
     }
+    public function submitProject(): void {
+        try {
+            $headers = getallheaders();
+            $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+
+            if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
+                http_response_code(401);
+                echo json_encode(["status" => "error", "message" => "Yêu cầu phải có Token xác thực!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            $currentUser = $this->authService->verifyToken($matches[1]);
+            
+            if (!$currentUser->teamId) {
+                http_response_code(403);
+                echo json_encode(["status" => "error", "message" => "Bạn chưa tham gia đội thi nào!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            // Hỗ trợ form-data
+            $projectName = trim($_POST['projectName'] ?? '');
+            $description = trim($_POST['description'] ?? '');
+            $githubUrl = trim($_POST['githubUrl'] ?? '');
+            $demoVideoUrl = trim($_POST['demoVideoUrl'] ?? '');
+            $contestId = (int)($_POST['contestId'] ?? 0);
+
+            if (empty($projectName) || empty($description) || $contestId <= 0) {
+                http_response_code(400);
+                echo json_encode(["status" => "error", "message" => "Vui lòng chọn sự kiện và điền đầy đủ tên dự án, mô tả!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            $conn = $this->em->getConnection();
+
+            // Lấy thông tin leader_id của đội
+            $team = $conn->executeQuery("SELECT leader_id FROM teams WHERE id = :teamId", ['teamId' => $currentUser->teamId])->fetchAssociative();
+            
+            if (!$team || (int)$team['leader_id'] !== $currentUser->id) {
+                http_response_code(403);
+                echo json_encode(["status" => "error", "message" => "Chỉ đội trưởng mới có quyền nộp dự án!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            // Kiểm tra đăng ký sự kiện
+            $registration = $conn->executeQuery("SELECT id FROM contest_registrations WHERE team_id = :teamId AND contest_id = :contestId", [
+                'teamId' => $currentUser->teamId,
+                'contestId' => $contestId
+            ])->fetchOne();
+
+            if (!$registration) {
+                http_response_code(403);
+                echo json_encode(["status" => "error", "message" => "Đội của bạn chưa đăng ký tham gia sự kiện này!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            $fileUrl = null;
+            if (isset($_FILES['projectFile']) && $_FILES['projectFile']['error'] === UPLOAD_ERR_OK) {
+                $fileService = new \App\Services\FileUploadService();
+                $uploadResult = $fileService->uploadSubmissionFile($_FILES['projectFile'], $currentUser->teamId, $contestId);
+                $fileUrl = $uploadResult['url'];
+            }
+
+            // Check if submission already exists for this specific contest
+            $existing = $conn->executeQuery("SELECT id FROM submissions WHERE team_id = :teamId AND contest_id = :contestId", [
+                'teamId' => $currentUser->teamId,
+                'contestId' => $contestId
+            ])->fetchOne();
+
+            if ($existing) {
+                $updateParams = [
+                    'projectName' => $projectName,
+                    'description' => $description,
+                    'githubUrl' => $githubUrl,
+                    'demoVideoUrl' => $demoVideoUrl,
+                    'id' => $existing
+                ];
+                $updateSql = "UPDATE submissions SET project_name = :projectName, description = :description, github_url = :githubUrl, demo_video_url = :demoVideoUrl";
+                if ($fileUrl) {
+                    $updateSql .= ", file_url = :fileUrl";
+                    $updateParams['fileUrl'] = $fileUrl;
+                }
+                $updateSql .= " WHERE id = :id";
+                $conn->executeStatement($updateSql, $updateParams);
+            } else {
+                // Insert
+                $conn->executeStatement("
+                    INSERT INTO submissions (team_id, contest_id, project_name, description, github_url, demo_video_url, file_url, submitted_at)
+                    VALUES (:teamId, :contestId, :projectName, :description, :githubUrl, :demoVideoUrl, :fileUrl, NOW())
+                ", [
+                    'teamId' => $currentUser->teamId,
+                    'contestId' => $contestId,
+                    'projectName' => $projectName,
+                    'description' => $description,
+                    'githubUrl' => $githubUrl,
+                    'demoVideoUrl' => $demoVideoUrl,
+                    'fileUrl' => $fileUrl
+                ]);
+                http_response_code(400);
+                echo json_encode(["status" => "error", "message" => "Thí sinh này đã gia nhập đội khác!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            // Start transaction
+            $conn->beginTransaction();
+            try {
+                // 1. Update request status to APPROVED
+                $conn->executeStatement("
+                    UPDATE team_join_requests SET status = 'APPROVED' WHERE id = :id
+                ", ['id' => $requestId]);
+
+                // 2. Reject all other pending requests for this user
+                $conn->executeStatement("
+                    UPDATE team_join_requests SET status = 'REJECTED' 
+                    WHERE user_id = :userId AND id != :id AND status = 'PENDING'
+                ", ['userId' => $request['user_id'], 'id' => $requestId]);
+
+                // 3. Add to team_members
+                $conn->executeStatement("
+                    INSERT INTO team_members (team_id, user_id, role_in_team, joined_at)
+                    VALUES (:teamId, :userId, 'MEMBER', NOW())
+                ", ['teamId' => $request['team_id'], 'userId' => $request['user_id']]);
+
+                // 4. Update users.team_id
+                $conn->executeStatement("
+                    UPDATE users SET team_id = :teamId WHERE id = :userId
+                ", ['teamId' => $request['team_id'], 'userId' => $request['user_id']]);
+
+                $conn->commit();
+            } catch (Exception $txEx) {
+                $conn->rollBack();
+                throw $txEx;
+            }
+
+            http_response_code(200);
+            echo json_encode(["status" => "success", "message" => "Duyệt thành viên thành công!"], JSON_UNESCAPED_UNICODE);
+
+        } catch (Exception $e) {
+            http_response_code(400);
+            echo json_encode(["status" => "error", "message" => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        }
+    }
+
+
+
+    public function getMyTeamContests(): void {
+        try {
+            $headers = getallheaders();
+            $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+
+            if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
+                http_response_code(401);
+                echo json_encode(["status" => "error", "message" => "Yêu cầu phải có Token xác thực!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            $currentUser = $this->authService->verifyToken($matches[1]);
+            
+            if (!$currentUser->teamId) {
+                http_response_code(403);
+                echo json_encode(["status" => "error", "message" => "Bạn chưa tham gia đội thi nào!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            $conn = $this->em->getConnection();
+            $contests = $conn->executeQuery("
+                SELECT c.id, c.name, c.start_date, c.end_date, cr.registered_at 
+                FROM contests c
+                INNER JOIN contest_registrations cr ON cr.contest_id = c.id
+                WHERE cr.team_id = :teamId
+            ", ['teamId' => $currentUser->teamId])->fetchAllAssociative();
+
+            http_response_code(200);
+            echo json_encode(["status" => "success", "data" => $contests], JSON_UNESCAPED_UNICODE);
+
+        } catch (\Exception $e) {
+            http_response_code(400);
+            echo json_encode(["status" => "error", "message" => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        }
+    }
 }

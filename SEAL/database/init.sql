@@ -285,12 +285,15 @@ CREATE TABLE `submissions` (
   `notes` longtext,
   `submitted_at` datetime DEFAULT NULL,
   `team_id` int DEFAULT NULL,
+  `contest_id` int DEFAULT NULL,
   `github_url` varchar(255) DEFAULT NULL,
   `demo_video_url` varchar(255) DEFAULT NULL,
   `file_url` varchar(255) DEFAULT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `UNIQ_3F6169F7296CD8AE` (`team_id`),
-  CONSTRAINT `FK_3F6169F7296CD8AE` FOREIGN KEY (`team_id`) REFERENCES `teams` (`id`) ON DELETE CASCADE
+  UNIQUE KEY `unique_team_contest` (`team_id`, `contest_id`),
+  KEY `fk_submission_contest` (`contest_id`),
+  CONSTRAINT `FK_3F6169F7296CD8AE` FOREIGN KEY (`team_id`) REFERENCES `teams` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_submission_contest` FOREIGN KEY (`contest_id`) REFERENCES `contests` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 

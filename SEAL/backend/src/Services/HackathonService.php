@@ -207,8 +207,50 @@ class HackathonService {
         return [
             'contest_id'   => $contestId,
             'contest_name' => $contest['name'],
-            'has_challenge' => $challenge !== false,
+            'challenge_released' => $challenge ? true : false,
+            'notifications_sent' => true
         ];
     }
-}
 
+    public function getRegisteredTeams(int $contestId): array {
+        $conn = $this->em->getConnection();
+        $teams = $conn->executeQuery("
+            SELECT t.id, t.team_name as name, t.category as description, t.leader_id, cr.registered_at,
+                   u.name as leader_name, u.email as leader_email
+            FROM teams t
+            INNER JOIN contest_registrations cr ON cr.team_id = t.id
+            LEFT JOIN users u ON u.id = t.leader_id
+            WHERE cr.contest_id = :contestId
+            ORDER BY cr.registered_at DESC
+        ", ['contestId' => $contestId])->fetchAllAssociative();
+        return $teams;
+    }
+
+    public function removeTeam(int $contestId, int $teamId): void {
+        $conn = $this->em->getConnection();
+        
+        $conn->beginTransaction();
+        try {
+            // Delete the team's submission for this contest if any
+            $conn->executeStatement("DELETE FROM submissions WHERE contest_id = :contestId AND team_id = :teamId", [
+                'contestId' => $contestId,
+                'teamId' => $teamId
+            ]);
+
+            // Delete the registration
+            $deleted = $conn->executeStatement("DELETE FROM contest_registrations WHERE contest_id = :contestId AND team_id = :teamId", [
+                'contestId' => $contestId,
+                'teamId' => $teamId
+            ]);
+
+            if ($deleted === 0) {
+                throw new Exception("Đội thi chưa đăng ký hoặc không tồn tại trong cuộc thi này!");
+            }
+
+            $conn->commit();
+        } catch (\Exception $e) {
+            $conn->rollBack();
+            throw $e;
+        }
+    }
+}

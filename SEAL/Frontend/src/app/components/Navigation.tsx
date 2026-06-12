@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Trophy, Calendar, Users, Settings, Home, Award, LogIn, LogOut } from 'lucide-react';
+import { Trophy, Calendar, Users, Settings, Home, Award, LogIn, LogOut, Upload, CheckSquare } from 'lucide-react';
 import { NotificationBell } from './NotificationBell';
 
 interface NavigationProps {
@@ -11,12 +11,16 @@ export function Navigation({ currentUser, onLogout }: NavigationProps) {
   const location = useLocation();
 
   const isUserAdmin = currentUser && currentUser.role?.toUpperCase() === 'ADMIN';
+  const isUserJudge = currentUser && (currentUser.role?.toUpperCase() === 'JUDGE' || isUserAdmin);
+  const isParticipant = currentUser && currentUser.role?.toUpperCase() === 'PARTICIPANT';
 
   const navItems = [
     { path: '/', icon: Home, label: 'Trang chủ' },
     { path: '/events', icon: Calendar, label: 'Sự kiện' },
     { path: '/teams', icon: Users, label: 'Đội thi' },
     { path: '/leaderboard', icon: Award, label: 'Bảng xếp hạng' },
+    ...(isParticipant ? [{ path: '/submit', icon: Upload, label: 'Nộp dự án' }] : []),
+    ...(isUserJudge ? [{ path: '/judging', icon: CheckSquare, label: 'Chấm điểm' }] : []),
     ...(isUserAdmin ? [{ path: '/admin', icon: Settings, label: 'Quản lý' }] : []),
   ];
 
@@ -91,10 +95,10 @@ export function Navigation({ currentUser, onLogout }: NavigationProps) {
                 {/* Chuông thông báo */}
                 <NotificationBell currentUser={currentUser} />
 
-                {/* Avatar tròn */}
-                <div className="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-sm shadow-md cursor-pointer hover:scale-105 transition-transform" title={currentUser.username}>
+                {/* Avatar tròn (Click để vào Profile) */}
+                <Link to="/profile" className="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-sm shadow-md cursor-pointer hover:scale-105 transition-transform" title="Hồ sơ cá nhân">
                   {getInitials(currentUser.username)}
-                </div>
+                </Link>
 
                 {/* Nút Đăng xuất */}
                 <button

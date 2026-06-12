@@ -29,10 +29,10 @@ class UserController {
         $row = $conn->executeQuery("
             SELECT t.id, t.team_name as name, t.join_code as joinCode, t.category,
                    t.max_members as maxMembers, t.status, t.leader_id as leaderId,
-                   (SELECT COUNT(*) FROM team_members tm WHERE tm.team_id = t.id) as memberCount
+                   (SELECT COUNT(*) FROM team_members tm2 WHERE tm2.team_id = t.id) as memberCount
             FROM teams t
-            INNER JOIN team_members tm ON tm.team_id = t.id
-            WHERE tm.user_id = :userId
+            INNER JOIN team_members tm1 ON tm1.team_id = t.id
+            WHERE tm1.user_id = :userId
             LIMIT 1
         ", ['userId' => $currentUser->id])->fetchAssociative();
 

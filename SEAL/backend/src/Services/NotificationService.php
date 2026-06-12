@@ -112,8 +112,8 @@ class NotificationService
             LEFT JOIN contests c ON c.id = n.contest_id
             WHERE n.user_id = :userId
             ORDER BY n.created_at DESC
-            LIMIT :limit
-        ", ['userId' => $userId, 'limit' => $limit])->fetchAllAssociative();
+            LIMIT " . (int)$limit . "
+        ", ['userId' => $userId])->fetchAllAssociative();
     }
 
     /**
