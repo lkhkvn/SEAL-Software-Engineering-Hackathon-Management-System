@@ -150,6 +150,9 @@ try {
     if ($path === '/api/teams' && $method === 'POST') {
         $teamController->createTeam(); exit(0);
     }
+    if (preg_match('#^/api/teams/(\d+)$#', $path, $m) && $method === 'PUT') {
+        $teamController->updateTeam((int)$m[1]); exit(0);
+    }
     if ($path === '/api/teams/join' && $method === 'POST') {
         $teamController->joinTeam(); exit(0);
     }

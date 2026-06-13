@@ -4,6 +4,7 @@ namespace App\Presentation;
 use App\Services\TeamService;
 use App\Services\AuthService;
 use App\DTO\JoinTeamRequestDTO;
+use App\Domain\Entity\User;
 use Doctrine\ORM\EntityManagerInterface;
 use Exception;
 
@@ -18,31 +19,41 @@ class TeamController {
         $this->em = $em;
     }
 
+    private function getAuthToken(): string {
+        $headers = getallheaders();
+        $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+
+        if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
+            throw new Exception("Yêu cầu phải có Token xác thực!");
+        }
+
+        return $matches[1];
+    }
+
+    private function requireCurrentUser(): User {
+        $token = $this->getAuthToken();
+        return $this->authService->verifyToken($token);
+    }
+
     public function createTeam(): void {
         try {
-            $headers = getallheaders();
-            $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
-            
-            if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
-                http_response_code(401);
-                echo json_encode(["status" => "error", "message" => "Yêu cầu phải có Token xác thực!"], JSON_UNESCAPED_UNICODE);
+            $currentUser = $this->requireCurrentUser();
+
+            if ($currentUser->teamId !== null) {
+                http_response_code(409);
+                echo json_encode(["status" => "error", "message" => "Bạn đã thuộc về một đội thi khác!"], JSON_UNESCAPED_UNICODE);
                 return;
             }
-            
-            $currentUser = $this->authService->verifyToken($matches[1]);
-            
+
             $inputData = json_decode(file_get_contents('php://input'), true) ?? [];
-            $teamName = trim($inputData['name'] ?? '');
+            $teamName = trim($inputData['name'] ?? $inputData['team_name'] ?? '');
             $category  = trim($inputData['category'] ?? 'AI & ML');
-            // Nhận mảng công nghệ từ frontend, ép kiểu an toàn
             $skills = [];
             if (!empty($inputData['skills']) && is_array($inputData['skills'])) {
-                $skills = array_map('trim', $inputData['skills']);
-                $skills = array_filter($skills);
-                $skills = array_values($skills);
+                $skills = array_filter(array_map('trim', $inputData['skills']));
             }
             $skillsStr = implode(', ', $skills);
-            
+
             $maxMembers = (int)($inputData['max_members'] ?? 5);
             if ($maxMembers < 1 || $maxMembers > 10) {
                 $maxMembers = 5;
@@ -53,10 +64,13 @@ class TeamController {
                 echo json_encode(["status" => "error", "message" => "Tên đội thi không được để trống!"], JSON_UNESCAPED_UNICODE);
                 return;
             }
+            if (strlen($teamName) < 3 || strlen($teamName) > 80) {
+                http_response_code(400);
+                echo json_encode(["status" => "error", "message" => "Tên đội thi phải có từ 3 đến 80 ký tự!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
 
             $conn = $this->em->getConnection();
-
-            // Kiểm tra tên đội đã tồn tại
             $existing = $conn->executeQuery("SELECT id FROM teams WHERE team_name = :name", ['name' => $teamName])->fetchOne();
             if ($existing) {
                 http_response_code(409);
@@ -64,12 +78,24 @@ class TeamController {
                 return;
             }
 
-            // Tạo mã invite code
-            $prefix = strtoupper(substr(str_replace(' ', '', $teamName), 0, 2));
-            if (strlen($prefix) < 2) $prefix = 'TM';
-            $joinCode = $prefix . rand(1000, 9999);
+            $joinCode = null;
+            $attempt = 0;
+            do {
+                $prefix = strtoupper(substr(str_replace(' ', '', $teamName), 0, 2));
+                if (strlen($prefix) < 2) {
+                    $prefix = 'TM';
+                }
+                $joinCode = $prefix . rand(1000, 9999);
+                $existingJoin = $conn->executeQuery("SELECT id FROM teams WHERE join_code = :joinCode", ['joinCode' => $joinCode])->fetchOne();
+                $attempt++;
+            } while ($existingJoin && $attempt < 10);
 
-            // Lưu vào bảng teams
+            if ($existingJoin) {
+                http_response_code(500);
+                echo json_encode(["status" => "error", "message" => "Không thể tạo mã tham gia độc nhất, vui lòng thử lại."], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
             $conn->executeStatement("
                 INSERT INTO teams (team_name, category, join_code, status, max_members, leader_id)
                 VALUES (:teamName, :category, :joinCode, 'APPROVED', :maxMembers, :leaderId)
@@ -82,13 +108,11 @@ class TeamController {
             ]);
             $teamId = (int)$conn->lastInsertId();
 
-            // Lưu đội trưởng vào team_members (LEAD)
             $conn->executeStatement("
                 INSERT INTO team_members (team_id, user_id, role_in_team)
                 VALUES (:teamId, :userId, 'LEAD')
             ", ['teamId' => $teamId, 'userId' => $currentUser->id]);
 
-            // Cập nhật users.team_id + skills của đội trưởng
             $conn->executeStatement("
                 UPDATE users SET team_id = :teamId, skills = :skills WHERE id = :userId
             ", ['teamId' => $teamId, 'skills' => $skillsStr ?: null, 'userId' => $currentUser->id]);
@@ -107,7 +131,105 @@ class TeamController {
             ], JSON_UNESCAPED_UNICODE);
             
         } catch (Exception $e) {
-            http_response_code(400);
+            if (http_response_code() === 200) {
+                http_response_code(400);
+            }
+            echo json_encode(["status" => "error", "message" => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        }
+    }
+
+    public function updateTeam(int $teamId): void {
+        try {
+            $currentUser = $this->requireCurrentUser();
+            $inputData = json_decode(file_get_contents('php://input'), true) ?? [];
+
+            $teamName = isset($inputData['team_name']) ? trim($inputData['team_name']) : (isset($inputData['name']) ? trim($inputData['name']) : null);
+            $category = isset($inputData['category']) ? trim($inputData['category']) : null;
+            $status = isset($inputData['status']) ? strtoupper(trim($inputData['status'])) : null;
+
+            if ($teamName !== null && $teamName === '') {
+                http_response_code(400);
+                echo json_encode(["status" => "error", "message" => "Tên đội thi không được để trống!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            if ($teamName !== null && (strlen($teamName) < 3 || strlen($teamName) > 80)) {
+                http_response_code(400);
+                echo json_encode(["status" => "error", "message" => "Tên đội thi phải có từ 3 đến 80 ký tự!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            $allowedStatuses = ['APPROVED', 'PENDING', 'LOCKED'];
+            if ($status !== null && !in_array($status, $allowedStatuses, true)) {
+                http_response_code(400);
+                echo json_encode(["status" => "error", "message" => "Trạng thái đội không hợp lệ!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            $conn = $this->em->getConnection();
+            $team = $conn->executeQuery("SELECT id, team_name, category, status, leader_id FROM teams WHERE id = :teamId", ['teamId' => $teamId])->fetchAssociative();
+            if (!$team) {
+                http_response_code(404);
+                echo json_encode(["status" => "error", "message" => "Đội không tồn tại!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            if (!$currentUser->isAdmin() && (int)$team['leader_id'] !== $currentUser->id) {
+                http_response_code(403);
+                echo json_encode(["status" => "error", "message" => "Bạn không có quyền sửa đội này."], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            $updates = [];
+            $params = ['teamId' => $teamId];
+
+            if ($teamName !== null) {
+                if ($teamName !== $team['team_name']) {
+                    $existing = $conn->executeQuery("SELECT id FROM teams WHERE team_name = :name AND id != :teamId", ['name' => $teamName, 'teamId' => $teamId])->fetchOne();
+                    if ($existing) {
+                        http_response_code(409);
+                        echo json_encode(["status" => "error", "message" => "Tên đội thi này đã tồn tại!"], JSON_UNESCAPED_UNICODE);
+                        return;
+                    }
+                }
+                $updates[] = 'team_name = :teamName';
+                $params['teamName'] = $teamName;
+            }
+
+            if ($category !== null) {
+                $updates[] = 'category = :category';
+                $params['category'] = $category;
+            }
+
+            if ($status !== null) {
+                $updates[] = 'status = :status';
+                $params['status'] = $status;
+            }
+
+            if (empty($updates)) {
+                http_response_code(400);
+                echo json_encode(["status" => "error", "message" => "Vui lòng cung cấp ít nhất một trường để cập nhật!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            $sql = "UPDATE teams SET " . implode(', ', $updates) . " WHERE id = :teamId";
+            $conn->executeStatement($sql, $params);
+
+            http_response_code(200);
+            echo json_encode([
+                "status" => "success",
+                "message" => "Cập nhật thông tin đội thi thành công!",
+                "data" => [
+                    'teamId' => $teamId,
+                    'teamName' => $teamName ?? $team['team_name'],
+                    'category' => $category ?? $team['category'] ?? null,
+                    'status' => $status ?? $team['status'] ?? null,
+                ]
+            ], JSON_UNESCAPED_UNICODE);
+
+        } catch (Exception $e) {
+            if (http_response_code() === 200) {
+                http_response_code(400);
+            }
             echo json_encode(["status" => "error", "message" => $e->getMessage()], JSON_UNESCAPED_UNICODE);
         }
     }
