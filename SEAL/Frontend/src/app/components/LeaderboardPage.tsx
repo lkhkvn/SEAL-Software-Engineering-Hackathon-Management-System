@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Trophy, Medal, Award, TrendingUp, Users, Code, Loader2 } from 'lucide-react';
+import { Trophy, Medal, Award, TrendingUp, Users, Code, Loader2, Download } from 'lucide-react';
 
 export function LeaderboardPage() {
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -23,6 +23,8 @@ export function LeaderboardPage() {
       }
     };
     fetchLeaderboard();
+    const interval = setInterval(fetchLeaderboard, 10000);
+    return () => clearInterval(interval);
   }, []);
 
   // Lọc danh mục động từ dữ liệu thật
@@ -41,6 +43,29 @@ export function LeaderboardPage() {
     if (rank === 2) return 'from-gray-300 to-gray-500';
     if (rank === 3) return 'from-orange-400 to-orange-600';
     return 'from-blue-400 to-blue-600';
+  };
+
+  const handleExportCSV = () => {
+    const headers = ['Hạng', 'Tên Đội', 'Danh mục', 'Tổng điểm', 'Số thành viên', 'Công nghệ'];
+    const rows = filteredLeaderboard.map(team => [
+      team.rank,
+      `"${team.team}"`,
+      `"${team.category}"`,
+      team.score,
+      team.members,
+      `"${team.tech.join(' - ')}"`
+    ]);
+    
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(e => e.join(','))
+    ].join('\n');
+
+    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `Leaderboard_${selectedCategory}_${new Date().toISOString().slice(0,10)}.csv`;
+    link.click();
   };
 
   const getRankIcon = (rank: number) => {
@@ -90,21 +115,30 @@ export function LeaderboardPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         
         {/* Bộ lọc danh mục */}
-        <div className="mb-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Lọc theo danh mục công nghệ
-          </label>
-          <select
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-sm font-medium text-gray-700 cursor-pointer shadow-sm"
+        <div className="mb-6 flex flex-col sm:flex-row items-end justify-between gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Lọc theo danh mục công nghệ
+            </label>
+            <select
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-sm font-medium text-gray-700 cursor-pointer shadow-sm"
+            >
+              {categories.map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat === 'all' ? 'Tất cả danh mục' : cat}
+                </option>
+              ))}
+            </select>
+          </div>
+          <button 
+            onClick={handleExportCSV}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors shadow-sm font-medium"
           >
-            {categories.map((cat) => (
-              <option key={cat} value={cat}>
-                {cat === 'all' ? 'Tất cả danh mục' : cat}
-              </option>
-            ))}
-          </select>
+            <Download size={18} />
+            Xuất CSV
+          </button>
         </div>
 
         {/* Top 3 đội dẫn đầu */}

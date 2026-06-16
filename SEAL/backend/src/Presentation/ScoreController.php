@@ -4,14 +4,17 @@ namespace App\Presentation;
 
 use App\Services\ScoreService;
 use App\Services\AuthService;
+use App\Services\NotificationService;
 
 class ScoreController {
     private ScoreService $scoreService;
     private AuthService $authService;
+    private NotificationService $notificationService;
 
-    public function __construct(ScoreService $scoreService, AuthService $authService) {
+    public function __construct(ScoreService $scoreService, AuthService $authService, NotificationService $notificationService) {
         $this->scoreService = $scoreService;
         $this->authService = $authService;
+        $this->notificationService = $notificationService;
     }
 
     /**
@@ -48,9 +51,9 @@ class ScoreController {
     public function submitScores(): void {
         try {
             $user = $this->getCurrentUser();
-            if (!$user || !$user->isJudge()) {
+            if (!$user || (!$user->isJudge() && !$user->isAdmin())) {
                 http_response_code(403);
-                echo json_encode(["status" => "error", "message" => "Chỉ giám khảo mới được nhập điểm"]);
+                echo json_encode(["status" => "error", "message" => "Chỉ giám khảo hoặc Ban tổ chức mới được nhập điểm"]);
                 return;
             }
 
@@ -65,6 +68,7 @@ class ScoreController {
             }
 
             $this->scoreService->submitScores($user->id, $teamId, $scores);
+            $this->notificationService->notifyTeamScored($teamId, $user->id);
 
             echo json_encode([
                 "status" => "success",

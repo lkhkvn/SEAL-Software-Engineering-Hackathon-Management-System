@@ -1,275 +1,195 @@
 import { useState, useEffect } from 'react';
-import { Loader2, Save, CheckCircle, Search, Filter } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Loader2, Calendar, Search, ArrowRight, Trophy, Clock, Target, Sparkles } from 'lucide-react';
 
-interface Team {
-  teamId: number;
-  teamName: string;
-  category: string;
-  projectName: string | null;
-  projectDescription: string | null;
-  githubUrl: string | null;
-  demoVideoUrl: string | null;
-}
-
-interface Criteria {
+interface Hackathon {
   id: number;
   name: string;
-  max_score: number;
-  weight: number;
-}
-
-interface ScoreInput {
-  criteria_id: number;
-  score: number;
-  feedback: string;
+  description: string;
+  status: string;
+  start_date: string;
+  end_date: string;
 }
 
 export function JudgingPage() {
-  const [teams, setTeams] = useState<Team[]>([]);
-  const [criteria, setCriteria] = useState<Criteria[]>([]);
+  const [hackathons, setHackathons] = useState<Hackathon[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   
-  const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
-  const [scores, setScores] = useState<Record<number, ScoreInput>>({});
-  const [saving, setSaving] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
-    const fetchTeams = async () => {
+    const fetchHackathons = async () => {
       try {
-        const token = localStorage.getItem('auth_token');
-        if (!token) throw new Error('Không tìm thấy token đăng nhập');
-
-        const response = await fetch('http://localhost:8000/index.php/api/judging/teams', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
+        const response = await fetch('http://localhost:8000/index.php/api/hackathons');
         const result = await response.json();
         if (!response.ok || result.status === 'error') {
-          throw new Error(result.message || 'Lỗi tải dữ liệu');
+          throw new Error(result.message || 'Lỗi tải dữ liệu sự kiện');
         }
         
-        setTeams(result.data.teams || []);
-        setCriteria(result.data.criteria || []);
+        setHackathons(result.data || []);
       } catch (err: any) {
         setError(err.message || 'Lỗi kết nối máy chủ');
       } finally {
         setLoading(false);
       }
     };
-    fetchTeams();
+    fetchHackathons();
   }, []);
-
-  const handleScoreChange = (criteriaId: number, value: number) => {
-    setScores(prev => ({
-      ...prev,
-      [criteriaId]: {
-        ...prev[criteriaId],
-        criteria_id: criteriaId,
-        score: value
-      }
-    }));
-  };
-
-  const handleFeedbackChange = (criteriaId: number, feedback: string) => {
-    setScores(prev => ({
-      ...prev,
-      [criteriaId]: {
-        ...prev[criteriaId],
-        criteria_id: criteriaId,
-        feedback
-      }
-    }));
-  };
-
-  const handleSubmitScore = async () => {
-    if (!selectedTeam) return;
-    
-    setSaving(true);
-    setSaveSuccess(false);
-    setError(null);
-
-    try {
-      const token = localStorage.getItem('auth_token');
-      const response = await fetch('http://localhost:8000/index.php/api/scores', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          teamId: selectedTeam.teamId,
-          scores: Object.values(scores)
-        })
-      });
-
-      const result = await response.json();
-      if (!response.ok || result.status === 'error') {
-        throw new Error(result.message || 'Lỗi khi lưu điểm');
-      }
-
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setSaving(false);
-    }
-  };
 
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <Loader2 className="animate-spin text-blue-600" size={40} />
+        <div className="flex flex-col items-center gap-4">
+            <Loader2 className="animate-spin text-blue-600" size={48} />
+            <p className="text-gray-500 font-medium animate-pulse">Đang tải danh sách sự kiện...</p>
+        </div>
       </div>
     );
   }
 
+  const filteredHackathons = hackathons.filter(h => 
+    h.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-7xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Bảng chấm điểm (Judging)</h1>
-          <p className="text-gray-500 mt-2">Chọn đội thi và nhập điểm theo các tiêu chí đã đề ra.</p>
+    <div className="min-h-screen bg-[#F8FAFC] pb-20">
+      {/* Hero Section */}
+      <div className="bg-gradient-to-br from-blue-900 via-blue-800 to-indigo-900 text-white pt-20 pb-24 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
+        {/* Decorative elements */}
+        <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
+            <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-blue-500 opacity-20 blur-3xl"></div>
+            <div className="absolute top-1/2 -left-24 w-72 h-72 rounded-full bg-indigo-500 opacity-20 blur-3xl"></div>
+            <div className="absolute bottom-0 right-1/4 w-80 h-80 rounded-full bg-purple-500 opacity-20 blur-3xl"></div>
         </div>
 
+        <div className="relative z-10 flex flex-col md:flex-row md:items-end justify-between gap-8">
+          <div className="max-w-2xl">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-blue-100 text-sm font-medium mb-6">
+                <Sparkles size={16} className="text-yellow-400" />
+                <span>Cổng Chấm Điểm Ban Giám Khảo</span>
+            </div>
+            <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-4 leading-tight">
+                Sự kiện cần <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-200 to-cyan-200">chấm điểm</span>
+            </h1>
+            <p className="text-blue-100/80 text-lg md:text-xl font-light">
+                Chọn một sự kiện dưới đây để xem danh sách các dự án và bắt đầu quá trình đánh giá.
+            </p>
+          </div>
+          
+          <div className="relative w-full md:w-96 group">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors z-10" size={20} />
+            <input
+              type="text"
+              placeholder="Tìm kiếm sự kiện..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-12 pr-4 py-4 rounded-2xl shadow-xl text-gray-800 bg-white/95 backdrop-blur-sm border-2 border-transparent focus:border-blue-400 focus:outline-none focus:ring-4 focus:ring-blue-400/20 transition-all font-medium"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="px-4 sm:px-6 lg:px-8 py-8">
+        <div className="relative z-20">
         {error && (
-          <div className="bg-red-50 text-red-600 p-4 rounded-lg mb-6 border border-red-200">
-            {error}
+          <div className="bg-white text-red-600 p-6 rounded-2xl mb-8 shadow-lg border-l-4 border-red-500 flex items-center gap-4">
+            <div className="bg-red-50 p-2 rounded-full">
+                <Target size={24} className="text-red-500" />
+            </div>
+            <div>
+                <h3 className="font-bold">Đã xảy ra lỗi</h3>
+                <span className="font-medium text-sm text-red-500/80">{error}</span>
+            </div>
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Sidebar danh sách đội thi */}
-          <div className="lg:col-span-1 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col h-[calc(100vh-200px)]">
-            <div className="p-4 border-b border-gray-200 bg-gray-50">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                <input
-                  type="text"
-                  placeholder="Tìm kiếm đội thi..."
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
+        {hackathons.length === 0 && !error ? (
+          <div className="bg-white rounded-3xl shadow-xl border border-gray-100 p-20 flex flex-col items-center justify-center text-center">
+            <div className="bg-blue-50 p-6 rounded-full mb-6">
+                <Calendar size={48} className="text-blue-400" />
             </div>
-            
-            <div className="overflow-y-auto flex-1 p-2 space-y-1">
-              {teams.map(team => (
-                <button
-                  key={team.teamId}
-                  onClick={() => {
-                    setSelectedTeam(team);
-                    setScores({}); // Reset scores when switching team (or fetch existing later)
-                    setSaveSuccess(false);
-                  }}
-                  className={`w-full text-left px-4 py-3 rounded-lg transition-colors ${
-                    selectedTeam?.teamId === team.teamId 
-                      ? 'bg-blue-50 border border-blue-200 text-blue-700' 
-                      : 'hover:bg-gray-100 text-gray-700 border border-transparent'
-                  }`}
-                >
-                  <div className="font-semibold">{team.teamName}</div>
-                  <div className="text-xs text-gray-500 mt-1 truncate">{team.category}</div>
-                </button>
-              ))}
-              {teams.length === 0 && (
-                <div className="text-center p-6 text-gray-500">Không có đội thi nào</div>
-              )}
-            </div>
+            <h2 className="text-2xl font-bold text-gray-800 mb-2">Chưa có sự kiện nào</h2>
+            <p className="text-gray-500 max-w-md">Hệ thống hiện tại chưa có sự kiện nào được tạo. Vui lòng quay lại sau hoặc liên hệ Admin.</p>
           </div>
-
-          {/* Khu vực nhập điểm */}
-          <div className="lg:col-span-2">
-            {selectedTeam ? (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <div className="border-b border-gray-200 pb-4 mb-6">
-                  <h2 className="text-2xl font-bold text-gray-900">{selectedTeam.teamName}</h2>
-                  <span className="inline-block mt-2 px-3 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full">
-                    {selectedTeam.category}
-                  </span>
-                </div>
-
-                <div className="mb-8 p-4 bg-gray-50 rounded-lg border border-gray-100">
-                  <h3 className="font-semibold text-gray-800 mb-2">Thông tin dự án</h3>
-                  <div className="space-y-2 text-sm text-gray-600">
-                    <p><strong>Tên dự án:</strong> {selectedTeam.projectName || 'Chưa cập nhật'}</p>
-                    <p><strong>Mô tả:</strong> {selectedTeam.projectDescription || 'Chưa cập nhật'}</p>
-                    {selectedTeam.githubUrl && (
-                      <p><strong>GitHub:</strong> <a href={selectedTeam.githubUrl} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">{selectedTeam.githubUrl}</a></p>
-                    )}
-                    {selectedTeam.demoVideoUrl && (
-                      <p><strong>Demo Video:</strong> <a href={selectedTeam.demoVideoUrl} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">{selectedTeam.demoVideoUrl}</a></p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="space-y-6">
-                  <h3 className="text-lg font-bold text-gray-900">Phiếu chấm điểm</h3>
-                  {criteria.map(crit => (
-                    <div key={crit.id} className="p-4 border border-gray-200 rounded-lg">
-                      <div className="flex justify-between items-center mb-4">
-                        <div>
-                          <h4 className="font-semibold text-gray-800">{crit.name}</h4>
-                          <p className="text-xs text-gray-500 mt-1">Trọng số: {crit.weight} | Điểm tối đa: {crit.max_score}</p>
-                        </div>
-                        <div className="w-24">
-                          <input
-                            type="number"
-                            min="0"
-                            max={crit.max_score}
-                            step="0.5"
-                            placeholder="Điểm"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-semibold text-center"
-                            value={scores[crit.id]?.score || ''}
-                            onChange={(e) => handleScoreChange(crit.id, parseFloat(e.target.value))}
-                          />
-                        </div>
-                      </div>
-                      <textarea
-                        placeholder={`Nhận xét về tiêu chí ${crit.name}...`}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm h-20 resize-none"
-                        value={scores[crit.id]?.feedback || ''}
-                        onChange={(e) => handleFeedbackChange(crit.id, e.target.value)}
-                      ></textarea>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {filteredHackathons.map(hackathon => (
+              <div 
+                key={hackathon.id}
+                onClick={() => navigate(`/judging/hackathon/${hackathon.id}`)}
+                className="bg-white rounded-2xl shadow-sm hover:shadow-xl border border-gray-100 hover:border-blue-200 transition-all duration-300 cursor-pointer group flex flex-col overflow-hidden hover:-translate-y-1"
+              >
+                {/* Card Banner */}
+                <div className="h-24 bg-gradient-to-r from-blue-50 to-indigo-50 relative p-5 flex items-start justify-between border-b border-gray-100 overflow-hidden">
+                    <div className="absolute right-0 top-0 opacity-10 transform translate-x-2 -translate-y-2 group-hover:scale-110 transition-transform duration-500 pointer-events-none">
+                        <Trophy size={100} />
                     </div>
-                  ))}
-                </div>
-
-                <div className="mt-8 flex items-center justify-between border-t border-gray-200 pt-6">
-                  <div className="text-sm font-medium text-gray-700">
-                    Tổng điểm ước tính: <span className="text-xl font-bold text-blue-600 ml-2">
-                      {Object.values(scores).reduce((sum, item) => sum + (item.score || 0), 0)}
+                    <div className="bg-white p-2.5 rounded-xl shadow-sm z-10 group-hover:scale-110 transition-transform relative">
+                        <Trophy size={20} className="text-blue-600" />
+                    </div>
+                    <span className={`z-10 px-2.5 py-1 text-[10px] font-bold rounded-full uppercase tracking-wider shadow-sm border relative ${
+                        hackathon.status === 'UPCOMING' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
+                        (hackathon.status === 'ONGOING' || hackathon.status === 'ACTIVE') ? 'bg-green-50 text-green-600 border-green-200' :
+                        'bg-gray-100 text-gray-600 border-gray-200'
+                    }`}>
+                        {hackathon.status}
                     </span>
-                  </div>
-                  
-                  <div className="flex items-center gap-4">
-                    {saveSuccess && (
-                      <span className="flex items-center text-green-600 text-sm font-medium">
-                        <CheckCircle size={16} className="mr-1" />
-                        Đã lưu thành công!
-                      </span>
-                    )}
-                    <button
-                      onClick={handleSubmitScore}
-                      disabled={saving || Object.keys(scores).length === 0}
-                      className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium transition-colors"
-                    >
-                      {saving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
-                      Lưu điểm
-                    </button>
-                  </div>
                 </div>
 
+                {/* Card Content */}
+                <div className="p-5 flex flex-col flex-grow">
+                    <h3 className="font-bold text-lg text-gray-900 group-hover:text-blue-700 transition-colors mb-2 line-clamp-2">
+                        {hackathon.name}
+                    </h3>
+                    
+                    <p className="text-gray-500 mb-6 line-clamp-2 text-sm leading-relaxed flex-grow">
+                        {hackathon.description || 'Không có mô tả cho sự kiện này.'}
+                    </p>
+
+                    <div className="space-y-2.5 mb-6">
+                        <div className="flex items-center text-xs text-gray-600 bg-gray-50 p-2 rounded-lg">
+                            <Calendar size={14} className="text-gray-400 mr-2" />
+                            <div className="flex flex-col">
+                                <span className="text-[10px] text-gray-400 font-medium">Bắt đầu</span>
+                                <span className="font-semibold text-gray-800">{new Date(hackathon.start_date).toLocaleDateString('vi-VN')}</span>
+                            </div>
+                        </div>
+                        <div className="flex items-center text-xs text-gray-600 bg-gray-50 p-2 rounded-lg">
+                            <Clock size={14} className="text-gray-400 mr-2" />
+                            <div className="flex flex-col">
+                                <span className="text-[10px] text-gray-400 font-medium">Kết thúc</span>
+                                <span className="font-semibold text-gray-800">{new Date(hackathon.end_date).toLocaleDateString('vi-VN')}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="mt-auto">
+                        <button className="w-full py-2.5 px-4 bg-gray-50 group-hover:bg-blue-600 text-gray-700 group-hover:text-white rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all duration-300">
+                            Chấm điểm
+                            <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                        </button>
+                    </div>
+                </div>
               </div>
-            ) : (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 h-[calc(100vh-200px)] flex flex-col items-center justify-center text-gray-400">
-                <Filter size={48} className="mb-4 opacity-50" />
-                <p className="text-lg font-medium text-gray-500">Chọn một đội thi để bắt đầu chấm điểm</p>
-              </div>
+            ))}
+            
+            {filteredHackathons.length === 0 && hackathons.length > 0 && (
+                <div className="col-span-full py-16 flex flex-col items-center justify-center text-center">
+                    <Search size={48} className="text-gray-300 mb-4" />
+                    <h3 className="text-xl font-bold text-gray-700 mb-2">Không tìm thấy kết quả</h3>
+                    <p className="text-gray-500">Không có sự kiện nào phù hợp với từ khóa "{searchQuery}"</p>
+                    <button 
+                        onClick={() => setSearchQuery('')}
+                        className="mt-4 px-4 py-2 text-blue-600 font-medium hover:bg-blue-50 rounded-lg transition-colors"
+                    >
+                        Xóa tìm kiếm
+                    </button>
+                </div>
             )}
           </div>
+        )}
         </div>
       </div>
     </div>

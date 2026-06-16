@@ -760,6 +760,18 @@ class TeamController {
                 return;
             }
 
+            // Kiểm tra deadline
+            $contest = $conn->executeQuery("SELECT end_date FROM contests WHERE id = :contestId", ['contestId' => $contestId])->fetchAssociative();
+            if ($contest) {
+                $endDate = new \DateTime($contest['end_date']);
+                $endDate->setTime(23, 59, 59);
+                if (new \DateTime() > $endDate) {
+                    http_response_code(400);
+                    echo json_encode(["status" => "error", "message" => "Đã hết hạn nộp bài cho sự kiện này!"], JSON_UNESCAPED_UNICODE);
+                    return;
+                }
+            }
+
             // Kiểm tra đăng ký sự kiện
             $registration = $conn->executeQuery("SELECT id FROM contest_registrations WHERE team_id = :teamId AND contest_id = :contestId", [
                 'teamId' => $currentUser->teamId,
@@ -780,23 +792,37 @@ class TeamController {
             }
 
             // Check if submission already exists for this specific contest
-            $existing = $conn->executeQuery("SELECT id FROM submissions WHERE team_id = :teamId AND contest_id = :contestId", [
+            $existingSub = $conn->executeQuery("SELECT id, file_url FROM submissions WHERE team_id = :teamId AND contest_id = :contestId", [
                 'teamId' => $currentUser->teamId,
                 'contestId' => $contestId
-            ])->fetchOne();
+            ])->fetchAssociative();
 
-            if ($existing) {
+            if ($existingSub) {
                 $updateParams = [
                     'projectName' => $projectName,
                     'description' => $description,
                     'githubUrl' => $githubUrl,
                     'demoVideoUrl' => $demoVideoUrl,
-                    'id' => $existing
+                    'id' => $existingSub['id']
                 ];
                 $updateSql = "UPDATE submissions SET project_name = :projectName, description = :description, github_url = :githubUrl, demo_video_url = :demoVideoUrl";
                 if ($fileUrl) {
                     $updateSql .= ", file_url = :fileUrl";
                     $updateParams['fileUrl'] = $fileUrl;
+
+                    // Delete old file if exists
+                    if (!empty($existingSub['file_url'])) {
+                        $oldUrl = $existingSub['file_url'];
+                        $oldFilePath = '';
+                        if (str_starts_with($oldUrl, '/uploads/')) {
+                            $oldFilePath = __DIR__ . '/../../public' . $oldUrl;
+                        } else if (str_starts_with($oldUrl, '/api/submissions/file/')) {
+                            $oldFilePath = __DIR__ . '/../../storage/uploads/submissions/' . str_replace('/api/submissions/file/', '', $oldUrl);
+                        }
+                        if ($oldFilePath && file_exists($oldFilePath)) {
+                            unlink($oldFilePath);
+                        }
+                    }
                 }
                 $updateSql .= " WHERE id = :id";
                 $conn->executeStatement($updateSql, $updateParams);
@@ -814,44 +840,10 @@ class TeamController {
                     'demoVideoUrl' => $demoVideoUrl,
                     'fileUrl' => $fileUrl
                 ]);
-                http_response_code(400);
-                echo json_encode(["status" => "error", "message" => "Thí sinh này đã gia nhập đội khác!"], JSON_UNESCAPED_UNICODE);
-                return;
-            }
-
-            // Start transaction
-            $conn->beginTransaction();
-            try {
-                // 1. Update request status to APPROVED
-                $conn->executeStatement("
-                    UPDATE team_join_requests SET status = 'APPROVED' WHERE id = :id
-                ", ['id' => $requestId]);
-
-                // 2. Reject all other pending requests for this user
-                $conn->executeStatement("
-                    UPDATE team_join_requests SET status = 'REJECTED' 
-                    WHERE user_id = :userId AND id != :id AND status = 'PENDING'
-                ", ['userId' => $request['user_id'], 'id' => $requestId]);
-
-                // 3. Add to team_members
-                $conn->executeStatement("
-                    INSERT INTO team_members (team_id, user_id, role_in_team, joined_at)
-                    VALUES (:teamId, :userId, 'MEMBER', NOW())
-                ", ['teamId' => $request['team_id'], 'userId' => $request['user_id']]);
-
-                // 4. Update users.team_id
-                $conn->executeStatement("
-                    UPDATE users SET team_id = :teamId WHERE id = :userId
-                ", ['teamId' => $request['team_id'], 'userId' => $request['user_id']]);
-
-                $conn->commit();
-            } catch (Exception $txEx) {
-                $conn->rollBack();
-                throw $txEx;
             }
 
             http_response_code(200);
-            echo json_encode(["status" => "success", "message" => "Duyệt thành viên thành công!"], JSON_UNESCAPED_UNICODE);
+            echo json_encode(["status" => "success", "message" => "Nộp dự án thành công!"], JSON_UNESCAPED_UNICODE);
 
         } catch (Exception $e) {
             http_response_code(400);
@@ -860,6 +852,45 @@ class TeamController {
     }
 
 
+    public function getMySubmission(int $contestId): void {
+        try {
+            $headers = getallheaders();
+            $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+
+            if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
+                http_response_code(401);
+                echo json_encode(["status" => "error", "message" => "Yêu cầu phải có Token xác thực!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            $currentUser = $this->authService->verifyToken($matches[1]);
+            
+            if (!$currentUser->teamId) {
+                http_response_code(403);
+                echo json_encode(["status" => "error", "message" => "Bạn chưa tham gia đội thi nào!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+
+            $conn = $this->em->getConnection();
+            $submission = $conn->executeQuery("SELECT project_name as projectName, description, github_url as githubUrl, demo_video_url as demoVideoUrl, file_url as fileUrl FROM submissions WHERE team_id = :teamId AND contest_id = :contestId", [
+                'teamId' => $currentUser->teamId,
+                'contestId' => $contestId
+            ])->fetchAssociative();
+
+            if ($submission) {
+                http_response_code(200);
+                echo json_encode(["status" => "success", "data" => $submission], JSON_UNESCAPED_UNICODE);
+            } else {
+                http_response_code(200);
+                echo json_encode(["status" => "success", "data" => null], JSON_UNESCAPED_UNICODE);
+            }
+
+        } catch (Exception $e) {
+            http_response_code(400);
+            echo json_encode(["status" => "error", "message" => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        }
+    }
 
     public function getMyTeamContests(): void {
         try {
@@ -894,6 +925,77 @@ class TeamController {
         } catch (\Exception $e) {
             http_response_code(400);
             echo json_encode(["status" => "error", "message" => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        }
+    }
+
+    /**
+     * Download bảo mật file đính kèm
+     */
+    public function downloadSubmissionFile(int $contestId, string $filename): void {
+        try {
+            $headers = getallheaders();
+            $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+            // Allow token via query string for direct browser downloads
+            if (empty($authHeader) && isset($_GET['token'])) {
+                $authHeader = 'Bearer ' . $_GET['token'];
+            }
+
+            if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
+                http_response_code(401);
+                echo "Yêu cầu xác thực Token!";
+                return;
+            }
+
+            $currentUser = $this->authService->verifyToken($matches[1]);
+
+            // Trích xuất team_id từ filename (format: team_123_...)
+            $parts = explode('_', $filename);
+            $fileTeamId = null;
+            if (count($parts) >= 2 && $parts[0] === 'team') {
+                $fileTeamId = (int)$parts[1];
+            }
+
+            // Kiểm tra quyền: Admin hoặc Giám khảo được xem tất cả. Thí sinh chỉ được xem file của đội mình.
+            if (!$currentUser->isAdmin() && !$currentUser->isJudge()) {
+                if ($fileTeamId !== null && $fileTeamId !== $currentUser->teamId) {
+                    http_response_code(403);
+                    echo "Bạn không có quyền tải file của đội khác!";
+                    return;
+                }
+            }
+
+            $filePath = realpath(__DIR__ . '/../../storage/uploads/submissions/' . $contestId . '/' . $filename);
+            if (!$filePath || !file_exists($filePath)) {
+                http_response_code(404);
+                echo "File không tồn tại!";
+                return;
+            }
+
+            // Tránh Path Traversal
+            $baseStorageDir = realpath(__DIR__ . '/../../storage/uploads/submissions/');
+            if (strpos($filePath, $baseStorageDir) !== 0) {
+                http_response_code(403);
+                echo "Truy cập không hợp lệ!";
+                return;
+            }
+
+            // Trả về file
+            $finfo = new \finfo(FILEINFO_MIME_TYPE);
+            $mimeType = $finfo->file($filePath);
+
+            header('Content-Description: File Transfer');
+            header('Content-Type: ' . $mimeType);
+            header('Content-Disposition: inline; filename="' . basename($filePath) . '"');
+            header('Expires: 0');
+            header('Cache-Control: must-revalidate');
+            header('Pragma: public');
+            header('Content-Length: ' . filesize($filePath));
+            readfile($filePath);
+            exit;
+
+        } catch (\Exception $e) {
+            http_response_code(400);
+            echo "Lỗi: " . $e->getMessage();
         }
     }
 }

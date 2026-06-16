@@ -92,10 +92,65 @@ class NotificationService
     {
         if (!$this->pusher) return;
         try {
-            $this->pusher->trigger("contest-{$contestId}", 'challenge-released', $payload);
+            // Đổi kênh từ "contest-{id}" thành "global-notifications" để trùng khớp với Frontend
+            $this->pusher->trigger("global-notifications", 'challenge-released', $payload);
         } catch (\Throwable $e) {
             // Pusher thất bại → không crash app, chỉ log
             error_log('[Pusher Error] ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Gửi thông báo "Dự án đã được chấm điểm" đến các thành viên trong đội
+     */
+    public function notifyTeamScored(int $teamId, int $judgeId): void
+    {
+        $conn = $this->em->getConnection();
+
+        // Lấy tất cả user thuộc đội (bao gồm cả trưởng nhóm và thành viên)
+        $users = $conn->executeQuery("
+            SELECT DISTINCT user_id
+            FROM team_members
+            WHERE team_id = :teamId
+            UNION
+            SELECT leader_id as user_id
+            FROM teams
+            WHERE id = :teamId
+        ", ['teamId' => $teamId])->fetchAllAssociative();
+
+        if (empty($users)) return;
+
+        // Lấy tên đội
+        $team = $conn->executeQuery("SELECT team_name, category FROM teams WHERE id = :teamId", ['teamId' => $teamId])->fetchAssociative();
+        $teamName = $team['team_name'] ?? 'Đội của bạn';
+
+        $title = "✅ Dự án đã được chấm điểm!";
+        $message = "Dự án của đội {$teamName} vừa được Giám khảo hoàn tất việc chấm điểm. Bạn có thể kiểm tra lại trên Bảng xếp hạng!";
+
+        foreach ($users as $user) {
+            if (!$user['user_id']) continue;
+            $conn->executeStatement("
+                INSERT INTO notifications (user_id, contest_id, type, title, message, is_read, created_at)
+                VALUES (:userId, NULL, 'PROJECT_SCORED', :title, :message, 0, NOW())
+            ", [
+                'userId'  => $user['user_id'],
+                'title'   => $title,
+                'message' => $message,
+            ]);
+        }
+
+        // Broadcast qua Pusher (real-time)
+        if ($this->pusher) {
+            try {
+                // Broadcast lên global-notifications (để đơn giản)
+                $this->pusher->trigger('global-notifications', 'project-scored', [
+                    'team_id' => $teamId,
+                    'title'   => $title,
+                    'message' => $message,
+                ]);
+            } catch (\Throwable $e) {
+                error_log('[Pusher Error] ' . $e->getMessage());
+            }
         }
     }
 

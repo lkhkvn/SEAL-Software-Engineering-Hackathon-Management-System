@@ -26,9 +26,12 @@ class ScoreService {
                 s.project_name as projectName,
                 s.description as projectDescription,
                 s.github_url as githubUrl,
-                s.demo_video_url as demoVideoUrl
+                s.demo_video_url as demoVideoUrl,
+                s.file_url as fileUrl,
+                cr.contest_id as contestId
             FROM teams t
-            LEFT JOIN submissions s ON s.team_id = t.id
+            INNER JOIN contest_registrations cr ON cr.team_id = t.id
+            LEFT JOIN submissions s ON s.team_id = t.id AND s.contest_id = cr.contest_id
         ";
         
         $teams = $conn->executeQuery($sql)->fetchAllAssociative();
@@ -43,6 +46,8 @@ class ScoreService {
                 'projectDescription' => $team['projectDescription'],
                 'githubUrl' => $team['githubUrl'],
                 'demoVideoUrl' => $team['demoVideoUrl'],
+                'fileUrl' => $team['fileUrl'],
+                'contestId' => (int)$team['contestId'],
             ];
         }, $teams);
     }

@@ -69,14 +69,24 @@ export function NotificationBell({ currentUser }: { currentUser: any }) {
       } catch (e) {}
     };
 
-    // Cách đơn giản nhất: Frontend subcribe vào kênh global của user
-    // Nhưng vì backend push vào "contest-{id}", ta sẽ subcribe vào tất cả các contest
-    // Vì không có API lấy ds contest nhanh, ta có thể subscribe thủ công dựa trên notification cũ
-    const channel = pusher.subscribe('global-notifications'); // Nếu cần, ta đổi backend sang push kênh user.
-    // Tạm thời ta sẽ sửa backend để push vào "user-{id}" luôn cho dễ, nhưng vì backend đã lưu "contest-{id}"
-    // Ta chỉ fetch notifications để tự update unreadCount.
+    const channel = pusher.subscribe('global-notifications');
+    
+    channel.bind('project-scored', (data: any) => {
+      // Refresh notifications and show toast
+      fetchNotifications();
+      setToast({ id: Date.now(), title: data.title, message: data.message } as Notification);
+      setTimeout(() => setToast(null), 5000); // Auto hide after 5 seconds
+    });
+
+    channel.bind('challenge-released', (data: any) => {
+      fetchNotifications();
+      setToast({ id: Date.now(), title: data.title, message: data.message } as Notification);
+      setTimeout(() => setToast(null), 5000);
+    });
 
     return () => {
+      channel.unbind_all();
+      pusher.unsubscribe('global-notifications');
       pusher.disconnect();
     };
   }, [currentUser]);

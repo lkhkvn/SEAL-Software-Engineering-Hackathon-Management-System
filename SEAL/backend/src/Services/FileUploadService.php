@@ -29,8 +29,10 @@ class FileUploadService
 
     public function __construct()
     {
-        $this->uploadDir = __DIR__ . '/../../public/uploads/challenges/';
-        $this->publicUrl = '/uploads/challenges/';
+        $this->uploadDir = __DIR__ . '/../../storage/uploads/challenges/';
+        // We will no longer serve it statically via publicUrl, 
+        // but we'll return a special API endpoint url for download
+        $this->publicUrl = '/api/challenges/file/';
     }
 
     /**
@@ -125,7 +127,7 @@ class FileUploadService
             throw new Exception('Định dạng file không được hỗ trợ. Cho phép: PDF, ZIP, DOCX, DOC, RAR.');
         }
 
-        $submissionDir = __DIR__ . '/../../public/uploads/submissions/' . $contestId . '/';
+        $submissionDir = __DIR__ . '/../../storage/uploads/submissions/' . $contestId . '/';
         if (!is_dir($submissionDir)) {
             mkdir($submissionDir, 0755, true);
         }
@@ -139,7 +141,7 @@ class FileUploadService
         }
 
         return [
-            'url'  => '/uploads/submissions/' . $contestId . '/' . $uniqueName,
+            'url'  => '/api/submissions/file/' . $contestId . '/' . $uniqueName,
             'name' => $originalName,
         ];
     }

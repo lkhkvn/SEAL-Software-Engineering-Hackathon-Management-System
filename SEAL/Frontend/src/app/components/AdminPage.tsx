@@ -143,6 +143,11 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
   const [loadingTeams, setLoadingTeams] = useState(false);
   const [removingTeamId, setRemovingTeamId] = useState<number | null>(null);
 
+  // Tạo tài khoản Giám Khảo
+  const [showCreateJudgeModal, setShowCreateJudgeModal] = useState(false);
+  const [judgeForm, setJudgeForm] = useState({ username: '', email: '', password: '' });
+  const [submittingJudge, setSubmittingJudge] = useState(false);
+
   // Toast
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -235,6 +240,35 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
       }
     } finally {
       setUpdatingUserId(null);
+    }
+  };
+
+  const handleCreateJudge = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!judgeForm.username || !judgeForm.email || !judgeForm.password) {
+      toast('error', 'Vui lòng nhập đầy đủ thông tin (Tên, Email, Mật khẩu).');
+      return;
+    }
+
+    setSubmittingJudge(true);
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch('http://localhost:8000/index.php/api/auth/create-judge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(judgeForm),
+      });
+      const result = await res.json();
+      if (!res.ok || result.status === 'error') throw new Error(result.message);
+      
+      toast('success', `Tạo tài khoản Giám khảo "${judgeForm.username}" thành công!`);
+      setShowCreateJudgeModal(false);
+      setJudgeForm({ username: '', email: '', password: '' });
+      fetchUsers(); // Tải lại danh sách
+    } catch (e: any) {
+      toast('error', e.message || 'Không thể tạo tài khoản Giám khảo.');
+    } finally {
+      setSubmittingJudge(false);
     }
   };
 
@@ -768,6 +802,77 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
                 Xoá vĩnh viễn
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Create Judge Modal ── */}
+      {showCreateJudgeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-gray-200 overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50">
+              <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                <Shield size={18} className="text-purple-600" />
+                Tạo tài khoản Giám khảo
+              </h3>
+              <button onClick={() => setShowCreateJudgeModal(false)} className="p-1.5 hover:bg-gray-200 rounded-lg transition-colors">
+                <X size={20} className="text-gray-500" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleCreateJudge} className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Tên giám khảo <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  required
+                  value={judgeForm.username}
+                  onChange={e => setJudgeForm({...judgeForm, username: e.target.value})}
+                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all outline-none"
+                  placeholder="VD: Nguyen Van A"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Email <span className="text-red-500">*</span></label>
+                <input
+                  type="email"
+                  required
+                  value={judgeForm.email}
+                  onChange={e => setJudgeForm({...judgeForm, email: e.target.value})}
+                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all outline-none"
+                  placeholder="email@example.com"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Mật khẩu <span className="text-red-500">*</span></label>
+                <input
+                  type="password"
+                  required
+                  value={judgeForm.password}
+                  onChange={e => setJudgeForm({...judgeForm, password: e.target.value})}
+                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all outline-none"
+                  placeholder="••••••••"
+                />
+              </div>
+
+              <div className="pt-4 flex gap-3 justify-end border-t border-gray-100 mt-6">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateJudgeModal(false)}
+                  className="px-5 py-2.5 text-sm font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                >
+                  Huỷ
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingJudge}
+                  className="px-5 py-2.5 text-sm font-semibold text-white bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors flex items-center gap-2 shadow-md disabled:opacity-60"
+                >
+                  {submittingJudge ? <Loader2 className="animate-spin" size={16} /> : <CheckCircle2 size={16} />}
+                  Xác nhận tạo
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
@@ -1385,16 +1490,24 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
                     Thay đổi vai trò thành viên để cấp quyền quản lý (BTC), chấm thi (Giám khảo) hoặc tham gia (Thí sinh).
                   </p>
                 </div>
-                <div className="relative w-full sm:w-80">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                  <input
-                    id="user-search"
-                    type="text"
-                    placeholder="Tìm theo tên hoặc email..."
-                    value={searchTerm}
-                    onChange={e => setSearchTerm(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm transition-all"
-                  />
+                <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+                  <div className="relative w-full sm:w-80">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    <input
+                      id="user-search"
+                      type="text"
+                      placeholder="Tìm theo tên hoặc email..."
+                      value={searchTerm}
+                      onChange={e => setSearchTerm(e.target.value)}
+                      className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm transition-all"
+                    />
+                  </div>
+                  <button
+                    onClick={() => setShowCreateJudgeModal(true)}
+                    className="flex-shrink-0 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-semibold flex items-center justify-center gap-2 shadow-sm"
+                  >
+                    <Plus size={16} /> Tạo Giám khảo
+                  </button>
                 </div>
               </div>
 

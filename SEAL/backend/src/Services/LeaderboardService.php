@@ -14,7 +14,7 @@ class LeaderboardService {
     public function getLeaderboard(): array {
         $conn = $this->em->getConnection();
 
-        $criteria = $conn->executeQuery("SELECT id, name, max_score FROM criteria")->fetchAllAssociative();
+        $criteria = $conn->executeQuery("SELECT id, name, max_score, weight FROM criteria")->fetchAllAssociative();
 
         $teams = $conn->executeQuery("SELECT id, team_name as name, category FROM teams")->fetchAllAssociative();
 
@@ -28,13 +28,19 @@ class LeaderboardService {
                     'teamId' => $teamId,
                     'critId' => $criterion['id']
                 ])->fetchOne();
+                
+                $weight = (float)($criterion['weight'] ?? 1);
+                $weightedScore = (float)$score * $weight;
+
                 $criteriaScores[] = [
                     'id' => $criterion['id'],
                     'name' => $criterion['name'],
                     'score' => round((float)$score, 1),
-                    'max_score' => (int)$criterion['max_score']
+                    'weighted_score' => round($weightedScore, 1),
+                    'max_score' => (int)$criterion['max_score'],
+                    'weight' => $weight
                 ];
-                $totalScore += (float)$score;
+                $totalScore += $weightedScore;
             }
 
             $memberCount = $conn->executeQuery("SELECT COUNT(*) FROM users WHERE team_id = :teamId", ['teamId' => $teamId])->fetchOne();

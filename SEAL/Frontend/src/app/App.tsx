@@ -11,6 +11,8 @@ import { LoginPage } from './components/LoginPage';
 import { RegisterPage } from './components/RegisterPage';
 import { ProfilePage } from './components/ProfilePage';
 import { JudgingPage } from './components/JudgingPage';
+import { JudgingTeamsPage } from './components/JudgingTeamsPage';
+import { JudgingDetailPage } from './components/JudgingDetailPage';
 import { SubmissionPage } from './components/SubmissionPage';
 
 // Component Layout chung bọc thanh điều hướng Navigation
@@ -61,6 +63,8 @@ function AppRoutes() {
         <Route path="/leaderboard" element={<LeaderboardPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/judging" element={<JudgingPage />} />
+        <Route path="/judging/hackathon/:hackathonId" element={<JudgingTeamsPage />} />
+        <Route path="/judging/hackathon/:hackathonId/team/:teamId" element={<JudgingDetailPage />} />
         <Route path="/submit" element={<SubmissionPage />} />
         <Route path="/admin" element={<AdminPage currentUser={currentUser} onLogout={handleLogout} />} />
       </Route>

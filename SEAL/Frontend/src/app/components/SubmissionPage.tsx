@@ -18,6 +18,43 @@ export function SubmissionPage() {
     demoVideoUrl: '',
   });
   const [projectFile, setProjectFile] = useState<File | null>(null);
+  const [existingFile, setExistingFile] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!formData.contestId) return;
+
+    const fetchSubmission = async () => {
+      try {
+        const token = localStorage.getItem('auth_token');
+        const res = await fetch(`http://localhost:8000/index.php/api/teams/my-team/submission?contestId=${formData.contestId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (data.status === 'success' && data.data) {
+          setFormData(prev => ({
+            ...prev,
+            projectName: data.data.projectName || '',
+            description: data.data.description || '',
+            githubUrl: data.data.githubUrl || '',
+            demoVideoUrl: data.data.demoVideoUrl || '',
+          }));
+          setExistingFile(data.data.fileUrl || null);
+        } else {
+          setFormData(prev => ({
+            ...prev,
+            projectName: '',
+            description: '',
+            githubUrl: '',
+            demoVideoUrl: '',
+          }));
+          setExistingFile(null);
+        }
+      } catch (err) {
+        console.error("Error fetching existing submission", err);
+      }
+    };
+    fetchSubmission();
+  }, [formData.contestId]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -125,6 +162,12 @@ export function SubmissionPage() {
           </div>
           <h1 className="text-3xl font-bold text-gray-900">Nộp Dự Án (Submission)</h1>
           <p className="text-gray-500 mt-2">Nộp kết quả sản phẩm của đội bạn trước khi thời gian kết thúc.</p>
+          {existingFile && (
+            <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium border border-blue-100">
+              <CheckCircle size={16} />
+              Đội của bạn đã nộp bài. Bạn có thể cập nhật thông tin nếu chưa tới hạn.
+            </div>
+          )}
         </div>
 
         {error && (
@@ -229,6 +272,12 @@ export function SubmissionPage() {
                 <label className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
                   <FileUp size={18} className="text-gray-400" /> Tệp đính kèm (PDF, ZIP, DOCX, RAR)
                 </label>
+                {existingFile && !projectFile && (
+                  <div className="mb-2 text-sm text-gray-600 flex items-center gap-2">
+                    <FileText size={16} className="text-blue-500"/>
+                    Đã nộp tệp: <a href={`http://localhost:8000${existingFile}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">Xem tệp hiện tại</a>
+                  </div>
+                )}
                 <input 
                   type="file" 
                   name="projectFile" 
@@ -236,6 +285,7 @@ export function SubmissionPage() {
                   accept=".pdf,.zip,.docx,.doc,.rar"
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" 
                 />
+                <p className="text-xs text-gray-500 mt-2">Chọn tệp mới nếu bạn muốn thay thế tệp đã nộp.</p>
               </div>
             </div>
 
@@ -254,7 +304,7 @@ export function SubmissionPage() {
               className="flex items-center gap-2 px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-bold transition-colors shadow-md hover:shadow-lg"
             >
               {saving ? <Loader2 className="animate-spin" size={20} /> : <Save size={20} />}
-              Nộp dự án
+              {existingFile ? "Cập nhật dự án" : "Nộp dự án"}
             </button>
           </div>
         </form>

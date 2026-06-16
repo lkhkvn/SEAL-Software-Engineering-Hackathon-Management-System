@@ -90,7 +90,7 @@ try {
     $notificationController= new NotificationController($notificationService, $authService);
     
     $scoreService          = new ScoreService($entityManager);
-    $scoreController       = new ScoreController($scoreService, $authService);
+    $scoreController       = new ScoreController($scoreService, $authService, $notificationService);
 
     // ============================================================================
     // ROUTER
@@ -179,6 +179,14 @@ try {
     }
     if ($path === '/api/teams/my-team/contests' && $method === 'GET') {
         $teamController->getMyTeamContests(); exit(0);
+    }
+    if ($path === '/api/teams/my-team/submission' && $method === 'GET') {
+        $contestId = isset($_GET['contestId']) ? (int)$_GET['contestId'] : 0;
+        $teamController->getMySubmission($contestId); exit(0);
+    }
+    // SECURE FILE DOWNLOAD
+    if (preg_match('#^/api/submissions/file/(\d+)/([^/]+)$#', $path, $m) && $method === 'GET') {
+        $teamController->downloadSubmissionFile((int)$m[1], $m[2]); exit(0);
     }
 
     // ------------------------------------------------------------------
