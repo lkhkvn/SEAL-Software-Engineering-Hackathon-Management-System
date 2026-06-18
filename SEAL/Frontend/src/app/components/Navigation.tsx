@@ -1,7 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { Trophy, Calendar, Users, Settings, Home, Award, LogIn, LogOut, Upload, CheckSquare } from 'lucide-react';
 import { NotificationBell } from './NotificationBell';
-
 interface NavigationProps {
   currentUser: any;
   onLogout: () => void;

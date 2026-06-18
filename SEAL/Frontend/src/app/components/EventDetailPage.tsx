@@ -32,6 +32,12 @@ export function EventDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [challenge, setChallenge] = useState<any>(null);
+  const [isTeamRegistered, setIsTeamRegistered] = useState(false);
+
+  // Trạng thái đếm ngược (realtime)
+  const [timeLeft, setTimeLeft] = useState('');
+  const [isRegistrationClosed, setIsRegistrationClosed] = useState(false);
+  const [currentTime, setCurrentTime] = useState(new Date());
 
   // Trạng thái modal đăng ký
   const [showRegisterModal, setShowRegisterModal] = useState(false);
@@ -205,6 +211,21 @@ export function EventDetailPage() {
           // Ignored
         }
 
+        // Kiểm tra xem đội hiện tại đã đăng ký chưa
+        const token = localStorage.getItem('auth_token');
+        if (token) {
+          try {
+            const contestsRes = await fetch(`${API}/teams/my-team/contests`, { headers: { Authorization: `Bearer ${token}` } });
+            if (contestsRes.ok) {
+                const contestsData = await contestsRes.json();
+                if (contestsData.status === 'success' && contestsData.data) {
+                     const registered = contestsData.data.some((c: any) => c.id == id);
+                     setIsTeamRegistered(registered);
+                }
+            }
+          } catch(e) {}
+        }
+
       } catch (e: any) {
         setError(e.message || 'Lỗi tải chi tiết cuộc thi');
       } finally {
@@ -213,6 +234,42 @@ export function EventDetailPage() {
     };
     fetchEventData();
   }, [id]);
+
+  useEffect(() => {
+    if (!eventData || !eventData.registration_deadline) {
+      setIsRegistrationClosed(false);
+      setTimeLeft('');
+      return;
+    }
+
+    const updateTimer = () => {
+      const now = new Date();
+      setCurrentTime(now);
+
+      // Đặt deadline tới 23:59:59 của ngày kết thúc đăng ký
+      const deadline = new Date(eventData.registration_deadline);
+      deadline.setHours(23, 59, 59, 999);
+      const diff = deadline.getTime() - now.getTime();
+
+      if (diff <= 0) {
+        setIsRegistrationClosed(true);
+        setTimeLeft('Đã hết hạn đăng ký');
+      } else {
+        setIsRegistrationClosed(false);
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+        
+        const fZero = (n: number) => n < 10 ? `0${n}` : n;
+        setTimeLeft(`Còn ${days} ngày ${fZero(hours)}:${fZero(minutes)}:${fZero(seconds)}`);
+      }
+    };
+
+    updateTimer();
+    const timer = setInterval(updateTimer, 1000);
+    return () => clearInterval(timer);
+  }, [eventData]);
 
   if (loading) {
     return (
@@ -315,7 +372,7 @@ export function EventDetailPage() {
       ? 'Đã kết thúc' 
       : 'Đã huỷ',
     category: eventData.category,
-    image: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    image: eventData.image || eventData.image_url || 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
     description: eventData.description || 'Chưa có mô tả',
     organizer: eventData.organizer || 'Bộ Khoa học và Công nghệ',
     registrationDeadline: eventData.registration_deadline ? eventData.registration_deadline.slice(0, 10) : 'Chưa cập nhật',
@@ -368,8 +425,12 @@ export function EventDetailPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <div
-        className="relative h-64 flex items-center justify-center text-white"
-        style={{ background: event.image }}
+        className="relative h-64 flex items-center justify-center text-white bg-cover bg-center transition-all duration-500"
+        style={
+          event.image.startsWith('http') || event.image.startsWith('/')
+            ? { backgroundImage: `url(${event.image})` }
+            : { background: event.image }
+        }
       >
         <div className="absolute inset-0 bg-black/30"></div>
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
@@ -473,30 +534,175 @@ export function EventDetailPage() {
                 )}
 
                 {activeTab === 'schedule' && (
-                  <div className="space-y-4">
-                    {event.schedule.map((item, index) => (
-                      <div key={index} className="flex gap-4">
-                        <div className="flex flex-col items-center">
-                          <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-semibold flex-shrink-0 animate-pulse">
-                            {index + 1}
-                          </div>
-                          {index < event.schedule.length - 1 && (
-                            <div className="w-0.5 h-full bg-gray-200 my-2"></div>
-                          )}
-                        </div>
-                        <div className="flex-1 pb-8 text-left">
-                          <div className="font-semibold text-blue-600 mb-1">{item.time}</div>
-                          <div className="font-medium text-gray-900 mb-1">{item.event}</div>
-                          {(item as any).description && (
-                            <p className="text-sm text-gray-600 mb-2 leading-relaxed">{(item as any).description}</p>
-                          )}
-                          <div className="text-sm text-gray-600 flex items-center gap-1">
-                            <MapPin size={14} />
-                            {item.location}
-                          </div>
+                  <div className="space-y-6">
+                    <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl mb-6 flex items-center justify-between">
+                      <div>
+                        <h3 className="font-bold text-blue-800 flex items-center gap-2 mb-1">
+                          <Clock size={20} />
+                          Tiến độ Thời gian thực (Realtime)
+                        </h3>
+                        <p className="text-sm text-blue-700">Tự động cập nhật từng giây</p>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-xs text-blue-600 font-semibold uppercase tracking-wider mb-1">Thời gian hiện tại</div>
+                        <div className="font-mono font-bold text-lg text-blue-800 bg-white px-3 py-1 rounded-md border border-blue-100 shadow-sm">
+                          {currentTime.toLocaleString('vi-VN')}
                         </div>
                       </div>
-                    ))}
+                    </div>
+
+                    <div className="relative border-l-2 border-gray-200 ml-4 space-y-10 pb-4 mt-8">
+                      {/* Giai đoạn 1: Đăng ký */}
+                      {(() => {
+                        const startReg = eventData.created_at ? new Date(eventData.created_at) : new Date(eventData.start_date || Date.now());
+                        if (!eventData.created_at && eventData.start_date) {
+                          startReg.setDate(startReg.getDate() - 14); // Fallback mở đăng ký trước 14 ngày
+                        }
+                        
+                        let endReg = eventData.registration_deadline ? new Date(eventData.registration_deadline) : new Date(eventData.start_date);
+                        endReg.setHours(23, 59, 59, 999);
+                        
+                        const isUpcoming = currentTime < startReg;
+                        const isPast = currentTime > endReg;
+                        const isActive = currentTime >= startReg && currentTime <= endReg;
+
+                        let phaseTimeLeft = '';
+                        if (isActive) {
+                          const diff = endReg.getTime() - currentTime.getTime();
+                          const d = Math.floor(diff / (1000 * 60 * 60 * 24));
+                          const h = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                          const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                          const s = Math.floor((diff % (1000 * 60)) / 1000);
+                          const fZero = (n: number) => n < 10 ? `0${n}` : n;
+                          phaseTimeLeft = `Còn ${d} ngày ${fZero(h)}:${fZero(m)}:${fZero(s)}`;
+                        }
+
+                        let progress = 0;
+                        if (isPast) progress = 100;
+                        else if (isActive) {
+                          const total = endReg.getTime() - startReg.getTime();
+                          const passed = currentTime.getTime() - startReg.getTime();
+                          progress = total > 0 ? Math.min(100, Math.max(0, (passed / total) * 100)) : 0;
+                        }
+
+                        return (
+                          <div className="relative pl-8">
+                            <div className={`absolute -left-[11px] top-1 w-5 h-5 rounded-full border-4 border-white shadow-sm ${isPast ? 'bg-gray-400' : isActive ? 'bg-green-500 animate-pulse' : 'bg-blue-400'}`}></div>
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3">
+                              <h4 className={`text-xl font-bold ${isPast ? 'text-gray-500' : isActive ? 'text-green-600' : 'text-blue-600'}`}>
+                                1. Giai đoạn Đăng ký & Ghép đội
+                              </h4>
+                              {isActive && (
+                                <span className="mt-2 sm:mt-0 text-sm font-semibold text-green-700 bg-green-100 border border-green-200 px-4 py-1.5 rounded-full shadow-sm flex items-center gap-1.5 w-fit">
+                                  <Clock size={16} className="animate-spin-slow" style={{ animationDuration: '3s' }} /> 
+                                  {phaseTimeLeft}
+                                </span>
+                              )}
+                              {isPast && (
+                                <span className="mt-2 sm:mt-0 text-sm font-semibold text-gray-500 bg-gray-100 px-3 py-1 rounded-full w-fit">
+                                  Đã kết thúc
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-sm text-gray-600 mb-4 bg-gray-50 p-3 rounded-lg border border-gray-100 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              <div><span className="text-gray-400 mr-2">Mở đăng ký:</span> <strong className="text-gray-800">{startReg.toLocaleString('vi-VN')}</strong></div>
+                              <div><span className="text-gray-400 mr-2">Đóng đăng ký:</span> <strong className="text-gray-800">{endReg.toLocaleString('vi-VN')}</strong></div>
+                            </div>
+                            <div className="w-full bg-gray-100 rounded-full h-2.5 shadow-inner overflow-hidden">
+                              <div className={`h-full rounded-full transition-all duration-1000 ${isPast ? 'bg-gray-400' : 'bg-green-500 bg-[length:1rem_1rem] bg-[linear-gradient(45deg,rgba(255,255,255,.15)_25%,transparent_25%,transparent_50%,rgba(255,255,255,.15)_50%,rgba(255,255,255,.15)_75%,transparent_75%,transparent)] animate-[progress-bar-stripes_1s_linear_infinite]'}`} style={{ width: `${progress}%` }}></div>
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Giai đoạn 1.5: Phát đề bài */}
+                      {(() => {
+                        const challengeTime = new Date(eventData.start_date || eventData.startDate);
+                        const isPast = currentTime >= challengeTime;
+                        
+                        return (
+                          <div className="relative pl-8">
+                            <div className={`absolute -left-[11px] top-1 w-5 h-5 rounded-full border-4 border-white shadow-sm ${isPast ? 'bg-purple-500' : 'bg-gray-300'}`}></div>
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3">
+                              <h4 className={`text-xl font-bold ${isPast ? 'text-purple-600' : 'text-gray-500'}`}>
+                                2. Phát Đề Bài (Mở khóa Challenge)
+                              </h4>
+                              <span className={`mt-2 sm:mt-0 text-sm font-semibold px-4 py-1.5 rounded-full w-fit shadow-sm ${isPast ? 'text-purple-700 bg-purple-100 border border-purple-200' : 'text-gray-600 bg-gray-100 border border-gray-200'}`}>
+                                {isPast ? 'Đã công bố' : 'Sắp diễn ra'}
+                              </span>
+                            </div>
+                            <div className="text-sm text-gray-600 mb-4 bg-gray-50 p-3 rounded-lg border border-gray-100">
+                              <div><span className="text-gray-400 mr-2">Dự kiến công bố lúc:</span> <strong className="text-gray-800">{challengeTime.toLocaleString('vi-VN')}</strong></div>
+                              <p className="text-xs text-gray-500 italic mt-1.5">Lưu ý: Thời gian thực tế có thể thay đổi một chút tùy theo quyết định của Ban tổ chức.</p>
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Giai đoạn 2: Nộp bài */}
+                      {(() => {
+                        const startSub = new Date(eventData.start_date || eventData.startDate);
+                        let endSub = new Date(eventData.end_date || eventData.endDate);
+                        endSub.setHours(23, 59, 59, 999);
+                        
+                        const isUpcoming = currentTime < startSub;
+                        const isPast = currentTime > endSub;
+                        const isActive = currentTime >= startSub && currentTime <= endSub;
+
+                        let phaseTimeLeft = '';
+                        if (isActive) {
+                          const diff = endSub.getTime() - currentTime.getTime();
+                          const d = Math.floor(diff / (1000 * 60 * 60 * 24));
+                          const h = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                          const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                          const s = Math.floor((diff % (1000 * 60)) / 1000);
+                          const fZero = (n: number) => n < 10 ? `0${n}` : n;
+                          phaseTimeLeft = `Còn ${d} ngày ${fZero(h)}:${fZero(m)}:${fZero(s)}`;
+                        }
+
+                        let progress = 0;
+                        if (isPast) progress = 100;
+                        else if (isActive) {
+                          const total = endSub.getTime() - startSub.getTime();
+                          const passed = currentTime.getTime() - startSub.getTime();
+                          progress = total > 0 ? Math.min(100, Math.max(0, (passed / total) * 100)) : 0;
+                        }
+
+                        return (
+                          <div className="relative pl-8">
+                            <div className={`absolute -left-[11px] top-1 w-5 h-5 rounded-full border-4 border-white shadow-sm ${isPast ? 'bg-gray-400' : isActive ? 'bg-green-500 animate-pulse' : 'bg-blue-400'}`}></div>
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3">
+                              <h4 className={`text-xl font-bold ${isPast ? 'text-gray-500' : isActive ? 'text-green-600' : 'text-blue-600'}`}>
+                                3. Giai đoạn Coding & Nộp bài
+                              </h4>
+                              {isActive && (
+                                <span className="mt-2 sm:mt-0 text-sm font-semibold text-green-700 bg-green-100 border border-green-200 px-4 py-1.5 rounded-full shadow-sm flex items-center gap-1.5 w-fit">
+                                  <Clock size={16} className="animate-spin-slow" style={{ animationDuration: '3s' }} /> 
+                                  {phaseTimeLeft}
+                                </span>
+                              )}
+                              {isUpcoming && (
+                                <span className="mt-2 sm:mt-0 text-sm font-semibold text-blue-700 bg-blue-100 border border-blue-200 px-3 py-1 rounded-full w-fit">
+                                  Sắp diễn ra
+                                </span>
+                              )}
+                              {isPast && (
+                                <span className="mt-2 sm:mt-0 text-sm font-semibold text-gray-500 bg-gray-100 px-3 py-1 rounded-full w-fit">
+                                  Đã kết thúc
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-sm text-gray-600 mb-4 bg-gray-50 p-3 rounded-lg border border-gray-100 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              <div><span className="text-gray-400 mr-2">Bắt đầu:</span> <strong className="text-gray-800">{startSub.toLocaleString('vi-VN')}</strong></div>
+                              <div><span className="text-gray-400 mr-2">Kết thúc:</span> <strong className="text-gray-800">{endSub.toLocaleString('vi-VN')}</strong></div>
+                            </div>
+                            <div className="w-full bg-gray-100 rounded-full h-2.5 shadow-inner overflow-hidden">
+                              <div className={`h-full rounded-full transition-all duration-1000 ${isPast ? 'bg-gray-400' : isActive ? 'bg-green-500 bg-[length:1rem_1rem] bg-[linear-gradient(45deg,rgba(255,255,255,.15)_25%,transparent_25%,transparent_50%,rgba(255,255,255,.15)_50%,rgba(255,255,255,.15)_75%,transparent_75%,transparent)] animate-[progress-bar-stripes_1s_linear_infinite]' : 'bg-blue-400'}`} style={{ width: `${progress}%` }}></div>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
                   </div>
                 )}
 
@@ -655,6 +861,11 @@ export function EventDetailPage() {
                 <div>
                   <div className="text-sm text-gray-500 mb-1">Hạn đăng ký</div>
                   <div className="font-medium text-gray-900">{event.registrationDeadline}</div>
+                  {timeLeft && (
+                    <div className={`text-xs mt-1 font-bold ${isRegistrationClosed ? 'text-red-500' : 'text-blue-600'}`}>
+                      ⏳ {timeLeft}
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -673,14 +884,39 @@ export function EventDetailPage() {
                 </div>
               </div>
 
-              <button
-                onClick={handleOpenRegisterModal}
-                className="block w-full py-3 bg-blue-600 text-white text-center rounded-lg font-semibold hover:bg-blue-700 transition-colors cursor-pointer"
-              >
-                Đăng ký ngay
-              </button>
+              {isTeamRegistered && event.status === 'Đang diễn ra' ? (
+                <button
+                  onClick={() => navigate(`/submit`)}
+                  className="block w-full py-3 bg-green-600 text-white text-center rounded-lg font-semibold hover:bg-green-700 transition-colors cursor-pointer"
+                >
+                  Nộp Dự Án
+                </button>
+              ) : isRegistrationClosed ? (
+                <button
+                  disabled
+                  className="block w-full py-3 bg-gray-300 text-gray-500 text-center rounded-lg font-semibold cursor-not-allowed"
+                >
+                  Đã hết hạn đăng ký
+                </button>
+              ) : (
+                <button
+                  onClick={handleOpenRegisterModal}
+                  className="block w-full py-3 bg-blue-600 text-white text-center rounded-lg font-semibold hover:bg-blue-700 transition-colors cursor-pointer"
+                >
+                  Đăng ký ngay
+                </button>
+              )}
 
-              <button className="block w-full py-3 mt-3 bg-gray-100 text-gray-700 text-center rounded-lg font-semibold hover:bg-gray-200 transition-colors">
+              {currentUser && currentUser.role === 'ADMIN' && (
+                <button 
+                  onClick={() => navigate(`/admin`)}
+                  className="block w-full py-3 mt-3 bg-yellow-500 text-white text-center rounded-lg font-semibold hover:bg-yellow-600 transition-colors cursor-pointer border border-yellow-600"
+                >
+                  Chỉnh sửa sự kiện
+                </button>
+              )}
+
+              <button className="block w-full py-3 mt-3 bg-gray-100 text-gray-700 text-center rounded-lg font-semibold hover:bg-gray-200 transition-colors cursor-pointer">
                 Lưu sự kiện
               </button>
             </div>

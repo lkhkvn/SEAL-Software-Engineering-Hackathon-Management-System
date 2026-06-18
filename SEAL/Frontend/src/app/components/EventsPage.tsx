@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Calendar, Users, Trophy, Search, Filter, MapPin, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-
+import { Skeleton } from './ui/skeleton';
+import { motion } from 'motion/react';
 export function EventsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -50,7 +51,7 @@ export function EventsPage() {
             prize: item.prize || 'Liên hệ BTC',
             status: mapStatus(item.status),
             category: item.category,
-            image: gradients[item.id % gradients.length], // Dùng gradient mặc định
+            image: item.image || item.image_url || gradients[item.id % gradients.length], // Ưu tiên ảnh thật nếu có
             description: item.description || 'Chưa có mô tả'
           }));
           
@@ -155,68 +156,103 @@ export function EventsPage() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {loading ? (
-          <div className="text-center py-12">
-            <p className="text-gray-500">Đang tải danh sách sự kiện...</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div key={i} className="bg-white rounded-xl overflow-hidden shadow-sm border border-gray-200">
+                <Skeleton className="h-40 w-full rounded-none" />
+                <div className="p-6">
+                  <div className="flex justify-between mb-4">
+                    <Skeleton className="h-6 w-24 rounded-full" />
+                    <Skeleton className="h-6 w-20 rounded-full" />
+                  </div>
+                  <Skeleton className="h-4 w-full mb-2" />
+                  <Skeleton className="h-4 w-3/4 mb-6" />
+                  <div className="space-y-3">
+                    <Skeleton className="h-4 w-1/2" />
+                    <Skeleton className="h-4 w-2/3" />
+                    <Skeleton className="h-4 w-1/3" />
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         ) : error ? (
           <div className="text-center py-12 text-red-500">
             <p>{error}</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredEvents.map((event) => (
-            <Link
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ staggerChildren: 0.1 }}
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+          >
+          {filteredEvents.map((event, index) => (
+            <motion.div
               key={event.id}
-              to={`/events/${event.id}`}
-              className="bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-lg transition-all border border-gray-200 hover:border-blue-300"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.1 }}
             >
-              <div
-                className="h-40 flex items-center justify-center text-white text-xl font-bold p-6 text-center"
-                style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}
+              <Link
+                to={`/events/${event.id}`}
+                className="group block bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-200 hover:border-blue-400"
               >
-                {event.name}
-              </div>
-
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-3">
-                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusColors[event.status] || 'bg-gray-100'}`}>
-                    {statusLabels[event.status] || event.status}
-                  </span>
-                  <span className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-xs font-medium">
-                    {event.category || 'Khác'}
-                  </span>
+                <div
+                  className="h-40 flex items-center justify-center text-white text-xl font-bold p-6 text-center relative overflow-hidden"
+                  style={
+                    event.image.startsWith('http') || event.image.startsWith('/')
+                      ? { backgroundImage: `url(${event.image})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+                      : { background: event.image }
+                  }
+                >
+                  {(event.image.startsWith('http') || event.image.startsWith('/')) && (
+                    <div className="absolute inset-0 bg-black/40 group-hover:bg-black/30 transition-colors"></div>
+                  )}
+                  <span className="relative z-10 drop-shadow-md">{event.name}</span>
                 </div>
 
-                <p className="text-gray-600 text-sm mb-4">{event.description}</p>
+                <div className="p-6">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusColors[event.status] || 'bg-gray-100'}`}>
+                      {statusLabels[event.status] || event.status}
+                    </span>
+                    <span className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-xs font-medium">
+                      {event.category || 'Khác'}
+                    </span>
+                  </div>
 
-                <div className="space-y-2 text-gray-600 text-sm">
-                  <div className="flex items-center gap-2">
-                    <Calendar size={16} />
-                    <span>{formatDateRange(event.startDate, event.endDate)}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <MapPin size={16} />
-                    <span>{event.location || 'Chưa công bố'}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Users size={16} />
-                    <span>{event.teams}/{event.maxTeams || '∞'} đội</span>
-                    <div className="flex-1 bg-gray-200 rounded-full h-2 ml-2">
-                      <div
-                        className="bg-blue-600 h-2 rounded-full"
-                        style={{ width: `${Math.min(100, ((event.teams || 0) / (event.maxTeams || 1)) * 100)}%` }}
-                      ></div>
+                  <p className="text-gray-600 text-sm mb-4">{event.description}</p>
+
+                  <div className="space-y-2 text-gray-600 text-sm">
+                    <div className="flex items-center gap-2">
+                      <Calendar size={16} />
+                      <span>{formatDateRange(event.startDate, event.endDate)}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <MapPin size={16} />
+                      <span>{event.location || 'Chưa công bố'}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Users size={16} />
+                      <span>{event.teams}/{event.maxTeams || '∞'} đội</span>
+                      <div className="flex-1 bg-gray-200 rounded-full h-2 ml-2">
+                        <div
+                          className="bg-blue-600 h-2 rounded-full"
+                          style={{ width: `${Math.min(100, ((event.teams || 0) / (event.maxTeams || 1)) * 100)}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Trophy size={16} />
+                      <span className="font-semibold text-gray-900">Chi tiết bên trong</span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Trophy size={16} />
-                    <span className="font-semibold text-gray-900">Chi tiết bên trong</span>
-                  </div>
                 </div>
-              </div>
-            </Link>
+              </Link>
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
         )}
 
         {!loading && !error && filteredEvents.length === 0 && (

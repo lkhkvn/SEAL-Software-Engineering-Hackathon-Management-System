@@ -307,11 +307,11 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
       category: c.category || 'AI & ML',
       description: c.description || '',
       location: c.location || '',
-      startDate: c.startDate ? c.startDate.slice(0, 10) : '',
-      endDate: c.endDate ? c.endDate.slice(0, 10) : '',
-      registrationStart: c.registrationStart ? c.registrationStart.slice(0, 10) : '',
-      registrationEnd: c.registrationEnd ? c.registrationEnd.slice(0, 10) : '',
-      registrationDeadline: (c as any).registration_deadline ? (c as any).registration_deadline.slice(0, 10) : (c.registrationEnd ? c.registrationEnd.slice(0, 10) : ''),
+      startDate: c.startDate ? c.startDate.replace(' ', 'T').slice(0, 16) : '',
+      endDate: c.endDate ? c.endDate.replace(' ', 'T').slice(0, 16) : '',
+      registrationStart: c.registrationStart ? c.registrationStart.replace(' ', 'T').slice(0, 16) : '',
+      registrationEnd: c.registrationEnd ? c.registrationEnd.replace(' ', 'T').slice(0, 16) : '',
+      registrationDeadline: (c as any).registration_deadline ? (c as any).registration_deadline.replace(' ', 'T').slice(0, 16) : (c.registrationEnd ? c.registrationEnd.replace(' ', 'T').slice(0, 16) : ''),
       maxTeams: c.maxTeams || 50,
       status: c.status,
       organizer: c.organizer || '',
@@ -364,10 +364,10 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
           category: formData.category,
           description: formData.description,
           location: formData.location,
-          start_date: formData.startDate,
-          end_date: formData.endDate,
-          registration_start: formData.registrationStart,
-          registration_end: formData.registrationEnd,
+          start_date: formData.startDate.replace('T', ' ') + ':00',
+          end_date: formData.endDate.replace('T', ' ') + ':00',
+          registration_start: formData.registrationStart.replace('T', ' ') + ':00',
+          registration_end: formData.registrationEnd.replace('T', ' ') + ':00',
           max_teams: Number(formData.maxTeams),
           status: formData.status,
           organizer: formData.organizer,
@@ -375,7 +375,7 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
           prize_details: formData.prizeDetails,
           rules: formData.rules,
           criteria: formData.criteria,
-          registration_deadline: formData.registrationDeadline || formData.registrationEnd,
+          registration_deadline: (formData.registrationDeadline || formData.registrationEnd).replace('T', ' ') + ':00',
         }),
       });
       const result = await res.json();
@@ -1032,7 +1032,7 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
                   </label>
                   <input
                     id="contest-reg-start"
-                    type="date"
+                    type="datetime-local"
                     value={formData.registrationStart}
                     onChange={e => setFormData(p => ({ ...p, registrationStart: e.target.value }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs bg-white"
@@ -1045,7 +1045,7 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
                   </label>
                   <input
                     id="contest-reg-end"
-                    type="date"
+                    type="datetime-local"
                     value={formData.registrationEnd}
                     onChange={e => setFormData(p => ({ ...p, registrationEnd: e.target.value }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs bg-white"
@@ -1065,7 +1065,7 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
                   </label>
                   <input
                     id="contest-start-date"
-                    type="date"
+                    type="datetime-local"
                     value={formData.startDate}
                     onChange={e => setFormData(p => ({ ...p, startDate: e.target.value }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs bg-white"
@@ -1078,7 +1078,7 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
                   </label>
                   <input
                     id="contest-end-date"
-                    type="date"
+                    type="datetime-local"
                     value={formData.endDate}
                     onChange={e => setFormData(p => ({ ...p, endDate: e.target.value }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs bg-white"

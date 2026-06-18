@@ -3,6 +3,8 @@ import { createRoot } from "react-dom/client";
 import App from "./app/App.tsx";
 import "./styles/index.css";
 
+import { toast } from "sonner";
+
 // Global Fetch Interceptor
 const originalFetch = window.fetch;
 window.fetch = async (input, init) => {
@@ -13,8 +15,10 @@ window.fetch = async (input, init) => {
     localStorage.removeItem("user");
     // Chỉ alert nếu chưa ở trang login
     if (window.location.pathname !== '/login') {
-      alert("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại!");
-      window.location.href = "/login";
+      toast.error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại!");
+      setTimeout(() => {
+        window.location.href = "/login";
+      }, 1500);
     }
   }
   return response;

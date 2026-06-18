@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Outlet, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
+import { Toaster } from 'sonner';
 import { Navigation } from './components/Navigation';
 import { HomePage } from './components/HomePage';
 import { EventsPage } from './components/EventsPage';
@@ -93,10 +94,13 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <Router>
-      <div className="min-h-screen bg-gray-50">
-        <AppRoutes />
-      </div>
-    </Router>
+    <>
+      <Router>
+        <div className="min-h-screen bg-gray-50">
+          <AppRoutes />
+        </div>
+      </Router>
+      <Toaster richColors position="top-right" />
+    </>
   );
 }

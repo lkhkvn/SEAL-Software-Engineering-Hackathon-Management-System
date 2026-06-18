@@ -49,7 +49,7 @@ class HackathonService {
 
         // Kiểm tra cuộc thi
         $contest = $conn->executeQuery("
-            SELECT max_teams, 
+            SELECT max_teams, registration_deadline,
             (SELECT COUNT(*) FROM contest_registrations WHERE contest_id = contests.id) as registered_count 
             FROM contests WHERE id = ?
         ", [$contestId])->fetchAssociative();
@@ -60,6 +60,15 @@ class HackathonService {
 
         if ($contest['registered_count'] >= $contest['max_teams']) {
             throw new Exception("Cuộc thi đã đủ số lượng đội đăng ký!");
+        }
+
+        // Kiểm tra thời gian đăng ký (realtime deadline check)
+        if (!empty($contest['registration_deadline'])) {
+            $deadline = new \DateTime($contest['registration_deadline']);
+            $deadline->setTime(23, 59, 59); // Hết ngày deadline
+            if (new \DateTime() > $deadline) {
+                throw new Exception("Đã hết hạn đăng ký cho cuộc thi này!");
+            }
         }
 
         // Kiểm tra đã đăng ký chưa

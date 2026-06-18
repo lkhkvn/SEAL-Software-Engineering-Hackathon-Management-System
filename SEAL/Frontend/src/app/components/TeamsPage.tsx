@@ -6,7 +6,8 @@ import {
   Briefcase, GraduationCap, Link as LinkIcon
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-
+import { Skeleton } from './ui/skeleton';
+import { motion } from 'motion/react';
 const CV_THEMES: Record<string, {
   headerBg: string;
   accentText: string;
@@ -1200,15 +1201,7 @@ export function TeamsPage() {
     t.category.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // ── Loading ──
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center gap-3">
-        <Loader2 className="text-blue-600 animate-spin" size={40} />
-        <span className="text-sm text-gray-500 font-medium">Đang tải danh sách đội thi...</span>
-      </div>
-    );
-  }
+  // ── Loading state removed from here to render within page layout ──
 
   // ── Error ──
   if (error) {
@@ -1397,7 +1390,31 @@ export function TeamsPage() {
 
       {/* Team grid */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {filtered.length === 0 ? (
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div key={i} className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100">
+                <div className="h-20 flex items-center justify-center relative bg-gray-200">
+                  <Skeleton className="w-14 h-14 rounded-xl" />
+                </div>
+                <div className="p-5">
+                  <Skeleton className="h-6 w-3/4 mb-4" />
+                  <div className="space-y-2 mb-4">
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-2/3" />
+                    <Skeleton className="h-4 w-1/2" />
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 mb-4">
+                    <Skeleton className="h-5 w-12" />
+                    <Skeleton className="h-5 w-16" />
+                    <Skeleton className="h-5 w-10" />
+                  </div>
+                  <Skeleton className="h-10 w-full rounded-xl" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="text-center py-16">
             <Users className="text-gray-300 mx-auto mb-3" size={48} />
             <p className="text-gray-500 font-medium">
@@ -1405,10 +1422,18 @@ export function TeamsPage() {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filtered.map(team => (
-              <div
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ staggerChildren: 0.1 }}
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+          >
+            {filtered.map((team, index) => (
+              <motion.div
                 key={team.id}
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: index * 0.05 }}
                 className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition-all border border-gray-100 hover:-translate-y-0.5 group"
               >
                 {/* Card Banner */}
@@ -1465,9 +1490,9 @@ export function TeamsPage() {
                     Xem chi tiết
                   </button>
                 </div>
-              </div>
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
         )}
       </div>
 
