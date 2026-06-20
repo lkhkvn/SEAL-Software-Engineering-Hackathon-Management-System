@@ -439,6 +439,48 @@ LOCK TABLES `users` WRITE;
 INSERT INTO `users` VALUES (1,'Khiêm Lâm','admin@gmail.com','$2y$10$sCMOe2mqYu5oLAkcu8VGn..5KKbyEXUYhH1iQs2FIimW2P04n8IVW','PARTICIPANT',NULL,NULL,NULL,0),(2,'Admin 1','admin1@gmail.com','$2y$10$DVaLzfjRI/P7M4SXt72wTu75VM/zZaVMwJOmUzaOnZoqXahjhawQu','ADMIN',NULL,NULL,NULL,1),(3,'Quoc Danh','danh@gmail.com','$2y$10$TLhgxOftfwnhmzwLOjTnwe4OiYi0YUa.9k0BQGi9dYZfd1vShSsMe','PARTICIPANT',NULL,NULL,NULL,0),(4,'Nguyen Van E','lamkhiem100305@gmail.com','$2y$10$BIA8vuh2eVrtpDPlcOtVE.WVqFd0I.f12NbuRI2NLMId3DvDFzR9q','PARTICIPANT',NULL,'Next.js, React, MySQL, Docker, Spring Boot, Python',1,1),(5,'Nguyen Van F','lamkhiem100405@gmail.com','$2y$10$5k7vrvb4HGiG1UawRqOJP.jv8NiiofpnVmfB8QKMHkc.VwKgTROIe','PARTICIPANT',NULL,NULL,1,0),(6,'Nguyễn Văn P','khiem@gmail.com','$2y$10$xxq36wt0omYEUq9fxl.X6O/TV2Lt6psfevIojoExe7v/MANjbwMJC','PARTICIPANT',NULL,'MySQL, React, Spring Boot, Python, Docker',2,0);
 /*!40000 ALTER TABLE `users` ENABLE KEYS */;
 UNLOCK TABLES;
+
+--
+-- Table structure for table `milestones`
+--
+
+DROP TABLE IF EXISTS `milestones`;
+CREATE TABLE `milestones` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `hackathon_id` int NOT NULL,
+  `name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `description` text COLLATE utf8mb4_unicode_ci,
+  `due_date` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_milestone_hackathon` (`hackathon_id`),
+  CONSTRAINT `fk_milestone_contest` FOREIGN KEY (`hackathon_id`) REFERENCES `contests` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Table structure for table `schedules`
+--
+
+DROP TABLE IF EXISTS `schedules`;
+CREATE TABLE `schedules` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `hackathon_id` int DEFAULT NULL,
+  `title` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `description` text COLLATE utf8mb4_unicode_ci,
+  `start_time` datetime NOT NULL,
+  `end_time` datetime DEFAULT NULL,
+  `location` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_schedule_hackathon` (`hackathon_id`),
+  CONSTRAINT `fk_schedule_contest` FOREIGN KEY (`hackathon_id`) REFERENCES `contests` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- View structure for view `hackathons`
+--
+
+DROP VIEW IF EXISTS `hackathons`;
+CREATE VIEW `hackathons` AS SELECT * FROM `contests`;
+
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;

@@ -18,8 +18,7 @@ try {
     $hackathon->description = "Cuộc thi phát triển các giải pháp công nghệ xanh đột phá nhằm giảm thiểu rác thải nhựa, tối ưu hóa năng lượng tái tạo và bảo vệ môi trường sống.";
     $hackathon->startDate = new \DateTime('2026-06-15 08:00:00');
     $hackathon->endDate = new \DateTime('2026-06-17 17:00:00');
-    $hackathon->registrationStart = new \DateTime('2026-06-01 00:00:00');
-    $hackathon->registrationEnd = new \DateTime('2026-06-14 23:59:59');
+    $hackathon->registrationDeadline = new \DateTime('2026-06-14 23:59:59');
     $hackathon->status = "ACTIVE";
     $hackathon->category = "Sustainability";
     $hackathon->location = "Hội trường A - Đại học Bách Khoa";

@@ -201,6 +201,15 @@ try {
     if (preg_match('#^/api/hackathons/(\d+)/register$#', $path, $m) && $method === 'POST') {
         $hackathonController->registerTeam((int)$m[1]); exit(0);
     }
+    if ($path === '/api/hackathons' && $method === 'POST') {
+        $hackathonController->createHackathon(); exit(0);
+    }
+    if (preg_match('#^/api/hackathons/(\d+)$#', $path, $m) && $method === 'PUT') {
+        $hackathonController->updateHackathon((int)$m[1]); exit(0);
+    }
+    if (preg_match('#^/api/hackathons/(\d+)$#', $path, $m) && $method === 'DELETE') {
+        $hackathonController->deleteHackathon((int)$m[1]); exit(0);
+    }
 
     // ------------------------------------------------------------------
     // HACKATHON ADMIN ROUTES
