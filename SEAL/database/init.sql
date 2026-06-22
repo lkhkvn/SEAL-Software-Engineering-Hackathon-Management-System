@@ -87,6 +87,7 @@ CREATE TABLE `contest_registrations` (
   `id` int NOT NULL AUTO_INCREMENT,
   `contest_id` int NOT NULL,
   `team_id` int NOT NULL,
+  `status` varchar(20) NOT NULL DEFAULT 'PENDING',
   `registered_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `idx_contest_team` (`contest_id`,`team_id`),
@@ -103,7 +104,7 @@ CREATE TABLE `contest_registrations` (
 
 LOCK TABLES `contest_registrations` WRITE;
 /*!40000 ALTER TABLE `contest_registrations` DISABLE KEYS */;
-INSERT INTO `contest_registrations` VALUES (1,9,1,'2026-06-08 08:32:07'),(2,9,2,'2026-06-08 14:49:46');
+INSERT INTO `contest_registrations` (`id`, `contest_id`, `team_id`, `registered_at`) VALUES (1,9,1,'2026-06-08 08:32:07'),(2,9,2,'2026-06-08 14:49:46');
 /*!40000 ALTER TABLE `contest_registrations` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -436,7 +437,7 @@ CREATE TABLE `users` (
 
 LOCK TABLES `users` WRITE;
 /*!40000 ALTER TABLE `users` DISABLE KEYS */;
-INSERT INTO `users` VALUES (1,'Khiêm Lâm','admin@gmail.com','$2y$10$sCMOe2mqYu5oLAkcu8VGn..5KKbyEXUYhH1iQs2FIimW2P04n8IVW','PARTICIPANT',NULL,NULL,NULL,0),(2,'Admin 1','admin1@gmail.com','$2y$10$DVaLzfjRI/P7M4SXt72wTu75VM/zZaVMwJOmUzaOnZoqXahjhawQu','ADMIN',NULL,NULL,NULL,1),(3,'Quoc Danh','danh@gmail.com','$2y$10$TLhgxOftfwnhmzwLOjTnwe4OiYi0YUa.9k0BQGi9dYZfd1vShSsMe','PARTICIPANT',NULL,NULL,NULL,0),(4,'Nguyen Van E','lamkhiem100305@gmail.com','$2y$10$BIA8vuh2eVrtpDPlcOtVE.WVqFd0I.f12NbuRI2NLMId3DvDFzR9q','PARTICIPANT',NULL,'Next.js, React, MySQL, Docker, Spring Boot, Python',1,1),(5,'Nguyen Van F','lamkhiem100405@gmail.com','$2y$10$5k7vrvb4HGiG1UawRqOJP.jv8NiiofpnVmfB8QKMHkc.VwKgTROIe','PARTICIPANT',NULL,NULL,1,0),(6,'Nguyễn Văn P','khiem@gmail.com','$2y$10$xxq36wt0omYEUq9fxl.X6O/TV2Lt6psfevIojoExe7v/MANjbwMJC','PARTICIPANT',NULL,'MySQL, React, Spring Boot, Python, Docker',2,0);
+INSERT INTO `users` (`id`, `name`, `email`, `password`, `role`, `phone`, `skills`, `team_id`, `is_looking_for_team`) VALUES (1,'Khiêm Lâm','admin@gmail.com','$2y$10$sCMOe2mqYu5oLAkcu8VGn..5KKbyEXUYhH1iQs2FIimW2P04n8IVW','PARTICIPANT',NULL,NULL,NULL,0),(2,'Admin 1','admin1@gmail.com','$2y$10$DVaLzfjRI/P7M4SXt72wTu75VM/zZaVMwJOmUzaOnZoqXahjhawQu','ADMIN',NULL,NULL,NULL,1),(3,'Quoc Danh','danh@gmail.com','$2y$10$TLhgxOftfwnhmzwLOjTnwe4OiYi0YUa.9k0BQGi9dYZfd1vShSsMe','PARTICIPANT',NULL,NULL,NULL,0),(4,'Nguyen Van E','lamkhiem100305@gmail.com','$2y$10$BIA8vuh2eVrtpDPlcOtVE.WVqFd0I.f12NbuRI2NLMId3DvDFzR9q','PARTICIPANT',NULL,'Next.js, React, MySQL, Docker, Spring Boot, Python',1,1),(5,'Nguyen Van F','lamkhiem100405@gmail.com','$2y$10$5k7vrvb4HGiG1UawRqOJP.jv8NiiofpnVmfB8QKMHkc.VwKgTROIe','PARTICIPANT',NULL,NULL,1,0),(6,'Nguyễn Văn P','khiem@gmail.com','$2y$10$xxq36wt0omYEUq9fxl.X6O/TV2Lt6psfevIojoExe7v/MANjbwMJC','PARTICIPANT',NULL,'MySQL, React, Spring Boot, Python, Docker',2,0);
 /*!40000 ALTER TABLE `users` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -481,6 +482,25 @@ CREATE TABLE `schedules` (
 DROP VIEW IF EXISTS `hackathons`;
 CREATE VIEW `hackathons` AS SELECT * FROM `contests`;
 
+--
+-- Table structure for table `admin_activity_logs`
+--
+
+DROP TABLE IF EXISTS `admin_activity_logs`;
+CREATE TABLE `admin_activity_logs` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `admin_id` int NOT NULL,
+  `action` varchar(100) NOT NULL,
+  `target_type` varchar(50) NOT NULL,
+  `target_id` int DEFAULT NULL,
+  `description` text NOT NULL,
+  `ip_address` varchar(45) DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_log_admin` (`admin_id`),
+  CONSTRAINT `fk_log_admin` FOREIGN KEY (`admin_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
@@ -492,3 +512,4 @@ CREATE VIEW `hackathons` AS SELECT * FROM `contests`;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
 -- Dump completed on 2026-06-09 14:16:07
+

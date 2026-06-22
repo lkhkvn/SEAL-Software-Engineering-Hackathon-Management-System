@@ -2,16 +2,23 @@
 namespace App\Presentation;
 
 use App\Services\AuthService;
+use App\Services\ActivityLogService;
 use App\Domain\Repositories\UserRepositoryInterface;
 use Exception;
 
 class AdminUserController {
     private AuthService $authService;
     private UserRepositoryInterface $userRepository;
+    private ActivityLogService $activityLogService;
 
-    public function __construct(AuthService $authService, UserRepositoryInterface $userRepository) {
+    public function __construct(
+        AuthService $authService,
+        UserRepositoryInterface $userRepository,
+        ActivityLogService $activityLogService
+    ) {
         $this->authService = $authService;
         $this->userRepository = $userRepository;
+        $this->activityLogService = $activityLogService;
     }
 
     public function getAllUsers(): void {
@@ -34,8 +41,15 @@ class AdminUserController {
         echo json_encode(["status" => "success", "data" => $userDataList], JSON_UNESCAPED_UNICODE);
     }
 
-    public function updateRole(): void {
+    public function getActivityLogs(): void {
         $this->requireAdmin();
+        $logs = $this->activityLogService->getAllLogs();
+        http_response_code(200);
+        echo json_encode(["status" => "success", "data" => $logs], JSON_UNESCAPED_UNICODE);
+    }
+
+    public function updateRole(): void {
+        $currentUser = $this->requireAdmin();
 
         $inputData = json_decode(file_get_contents('php://input'), true) ?? [];
         $userId = $inputData['userId'] ?? null;
@@ -55,8 +69,18 @@ class AdminUserController {
             throw new Exception("Người dùng không tồn tại!");
         }
 
+        $oldRole = $targetUser->role;
         $updatedUser = $targetUser->withRole(strtoupper($newRole));
         $this->userRepository->save($updatedUser);
+
+        $this->activityLogService->logActivity(
+            $currentUser->id,
+            'UPDATE',
+            'users',
+            $updatedUser->id,
+            "Đã thay đổi vai trò của người dùng " . $updatedUser->username . " (" . $updatedUser->email . ") từ " . $oldRole . " sang " . strtoupper($newRole),
+            $_SERVER['REMOTE_ADDR'] ?? null
+        );
 
         http_response_code(200);
         echo json_encode([
@@ -71,7 +95,7 @@ class AdminUserController {
         ], JSON_UNESCAPED_UNICODE);
     }
 
-    private function requireAdmin(): void {
+    private function requireAdmin(): \App\Domain\Entity\User {
         $headers = getallheaders();
         $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
         if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
@@ -85,5 +109,6 @@ class AdminUserController {
             echo json_encode(["status" => "error", "message" => "Chỉ Ban tổ chức (ADMIN) mới có quyền truy cập!"], JSON_UNESCAPED_UNICODE);
             exit(0);
         }
+        return $currentUser;
     }
 }

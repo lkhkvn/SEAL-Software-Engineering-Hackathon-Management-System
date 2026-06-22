@@ -123,11 +123,30 @@ class ChallengeService
     // ── USE CASE 3: Thí sinh lấy đề bài ─────────────────────────────────────
     // Logic: Đề được hiển thị nếu đã released_at hoặc contest start_date đã qua
 
-    public function getForParticipant(int $contestId): array
+    public function getForParticipant(int $contestId, ?\App\Domain\Entity\User $user = null): array
     {
         $contest = $this->getContestRow($contestId);
         if (!$contest) {
             throw new Exception("Cuộc thi không tồn tại!");
+        }
+
+        if ($user && !$user->isAdmin() && !$user->isJudge()) {
+            if (!$user->teamId) {
+                throw new Exception("Bạn cần tham gia một đội thi để xem đề bài!");
+            }
+            $conn = $this->em->getConnection();
+            $reg = $conn->executeQuery(
+                "SELECT status FROM contest_registrations WHERE contest_id = :contestId AND team_id = :teamId",
+                ['contestId' => $contestId, 'teamId' => $user->teamId]
+            )->fetchAssociative();
+            
+            if (!$reg) {
+                throw new Exception("Đội của bạn chưa đăng ký tham gia cuộc thi này!");
+            }
+            
+            if ($reg['status'] !== 'APPROVED') {
+                throw new Exception("Đăng ký của đội bạn hiện đang chờ duyệt hoặc đã bị từ chối!");
+            }
         }
 
         $challenge = $this->challengeRepository->findByContestId($contestId);

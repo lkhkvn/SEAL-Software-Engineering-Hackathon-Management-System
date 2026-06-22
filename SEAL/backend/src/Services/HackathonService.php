@@ -224,7 +224,7 @@ class HackathonService {
     public function getRegisteredTeams(int $contestId): array {
         $conn = $this->em->getConnection();
         $teams = $conn->executeQuery("
-            SELECT t.id, t.team_name as name, t.category as description, t.leader_id, cr.registered_at,
+            SELECT t.id, t.team_name as name, t.category as description, t.leader_id, cr.registered_at, cr.status,
                    u.name as leader_name, u.email as leader_email
             FROM teams t
             INNER JOIN contest_registrations cr ON cr.team_id = t.id
@@ -260,6 +260,84 @@ class HackathonService {
         } catch (\Exception $e) {
             $conn->rollBack();
             throw $e;
+        }
+    }
+
+    public function approveRegistration(int $contestId, int $teamId): void {
+        $conn = $this->em->getConnection();
+        $exists = $conn->executeQuery("SELECT 1 FROM contest_registrations WHERE contest_id = ? AND team_id = ?", [$contestId, $teamId])->fetchOne();
+        if (!$exists) {
+            throw new Exception("Đơn đăng ký không tồn tại!");
+        }
+        $conn->executeStatement("UPDATE contest_registrations SET status = 'APPROVED' WHERE contest_id = ? AND team_id = ?", [$contestId, $teamId]);
+    }
+
+    public function rejectRegistration(int $contestId, int $teamId): void {
+        $conn = $this->em->getConnection();
+        $exists = $conn->executeQuery("SELECT 1 FROM contest_registrations WHERE contest_id = ? AND team_id = ?", [$contestId, $teamId])->fetchOne();
+        if (!$exists) {
+            throw new Exception("Đơn đăng ký không tồn tại!");
+        }
+        $conn->executeStatement("UPDATE contest_registrations SET status = 'REJECTED' WHERE contest_id = ? AND team_id = ?", [$contestId, $teamId]);
+    }
+
+    public function syncContestStatuses(?NotificationService $notificationService = null): void {
+        $conn = $this->em->getConnection();
+        
+        // Lấy danh sách các cuộc thi để kiểm tra và cập nhật trạng thái
+        $contests = $conn->executeQuery("SELECT id, name, status, start_date, end_date FROM contests")->fetchAllAssociative();
+        
+        $todayStr = (new \DateTime())->format('Y-m-d');
+        
+        foreach ($contests as $contest) {
+            $contestId = (int)$contest['id'];
+            $currentStatus = $contest['status'];
+            $startDate = $contest['start_date'];
+            $endDate = $contest['end_date'];
+            
+            if ($currentStatus === 'CANCELLED') {
+                continue;
+            }
+            
+            $expectedStatus = $currentStatus;
+            if ($todayStr < $startDate) {
+                $expectedStatus = 'UPCOMING';
+            } elseif ($todayStr >= $startDate && $todayStr <= $endDate) {
+                $expectedStatus = 'ACTIVE';
+            } else {
+                $expectedStatus = 'COMPLETED';
+            }
+            
+            if ($currentStatus !== $expectedStatus) {
+                $conn->executeStatement("UPDATE contests SET status = ? WHERE id = ?", [$expectedStatus, $contestId]);
+                
+                // Nếu tự động kích hoạt cuộc thi thành ACTIVE, phát đề bài và thông báo
+                if ($expectedStatus === 'ACTIVE') {
+                    $challenge = $conn->executeQuery(
+                        "SELECT id, title, released_at FROM contest_problems WHERE contest_id = :contestId",
+                        ['contestId' => $contestId]
+                    )->fetchAssociative();
+
+                    $challengeTitle = null;
+                    if ($challenge) {
+                        $challengeTitle = $challenge['title'];
+                        if (!$challenge['released_at']) {
+                            $conn->executeStatement(
+                                "UPDATE contest_problems SET released_at = NOW() WHERE contest_id = :contestId",
+                                ['contestId' => $contestId]
+                            );
+                        }
+                    }
+
+                    if ($notificationService) {
+                        try {
+                            $notificationService->notifyAllTeams($contestId, $contest['name'], $challengeTitle);
+                        } catch (\Exception $e) {
+                            // Bỏ qua lỗi thông báo để tránh block luồng chính
+                        }
+                    }
+                }
+            }
         }
     }
 }

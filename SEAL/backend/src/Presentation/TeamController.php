@@ -772,15 +772,21 @@ class TeamController {
                 }
             }
 
-            // Kiểm tra đăng ký sự kiện
-            $registration = $conn->executeQuery("SELECT id FROM contest_registrations WHERE team_id = :teamId AND contest_id = :contestId", [
+            // Kiểm tra đăng ký sự kiện và trạng thái duyệt
+            $registration = $conn->executeQuery("SELECT status FROM contest_registrations WHERE team_id = :teamId AND contest_id = :contestId", [
                 'teamId' => $currentUser->teamId,
                 'contestId' => $contestId
-            ])->fetchOne();
+            ])->fetchAssociative();
 
             if (!$registration) {
                 http_response_code(403);
                 echo json_encode(["status" => "error", "message" => "Đội của bạn chưa đăng ký tham gia sự kiện này!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            if ($registration['status'] !== 'APPROVED') {
+                http_response_code(403);
+                echo json_encode(["status" => "error", "message" => "Đăng ký của đội bạn hiện đang chờ duyệt hoặc đã bị từ chối!"], JSON_UNESCAPED_UNICODE);
                 return;
             }
 
@@ -871,8 +877,26 @@ class TeamController {
                 return;
             }
 
-
             $conn = $this->em->getConnection();
+
+            // Kiểm tra đăng ký sự kiện và trạng thái duyệt
+            $registration = $conn->executeQuery("SELECT status FROM contest_registrations WHERE team_id = :teamId AND contest_id = :contestId", [
+                'teamId' => $currentUser->teamId,
+                'contestId' => $contestId
+            ])->fetchAssociative();
+
+            if (!$registration) {
+                http_response_code(403);
+                echo json_encode(["status" => "error", "message" => "Đội của bạn chưa đăng ký tham gia sự kiện này!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            if ($registration['status'] !== 'APPROVED') {
+                http_response_code(403);
+                echo json_encode(["status" => "error", "message" => "Đăng ký của đội bạn hiện đang chờ duyệt hoặc đã bị từ chối!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
             $submission = $conn->executeQuery("SELECT project_name as projectName, description, github_url as githubUrl, demo_video_url as demoVideoUrl, file_url as fileUrl FROM submissions WHERE team_id = :teamId AND contest_id = :contestId", [
                 'teamId' => $currentUser->teamId,
                 'contestId' => $contestId
@@ -1111,6 +1135,7 @@ class TeamController {
             echo json_encode(["status" => "error", "message" => $e->getMessage()], JSON_UNESCAPED_UNICODE);
         }
     }
+    public function getMyTeamContests(): void {
         try {
             $headers = getallheaders();
             $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';

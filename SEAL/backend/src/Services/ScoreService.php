@@ -101,9 +101,78 @@ class ScoreService {
     }
 
     /**
+     * Create a new criterion
+     */
+    public function createCriteria(string $name, float $weight, int $maxScore): void {
+        $conn = $this->em->getConnection();
+        $conn->executeStatement(
+            "INSERT INTO criteria (name, weight, max_score) VALUES (:name, :weight, :maxScore)",
+            [
+                'name' => $name,
+                'weight' => $weight,
+                'maxScore' => $maxScore
+            ]
+        );
+    }
+
+    /**
+     * Delete a criterion
+     */
+    public function deleteCriteria(int $id): void {
+        $conn = $this->em->getConnection();
+        $conn->executeStatement("DELETE FROM criteria WHERE id = :id", ['id' => $id]);
+    }
+
+    /**
+     * Get all judge-team assignments
+     */
+    public function getAssignments(): array {
+        $conn = $this->em->getConnection();
+        return $conn->executeQuery("SELECT id, judge_id as judgeId, team_id as teamId, assigned_at as assignedAt FROM judging_assignments")->fetchAllAssociative();
+    }
+
+    /**
+     * Toggle assignment for a judge and a team
+     */
+    public function toggleAssignment(int $judgeId, int $teamId): void {
+        $conn = $this->em->getConnection();
+        $existing = $conn->executeQuery(
+            "SELECT id FROM judging_assignments WHERE judge_id = :judgeId AND team_id = :teamId",
+            ['judgeId' => $judgeId, 'teamId' => $teamId]
+        )->fetchOne();
+
+        if ($existing) {
+            $conn->executeStatement("DELETE FROM judging_assignments WHERE id = :id", ['id' => $existing]);
+        } else {
+            $conn->executeStatement(
+                "INSERT INTO judging_assignments (judge_id, team_id, assigned_at) VALUES (:judgeId, :teamId, NOW())",
+                ['judgeId' => $judgeId, 'teamId' => $teamId]
+            );
+        }
+    }
+
+    /**
      * Get all criteria from db.
      */
     public function getCriteria(): array {
-        return $this->em->getConnection()->executeQuery("SELECT id, name, max_score, weight FROM criteria")->fetchAllAssociative();
+        $conn = $this->em->getConnection();
+        $criteria = $conn->executeQuery("SELECT id, name, max_score, weight FROM criteria")->fetchAllAssociative();
+        
+        if (empty($criteria)) {
+            $defaults = [
+                ['name' => 'Tính sáng tạo & thực tế', 'weight' => 0.50, 'max_score' => 10],
+                ['name' => 'Hoàn thiện kỹ thuật & UI/UX', 'weight' => 0.30, 'max_score' => 10],
+                ['name' => 'Kỹ năng thuyết trình chung kết', 'weight' => 0.20, 'max_score' => 10],
+            ];
+            foreach ($defaults as $item) {
+                $conn->executeStatement(
+                    "INSERT INTO criteria (name, weight, max_score) VALUES (?, ?, ?)",
+                    [$item['name'], $item['weight'], $item['max_score']]
+                );
+            }
+            $criteria = $conn->executeQuery("SELECT id, name, max_score, weight FROM criteria")->fetchAllAssociative();
+        }
+        
+        return $criteria;
     }
 }

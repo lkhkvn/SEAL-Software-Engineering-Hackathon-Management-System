@@ -3,13 +3,23 @@ namespace App\Presentation;
 
 use App\Services\MilestoneService;
 use App\Services\AuthService;
+use App\Services\ActivityLogService;
 use Exception;
 
 class MilestoneController {
+    private MilestoneService $milestoneService;
+    private AuthService $authService;
+    private ActivityLogService $activityLogService;
+
     public function __construct(
-        private MilestoneService $milestoneService,
-        private AuthService $authService
-    ) {}
+        MilestoneService $milestoneService,
+        AuthService $authService,
+        ActivityLogService $activityLogService
+    ) {
+        $this->milestoneService = $milestoneService;
+        $this->authService = $authService;
+        $this->activityLogService = $activityLogService;
+    }
 
     /** GET /api/hackathons/{id}/milestones */
     public function getByHackathon(int $hackathonId): void {
@@ -20,9 +30,19 @@ class MilestoneController {
 
     /** POST /api/hackathons/{id}/milestones */
     public function create(int $hackathonId): void {
-        $this->requireAdmin();
+        $currentUser = $this->requireAdmin();
         $inputData = json_decode(file_get_contents('php://input'), true) ?? [];
         $newId = $this->milestoneService->create($hackathonId, $inputData);
+
+        $this->activityLogService->logActivity(
+            $currentUser->id,
+            'CREATE',
+            'milestones',
+            $newId,
+            "Tạo mới mốc thời gian: " . ($inputData['name'] ?? '') . " cho cuộc thi ID: " . $hackathonId,
+            $_SERVER['REMOTE_ADDR'] ?? null
+        );
+
         http_response_code(201);
         echo json_encode([
             'status'  => 'success',
@@ -33,22 +53,42 @@ class MilestoneController {
 
     /** PUT /api/milestones/{id} */
     public function update(int $id): void {
-        $this->requireAdmin();
+        $currentUser = $this->requireAdmin();
         $inputData = json_decode(file_get_contents('php://input'), true) ?? [];
         $this->milestoneService->update($id, $inputData);
+
+        $this->activityLogService->logActivity(
+            $currentUser->id,
+            'UPDATE',
+            'milestones',
+            $id,
+            "Cập nhật mốc thời gian ID: " . $id . ", tên: " . ($inputData['name'] ?? ''),
+            $_SERVER['REMOTE_ADDR'] ?? null
+        );
+
         http_response_code(200);
         echo json_encode(['status' => 'success', 'message' => 'Cập nhật mốc thời gian thành công!'], JSON_UNESCAPED_UNICODE);
     }
 
     /** DELETE /api/milestones/{id} */
     public function delete(int $id): void {
-        $this->requireAdmin();
+        $currentUser = $this->requireAdmin();
         $this->milestoneService->delete($id);
+
+        $this->activityLogService->logActivity(
+            $currentUser->id,
+            'DELETE',
+            'milestones',
+            $id,
+            "Xóa mốc thời gian ID: " . $id,
+            $_SERVER['REMOTE_ADDR'] ?? null
+        );
+
         http_response_code(200);
         echo json_encode(['status' => 'success', 'message' => 'Xoá mốc thời gian thành công!'], JSON_UNESCAPED_UNICODE);
     }
 
-    private function requireAdmin(): void {
+    private function requireAdmin(): \App\Domain\Entity\User {
         $headers = getallheaders();
         $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
         if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
@@ -62,5 +102,7 @@ class MilestoneController {
             echo json_encode(['status' => 'error', 'message' => 'Chỉ Ban tổ chức (ADMIN) mới có quyền thực hiện!'], JSON_UNESCAPED_UNICODE);
             exit(0);
         }
+        return $user;
     }
 }
+
