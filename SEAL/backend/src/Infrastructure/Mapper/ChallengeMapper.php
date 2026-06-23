@@ -32,6 +32,9 @@ class ChallengeMapper
                               : null,
             fileUrl:      $model->fileUrl,
             fileName:     $model->fileName,
+            submissionDeadline: $model->submissionDeadline instanceof \DateTimeInterface
+                              ? \DateTimeImmutable::createFromInterface($model->submissionDeadline)
+                              : null,
         );
     }
 
@@ -53,6 +56,9 @@ class ChallengeMapper
                               : null;
         $m->fileUrl      = $entity->fileUrl;
         $m->fileName     = $entity->fileName;
+        $m->submissionDeadline = $entity->submissionDeadline
+                              ? \DateTime::createFromInterface($entity->submissionDeadline)
+                              : null;
 
         if ($model === null) {
             // Chỉ đặt createdAt khi tạo mới

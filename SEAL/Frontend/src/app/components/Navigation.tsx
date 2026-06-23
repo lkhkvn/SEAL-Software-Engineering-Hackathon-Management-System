@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Trophy, Calendar, Users, Settings, Home, Award, LogIn, LogOut, Upload, CheckSquare } from 'lucide-react';
+import { Trophy, Calendar, Users, Settings, Home, Award, LogIn, LogOut, Upload, CheckSquare, HelpCircle } from 'lucide-react';
 import { NotificationBell } from './NotificationBell';
 interface NavigationProps {
   currentUser: any;
@@ -11,6 +11,7 @@ export function Navigation({ currentUser, onLogout }: NavigationProps) {
 
   const isUserAdmin = currentUser && currentUser.role?.toUpperCase() === 'ADMIN';
   const isUserJudge = currentUser && (currentUser.role?.toUpperCase() === 'JUDGE' || isUserAdmin);
+  const isUserMentor = currentUser && (currentUser.role?.toUpperCase() === 'MENTOR' || isUserAdmin);
   const isParticipant = currentUser && currentUser.role?.toUpperCase() === 'PARTICIPANT';
 
   const navItems = [
@@ -20,6 +21,7 @@ export function Navigation({ currentUser, onLogout }: NavigationProps) {
     { path: '/leaderboard', icon: Award, label: 'Bảng xếp hạng' },
     ...(isParticipant ? [{ path: '/submit', icon: Upload, label: 'Nộp dự án' }] : []),
     ...(isUserJudge ? [{ path: '/judging', icon: CheckSquare, label: 'Chấm điểm' }] : []),
+    ...(isUserMentor ? [{ path: '/mentor', icon: HelpCircle, label: 'Mentor' }] : []),
     ...(isUserAdmin ? [{ path: '/admin', icon: Settings, label: 'Quản lý' }] : []),
   ];
 
@@ -33,29 +35,33 @@ export function Navigation({ currentUser, onLogout }: NavigationProps) {
   const getRoleBadge = (role: string) => {
     switch (role?.toUpperCase()) {
       case 'ADMIN':
-        return <span className="px-2 py-0.5 text-xs font-semibold text-red-700 bg-red-100 rounded-full">BTC</span>;
+        return <span className="px-2.5 py-0.5 text-[10px] uppercase font-bold text-red-600 bg-red-50 border border-red-200 rounded-full shadow-sm">Admin</span>;
       case 'JUDGE':
-        return <span className="px-2 py-0.5 text-xs font-semibold text-purple-700 bg-purple-100 rounded-full">Giám khảo</span>;
+        return <span className="px-2.5 py-0.5 text-[10px] uppercase font-bold text-purple-600 bg-purple-50 border border-purple-200 rounded-full shadow-sm">Giám khảo</span>;
+      case 'MENTOR':
+        return <span className="px-2.5 py-0.5 text-[10px] uppercase font-bold text-orange-600 bg-orange-50 border border-orange-200 rounded-full shadow-sm">Mentor</span>;
       default:
-        return <span className="px-2 py-0.5 text-xs font-semibold text-blue-700 bg-blue-100 rounded-full">Thí sinh</span>;
+        return <span className="px-2.5 py-0.5 text-[10px] uppercase font-bold text-blue-600 bg-blue-50 border border-blue-200 rounded-full shadow-sm">Thí sinh</span>;
     }
   };
 
   return (
-    <nav className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <nav className="bg-white/80 backdrop-blur-md border-b border-gray-100 sticky top-0 z-50 shadow-sm transition-all duration-300">
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           
           {/* Bên trái: Logo thương hiệu */}
           <div className="flex items-center">
-            <Link to="/" className="flex items-center gap-2 hover:opacity-90 transition-opacity">
-              <Trophy className="text-blue-600 animate-pulse" size={32} />
-              <span className="font-bold text-xl text-gray-900 tracking-wider">SEAL</span>
+            <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+              <div className="bg-gradient-to-br from-blue-600 to-indigo-600 p-1.5 rounded-lg shadow-md">
+                <Trophy className="text-white animate-pulse" size={24} />
+              </div>
+              <span className="font-extrabold text-xl bg-clip-text text-transparent bg-gradient-to-r from-blue-700 to-indigo-700 tracking-tight">SEAL</span>
             </Link>
           </div>
 
           {/* Ở giữa: Menu điều hướng chính */}
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-0.5 mx-4 overflow-x-auto hide-scrollbar">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = location.pathname === item.path;
@@ -64,18 +70,20 @@ export function Navigation({ currentUser, onLogout }: NavigationProps) {
                 <Link
                   key={item.path}
                   to={item.path}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all text-sm font-medium ${
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all text-sm font-semibold whitespace-nowrap ${
                     isActive
-                      ? 'bg-blue-50 text-blue-600 shadow-sm'
-                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                      ? 'bg-blue-600 text-white shadow-md shadow-blue-200'
+                      : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
                   }`}
                 >
-                  <Icon size={18} />
-                  <span className="hidden md:inline">{item.label}</span>
+                  <Icon size={16} />
+                  <span className="hidden lg:inline">{item.label}</span>
+                  <span className="inline lg:hidden">{item.label}</span>
                 </Link>
               );
             })}
           </div>
+          {/* Reserved for multi_replace chunk logic - this part was merged above */}
 
           {/* Bên phải: Thông tin User đăng nhập hoặc Cụm nút Đăng nhập / Đăng ký */}
           <div className="flex items-center gap-4">
@@ -95,7 +103,7 @@ export function Navigation({ currentUser, onLogout }: NavigationProps) {
                 <NotificationBell currentUser={currentUser} />
 
                 {/* Avatar tròn (Click để vào Profile) */}
-                <Link to="/profile" className="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-sm shadow-md cursor-pointer hover:scale-105 transition-transform" title="Hồ sơ cá nhân">
+                <Link to="/profile" className="w-9 h-9 rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-sm shadow-md cursor-pointer hover:shadow-lg hover:scale-105 transition-all ring-2 ring-white ring-offset-1" title="Hồ sơ cá nhân">
                   {getInitials(currentUser.username)}
                 </Link>
 

@@ -36,4 +36,7 @@ RUN composer install --no-interaction --no-scripts --prefer-dist
 # 8. Cấp quyền sở hữu thư mục cho user www-data của Apache
 RUN chown -R www-data:www-data /var/www/html
 
+# 9. Tăng giới hạn upload file trong PHP lên 50M (mặc định chỉ 2M nên hay bị lỗi)
+RUN echo "upload_max_filesize = 50M\npost_max_size = 50M" > /usr/local/etc/php/conf.d/uploads.ini
+
 EXPOSE 80

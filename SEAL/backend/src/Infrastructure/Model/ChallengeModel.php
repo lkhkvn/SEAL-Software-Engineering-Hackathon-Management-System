@@ -42,6 +42,9 @@ class ChallengeModel
     #[ORM\Column(name: 'released_at', type: 'datetime', nullable: true)]
     public ?\DateTimeInterface $releasedAt = null;
 
+    #[ORM\Column(name: 'submission_deadline', type: 'datetime', nullable: true)]
+    public ?\DateTimeInterface $submissionDeadline = null;
+
     #[ORM\Column(name: 'created_at', type: 'datetime')]
     public \DateTimeInterface $createdAt;
 

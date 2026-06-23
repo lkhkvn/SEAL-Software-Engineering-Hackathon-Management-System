@@ -3,7 +3,7 @@ import {
   Users, Search, Trophy, Code, Target, Loader2, X,
   Github, Video, FileText, User, Plus, LogIn, Sparkles,
   Copy, Check, AlertCircle, Crown, Shield, Hash,
-  Briefcase, GraduationCap, Link as LinkIcon
+  Briefcase, GraduationCap, Link as LinkIcon, HelpCircle
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Skeleton } from './ui/skeleton';
@@ -139,6 +139,76 @@ const API = 'http://localhost:8000/index.php/api';
 
 // ────────── helpers ──────────
 function getToken() { return localStorage.getItem('auth_token') || ''; }
+
+// ────────── Modal: Gọi Mentor ──────────
+function AskForHelpModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+  const [topic, setTopic] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!topic.trim()) { setError('Vui lòng nhập nội dung cần hỗ trợ.'); return; }
+    setLoading(true); setError('');
+    try {
+      const res = await fetch(`${API}/mentor/tickets`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+        body: JSON.stringify({ topic: topic.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.status === 'error') throw new Error(data.message);
+      alert('Đã gửi yêu cầu hỗ trợ tới Mentor thành công!');
+      onSuccess();
+    } catch (err: any) {
+      setError(err.message || 'Lỗi gửi yêu cầu.');
+    } finally { setLoading(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col">
+        <div className="bg-gradient-to-r from-orange-500 to-red-500 p-6 flex items-center justify-between text-white">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+              <HelpCircle size={20} />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold">Gọi Mentor Hỗ Trợ</h2>
+              <p className="text-orange-100 text-xs mt-0.5">Mô tả vấn đề đội bạn đang gặp phải</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-white/70 hover:text-white p-1">
+            <X size={20} />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {error && (
+            <div className="p-3 bg-red-50 text-red-700 rounded-xl text-sm flex gap-2 items-center">
+              <AlertCircle size={16} /> <span>{error}</span>
+            </div>
+          )}
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1.5">Vấn đề cần hỗ trợ</label>
+            <textarea
+              value={topic}
+              onChange={e => setTopic(e.target.value)}
+              placeholder="VD: Nhóm em đang bị kẹt ở phần cấu hình Docker cho database..."
+              rows={4}
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
+            />
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="flex-1 py-2.5 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 font-semibold text-sm">Hủy</button>
+            <button type="submit" disabled={loading} className="flex-1 py-2.5 bg-orange-600 text-white rounded-xl hover:bg-orange-700 disabled:opacity-60 font-semibold text-sm">
+              {loading ? 'Đang gửi...' : 'Gửi yêu cầu'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
 
 function parseJwt(token: string): any {
   try { return JSON.parse(atob(token.split('.')[1])); } catch { return {}; }
@@ -1050,6 +1120,7 @@ export function TeamsPage() {
 
   const [showCreate, setShowCreate] = useState(false);
   const [showJoin, setShowJoin] = useState(false);
+  const [showAskHelp, setShowAskHelp] = useState(false);
   const [inviteResult, setInviteResult] = useState<any | null>(null);
 
   const [isLookingForTeam, setIsLookingForTeam] = useState(false);
@@ -1258,10 +1329,18 @@ export function TeamsPage() {
                     </button>
                   </>
                 ) : (
-                  <div className="px-4 py-2.5 bg-gray-100 border border-gray-200 text-gray-700 font-bold text-sm rounded-xl flex items-center gap-1.5">
-                    {userTeam.isLeader ? <Crown size={15} className="text-yellow-500" /> : <User size={15} className="text-blue-500" />}
-                    <span>Đã tham gia: {userTeam.name}</span>
-                  </div>
+                  <>
+                    <button
+                      onClick={() => setShowAskHelp(true)}
+                      className="flex items-center gap-2 px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white font-semibold text-sm rounded-xl shadow-sm transition-colors"
+                    >
+                      <HelpCircle size={16} /> Gọi Mentor
+                    </button>
+                    <div className="px-4 py-2.5 bg-gray-100 border border-gray-200 text-gray-700 font-bold text-sm rounded-xl flex items-center gap-1.5">
+                      {userTeam.isLeader ? <Crown size={15} className="text-yellow-500" /> : <User size={15} className="text-blue-500" />}
+                      <span>Đã tham gia: {userTeam.name}</span>
+                    </div>
+                  </>
                 )}
               </div>
             )}
@@ -1502,6 +1581,7 @@ export function TeamsPage() {
       {inviteResult && <InviteCodeModal data={inviteResult} onClose={() => { setInviteResult(null); }} />}
       {selectedTeam && <TeamDetailModal team={selectedTeam} onClose={() => setSelectedTeam(null)} />}
       {showCV && <MyCVModal onClose={() => setShowCV(false)} />}
+      {showAskHelp && <AskForHelpModal onClose={() => setShowAskHelp(false)} onSuccess={() => setShowAskHelp(false)} />}
 
       {/* Modal: Xem CV Ứng Viên */}
       {selectedCV && (

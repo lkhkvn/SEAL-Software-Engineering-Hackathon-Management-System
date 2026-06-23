@@ -85,9 +85,9 @@ class AuthService
 
 
     /**
-     * Tạo tài khoản Giám khảo (JUDGE) - Chỉ Admin mới có quyền gọi
+     * Tạo tài khoản với role cụ thể (JUDGE, MENTOR) - Chỉ Admin mới có quyền gọi
      */
-    public function registerJudge(RegisterRequestDTO $dto): User
+    public function registerAccountWithRole(RegisterRequestDTO $dto, string $role): User
     {
         if (empty($dto->username)) {
             throw new Exception("Tên đăng nhập không được để trống!");
@@ -104,15 +104,15 @@ class AuthService
 
         $hashedPassword = password_hash($dto->password, PASSWORD_BCRYPT);
 
-        $judge = new User(
+        $account = new User(
             username: $dto->username,
             email:    $dto->email,
             password: $hashedPassword,
-            role:     'JUDGE'
+            role:     $role
         );
 
-        $this->userRepository->save($judge);
-        return $judge;
+        $this->userRepository->save($account);
+        return $account;
     }
 
     /**

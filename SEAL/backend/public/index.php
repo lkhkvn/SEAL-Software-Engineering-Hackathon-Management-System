@@ -44,6 +44,9 @@ use App\Services\FileUploadService;
 use App\Presentation\NotificationController;
 use App\Services\ScoreService;
 use App\Presentation\ScoreController;
+use App\Infrastructure\Persistence\DoctrineMentorTicketRepository;
+use App\Services\MentorTicketService;
+use App\Presentation\MentorController;
 
 try {
     if (file_exists(__DIR__ . '/../vendor/autoload.php')) {
@@ -91,6 +94,10 @@ try {
     
     $scoreService          = new ScoreService($entityManager);
     $scoreController       = new ScoreController($scoreService, $authService, $notificationService);
+    
+    $mentorTicketRepository = new DoctrineMentorTicketRepository($entityManager);
+    $mentorTicketService   = new MentorTicketService($mentorTicketRepository);
+    $mentorController      = new MentorController($mentorTicketService, $authService);
 
     // ============================================================================
     // ROUTER
@@ -120,8 +127,8 @@ try {
         $userController->updateCV(); exit(0);
     }
 
-    if ($path === '/api/auth/create-judge' && $method === 'POST') {
-        $authController->createJudge(); exit(0);
+    if ($path === '/api/auth/create-account' && $method === 'POST') {
+        $authController->createAccount(); exit(0);
     }
 
     // ------------------------------------------------------------------
@@ -302,6 +309,28 @@ try {
     }
     if ($path === '/api/scores' && $method === 'POST') {
         $scoreController->submitScores(); exit(0);
+    }
+
+    // ------------------------------------------------------------------
+    // MENTOR TICKET ROUTES
+    // ------------------------------------------------------------------
+    if ($path === '/api/mentor/tickets' && $method === 'POST') {
+        $mentorController->createTicket(); exit(0);
+    }
+    if ($path === '/api/mentor/tickets/team' && $method === 'GET') {
+        $mentorController->getTeamTickets(); exit(0);
+    }
+    if ($path === '/api/mentor/tickets/open' && $method === 'GET') {
+        $mentorController->getOpenTickets(); exit(0);
+    }
+    if ($path === '/api/mentor/tickets/my' && $method === 'GET') {
+        $mentorController->getMyAssignedTickets(); exit(0);
+    }
+    if (preg_match('#^/api/mentor/tickets/(\d+)/assign$#', $path, $m) && $method === 'POST') {
+        $mentorController->assignTicket((int)$m[1]); exit(0);
+    }
+    if (preg_match('#^/api/mentor/tickets/(\d+)/resolve$#', $path, $m) && $method === 'POST') {
+        $mentorController->resolveTicket((int)$m[1]); exit(0);
     }
 
     // ------------------------------------------------------------------

@@ -39,18 +39,26 @@ class AuthController {
         ], JSON_UNESCAPED_UNICODE);
     }
 
-    public function createJudge(): void {
+    public function createAccount(): void {
         $currentUser = $this->requireAdmin();
 
         $inputData = json_decode(file_get_contents('php://input'), true) ?? [];
         $dto = new RegisterRequestDTO($inputData);
-        $judge = $this->authService->registerJudge($dto);
+        $role = strtoupper($inputData['role'] ?? 'JUDGE');
+
+        if (!in_array($role, ['JUDGE', 'MENTOR'])) {
+            http_response_code(400);
+            echo json_encode(["status" => "error", "message" => "Vai trò không hợp lệ!"], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+
+        $account = $this->authService->registerAccountWithRole($dto, $role);
 
         http_response_code(201);
         echo json_encode([
             "status"  => "success",
-            "message" => "Tạo tài khoản Giám khảo thành công!",
-            "data"    => ["username" => $judge->username, "email" => $judge->email, "role" => $judge->role]
+            "message" => "Tạo tài khoản thành công!",
+            "data"    => ["username" => $account->username, "email" => $account->email, "role" => $account->role]
         ], JSON_UNESCAPED_UNICODE);
     }
 

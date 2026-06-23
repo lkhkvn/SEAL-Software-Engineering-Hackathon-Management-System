@@ -15,6 +15,7 @@ import { JudgingPage } from './components/JudgingPage';
 import { JudgingTeamsPage } from './components/JudgingTeamsPage';
 import { JudgingDetailPage } from './components/JudgingDetailPage';
 import { SubmissionPage } from './components/SubmissionPage';
+import { MentorDashboardPage } from './components/MentorDashboardPage';
 
 // Component Layout chung bọc thanh điều hướng Navigation
 function MainLayout({ currentUser, onLogout }: { currentUser: any, onLogout: () => void }) {
@@ -67,6 +68,7 @@ function AppRoutes() {
         <Route path="/judging/hackathon/:hackathonId" element={<JudgingTeamsPage />} />
         <Route path="/judging/hackathon/:hackathonId/team/:teamId" element={<JudgingDetailPage />} />
         <Route path="/submit" element={<SubmissionPage />} />
+        <Route path="/mentor" element={<MentorDashboardPage />} />
         <Route path="/admin" element={<AdminPage currentUser={currentUser} onLogout={handleLogout} />} />
       </Route>
 

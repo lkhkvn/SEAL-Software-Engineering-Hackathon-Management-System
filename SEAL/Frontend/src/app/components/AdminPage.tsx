@@ -118,6 +118,7 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
   const [userError, setUserError]       = useState<string | null>(null);
   const [searchTerm, setSearchTerm]     = useState('');
   const [updatingUserId, setUpdatingUserId] = useState<number | null>(null);
+  const [totalTeams, setTotalTeams]     = useState<number>(0);
 
   // ── Hackathons ──
   const [contests, setContests]         = useState<Hackathon[]>([]);
@@ -143,10 +144,10 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
   const [loadingTeams, setLoadingTeams] = useState(false);
   const [removingTeamId, setRemovingTeamId] = useState<number | null>(null);
 
-  // Tạo tài khoản Giám Khảo
-  const [showCreateJudgeModal, setShowCreateJudgeModal] = useState(false);
-  const [judgeForm, setJudgeForm] = useState({ username: '', email: '', password: '' });
-  const [submittingJudge, setSubmittingJudge] = useState(false);
+  // Tạo tài khoản (Giám Khảo / Mentor)
+  const [showCreateAccountModal, setShowCreateAccountModal] = useState(false);
+  const [accountForm, setAccountForm] = useState({ username: '', email: '', password: '', role: 'JUDGE' });
+  const [submittingAccount, setSubmittingAccount] = useState(false);
 
   // Toast
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -177,6 +178,8 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
     description: '',
     resources: '',
     constraints: '',
+    submissionDeadline: '',
+    scheduledReleaseTime: '',
     criteriaItems: [{ name: '', weight: 30 }],
   });
 
@@ -189,7 +192,7 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
 
   // ── Fetch users ──
   useEffect(() => {
-    if (activeTab === 'permissions' && isAdmin) fetchUsers();
+    if ((activeTab === 'permissions' || activeTab === 'overview') && isAdmin && users.length === 0) fetchUsers();
   }, [activeTab, isAdmin]);
 
   const fetchUsers = async () => {
@@ -214,6 +217,24 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
       }
     } finally {
       setLoadingUsers(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'overview' && isAdmin) {
+      fetchTeamsCount();
+    }
+  }, [activeTab, isAdmin]);
+
+  const fetchTeamsCount = async () => {
+    try {
+      const res = await fetch('http://localhost:8000/index.php/api/teams');
+      const result = await res.json();
+      if (res.ok && result.status === 'success') {
+        setTotalTeams(result.data?.length || 0);
+      }
+    } catch (e) {
+      console.error("Lỗi lấy tổng đội thi", e);
     }
   };
 
@@ -243,32 +264,33 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
     }
   };
 
-  const handleCreateJudge = async (e: React.FormEvent) => {
+  const handleCreateAccount = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!judgeForm.username || !judgeForm.email || !judgeForm.password) {
+    if (!accountForm.username || !accountForm.email || !accountForm.password) {
       toast('error', 'Vui lòng nhập đầy đủ thông tin (Tên, Email, Mật khẩu).');
       return;
     }
 
-    setSubmittingJudge(true);
+    setSubmittingAccount(true);
     try {
       const token = localStorage.getItem('auth_token');
-      const res = await fetch('http://localhost:8000/index.php/api/auth/create-judge', {
+      const res = await fetch('http://localhost:8000/index.php/api/auth/create-account', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify(judgeForm),
+        body: JSON.stringify(accountForm),
       });
       const result = await res.json();
       if (!res.ok || result.status === 'error') throw new Error(result.message);
       
-      toast('success', `Tạo tài khoản Giám khảo "${judgeForm.username}" thành công!`);
-      setShowCreateJudgeModal(false);
-      setJudgeForm({ username: '', email: '', password: '' });
+      const roleName = accountForm.role === 'JUDGE' ? 'Giám khảo' : 'Mentor';
+      toast('success', `Tạo tài khoản ${roleName} "${accountForm.username}" thành công!`);
+      setShowCreateAccountModal(false);
+      setAccountForm({ username: '', email: '', password: '', role: 'JUDGE' });
       fetchUsers(); // Tải lại danh sách
     } catch (e: any) {
-      toast('error', e.message || 'Không thể tạo tài khoản Giám khảo.');
+      toast('error', e.message || 'Không thể tạo tài khoản.');
     } finally {
-      setSubmittingJudge(false);
+      setSubmittingAccount(false);
     }
   };
 
@@ -586,6 +608,7 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
             description: d.description || '',
             resources: d.resources || '',
             constraints: d.constraints || '',
+            submissionDeadline: d.submissionDeadline ? d.submissionDeadline.slice(0, 16) : '',
             criteriaItems: Array.isArray(d.criteria) && d.criteria.length > 0
               ? d.criteria.map((c: any) => ({ name: c.name || '', weight: c.weight ?? 30 }))
               : [{ name: '', weight: 30 }],
@@ -618,6 +641,7 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
             description: challengeForm.description,
             resources: challengeForm.resources,
             constraints: challengeForm.constraints,
+            submissionDeadline: challengeForm.submissionDeadline,
             criteria_json: criteriaJson,
           }),
         }
@@ -743,11 +767,12 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
   }
 
   // ── Static data overview ──
+  const activeContestsCount = contests.filter(c => c.status === 'ACTIVE').length;
   const stats = [
-    { label: 'Tổng Hackathon',       value: String(contests.length || '—'), icon: Calendar,  color: 'blue' },
-    { label: 'Đội thi đăng ký',      value: '856',                           icon: Users,     color: 'green' },
-    { label: 'Đang diễn ra',         value: String(contests.filter(c => c.status === 'ACTIVE').length || '—'), icon: Trophy, color: 'purple' },
-    { label: 'Người dùng hệ thống',  value: String(users.length || '—'),     icon: BarChart3, color: 'orange' },
+    { label: 'Tổng Hackathon',       value: contests.length > 0 ? String(contests.length) : '0', icon: Calendar,  color: 'blue' },
+    { label: 'Đội thi đăng ký',      value: totalTeams > 0 ? String(totalTeams) : '0',           icon: Users,     color: 'green' },
+    { label: 'Đang diễn ra',         value: activeContestsCount > 0 ? String(activeContestsCount) : '0', icon: Trophy, color: 'purple' },
+    { label: 'Người dùng hệ thống',  value: users.length > 0 ? String(users.length) : '0',       icon: BarChart3, color: 'orange' },
   ];
 
   const filteredUsers    = users.filter(u =>
@@ -760,7 +785,7 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50 relative">
+    <div className="flex h-[calc(100vh-64px)] w-full bg-gray-50 overflow-hidden relative">
 
       {/* ── Toast ── */}
       {notification && (
@@ -806,28 +831,28 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
         </div>
       )}
 
-      {/* ── Create Judge Modal ── */}
-      {showCreateJudgeModal && (
+      {/* ── Create Account Modal ── */}
+      {showCreateAccountModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-gray-200 overflow-hidden">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50">
               <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
                 <Shield size={18} className="text-purple-600" />
-                Tạo tài khoản Giám khảo
+                Tạo tài khoản phân quyền
               </h3>
-              <button onClick={() => setShowCreateJudgeModal(false)} className="p-1.5 hover:bg-gray-200 rounded-lg transition-colors">
+              <button onClick={() => setShowCreateAccountModal(false)} className="p-1.5 hover:bg-gray-200 rounded-lg transition-colors">
                 <X size={20} className="text-gray-500" />
               </button>
             </div>
             
-            <form onSubmit={handleCreateJudge} className="p-6 space-y-4">
+            <form onSubmit={handleCreateAccount} className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Tên giám khảo <span className="text-red-500">*</span></label>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Tên tài khoản <span className="text-red-500">*</span></label>
                 <input
                   type="text"
                   required
-                  value={judgeForm.username}
-                  onChange={e => setJudgeForm({...judgeForm, username: e.target.value})}
+                  value={accountForm.username}
+                  onChange={e => setAccountForm({...accountForm, username: e.target.value})}
                   className="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all outline-none"
                   placeholder="VD: Nguyen Van A"
                 />
@@ -837,8 +862,8 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
                 <input
                   type="email"
                   required
-                  value={judgeForm.email}
-                  onChange={e => setJudgeForm({...judgeForm, email: e.target.value})}
+                  value={accountForm.email}
+                  onChange={e => setAccountForm({...accountForm, email: e.target.value})}
                   className="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all outline-none"
                   placeholder="email@example.com"
                 />
@@ -848,27 +873,40 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
                 <input
                   type="password"
                   required
-                  value={judgeForm.password}
-                  onChange={e => setJudgeForm({...judgeForm, password: e.target.value})}
+                  value={accountForm.password}
+                  onChange={e => setAccountForm({...accountForm, password: e.target.value})}
                   className="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all outline-none"
                   placeholder="••••••••"
                 />
               </div>
 
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Vai trò <span className="text-red-500">*</span></label>
+                <select
+                  required
+                  value={accountForm.role}
+                  onChange={e => setAccountForm({...accountForm, role: e.target.value})}
+                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all outline-none"
+                >
+                  <option value="JUDGE">Giám khảo</option>
+                  <option value="MENTOR">Mentor (Cố vấn)</option>
+                </select>
+              </div>
+
               <div className="pt-4 flex gap-3 justify-end border-t border-gray-100 mt-6">
                 <button
                   type="button"
-                  onClick={() => setShowCreateJudgeModal(false)}
+                  onClick={() => setShowCreateAccountModal(false)}
                   className="px-5 py-2.5 text-sm font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
                 >
                   Huỷ
                 </button>
                 <button
                   type="submit"
-                  disabled={submittingJudge}
+                  disabled={submittingAccount}
                   className="px-5 py-2.5 text-sm font-semibold text-white bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors flex items-center gap-2 shadow-md disabled:opacity-60"
                 >
-                  {submittingJudge ? <Loader2 className="animate-spin" size={16} /> : <CheckCircle2 size={16} />}
+                  {submittingAccount ? <Loader2 className="animate-spin" size={16} /> : <CheckCircle2 size={16} />}
                   Xác nhận tạo
                 </button>
               </div>
@@ -1093,12 +1131,21 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
                   <label className="block text-sm font-semibold text-gray-700 mb-1.5">Địa điểm</label>
                   <input
                     id="contest-location"
+                    list="locations-list"
                     type="text"
                     value={formData.location}
                     onChange={e => setFormData(p => ({ ...p, location: e.target.value }))}
                     placeholder="VD: TP. Hồ Chí Minh"
                     className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white"
                   />
+                  <datalist id="locations-list">
+                    <option value="Hà Nội" />
+                    <option value="TP. Hồ Chí Minh" />
+                    <option value="Đà Nẵng" />
+                    <option value="Cần Thơ" />
+                    <option value="Hải Phòng" />
+                    <option value="Trực tuyến (Online)" />
+                  </datalist>
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1.5">Số đội tối đa</label>
@@ -1118,12 +1165,23 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
                 <label className="block text-sm font-semibold text-gray-700 mb-1.5">Ban tổ chức</label>
                 <input
                   id="contest-organizer"
+                  list="organizers-list"
                   type="text"
                   value={formData.organizer}
                   onChange={e => setFormData(p => ({ ...p, organizer: e.target.value }))}
                   placeholder="VD: Bộ Khoa học và Công nghệ"
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white"
                 />
+                <datalist id="organizers-list">
+                  <option value="Bộ Khoa học và Công nghệ" />
+                  <option value="FPT Software" />
+                  <option value="VNG Corporation" />
+                  <option value="Viettel" />
+                  <option value="Đại học Quốc gia Hà Nội" />
+                  <option value="Đại học Quốc gia TP.HCM" />
+                  <option value="Đại học Bách Khoa" />
+                  <option value="Google Developer Groups (GDG)" />
+                </datalist>
               </div>
 
               {/* Mô tả */}
@@ -1212,50 +1270,89 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
         </div>
       )}
 
-      {/* ══════════════════ HEADER ══════════════════ */}
-      <div className="bg-white border-b border-gray-200 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Quản lý hệ thống</h1>
-              <p className="text-gray-500 mt-1">Tổng quan thông tin và kiểm soát vai trò các thành viên trong Hackathon</p>
-            </div>
-            {activeTab === 'events' && (
+      {/* ══════════════════ SIDEBAR ══════════════════ */}
+      <aside className="w-64 bg-white border-r border-gray-200 flex flex-col flex-shrink-0 hidden md:flex shadow-sm z-10">
+        <div className="p-6 border-b border-gray-100 flex-shrink-0">
+          <h2 className="text-lg font-bold text-gray-900 tracking-tight flex items-center gap-2">
+            <SettingsIcon size={20} className="text-blue-600" />
+            Quản trị hệ thống
+          </h2>
+          <p className="text-xs text-gray-500 mt-1.5 font-medium">Dashboard điều hành SEAL</p>
+        </div>
+        <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
+          {[
+            { id: 'overview', icon: BarChart3, label: 'Tổng quan' },
+            { id: 'events', icon: Calendar, label: 'Quản lý Hackathon' },
+            { id: 'permissions', icon: Shield, label: 'Phân quyền' },
+            { id: 'settings', icon: SettingsIcon, label: 'Cài đặt' }
+          ].map(tab => {
+            const Icon = tab.icon;
+            return (
               <button
-                id="btn-create-contest"
-                onClick={openCreate}
-                className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all shadow-md font-semibold text-sm cursor-pointer"
-              >
-                <Plus size={18} />
-                Tạo Hackathon mới
-              </button>
-            )}
-          </div>
-
-          <div className="flex gap-2">
-            {['overview', 'events', 'permissions', 'settings'].map(tab => (
-              <button
-                key={tab}
-                id={`admin-tab-${tab}`}
-                onClick={() => setActiveTab(tab)}
-                className={`px-4 py-2 rounded-lg font-medium transition-all text-sm cursor-pointer ${
-                  activeTab === tab
-                    ? 'bg-blue-600 text-white shadow-md'
-                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                key={tab.id}
+                id={`admin-tab-${tab.id}`}
+                onClick={() => setActiveTab(tab.id)}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all text-sm cursor-pointer ${
+                  activeTab === tab.id
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-200 translate-x-1'
+                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                 }`}
               >
-                {tab === 'overview'     && 'Tổng quan'}
-                {tab === 'events'       && 'Quản lý Hackathon'}
-                {tab === 'permissions'  && 'Phân quyền'}
-                {tab === 'settings'     && 'Cài đặt'}
+                <Icon size={18} className={activeTab === tab.id ? 'text-white' : 'text-gray-400'} />
+                {tab.label}
               </button>
-            ))}
-          </div>
-        </div>
-      </div>
+            );
+          })}
+        </nav>
+      </aside>
 
-      {/* ══════════════════ CONTENT ══════════════════ */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* ══════════════════ MAIN CONTENT AREA ══════════════════ */}
+      <main className="flex-1 flex flex-col h-full overflow-hidden bg-gray-50">
+        
+        {/* Top Header of Main Area */}
+        <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between shadow-sm flex-shrink-0 z-10">
+          <div>
+            <h1 className="text-xl font-bold text-gray-900 tracking-tight">
+              {activeTab === 'overview' && 'Tổng quan hệ thống'}
+              {activeTab === 'events' && 'Quản lý Hackathon'}
+              {activeTab === 'permissions' && 'Phân quyền thành viên'}
+              {activeTab === 'settings' && 'Cài đặt chung'}
+            </h1>
+          </div>
+          {activeTab === 'events' && (
+            <button
+              id="btn-create-contest"
+              onClick={openCreate}
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all shadow-md font-semibold text-sm cursor-pointer"
+            >
+              <Plus size={18} />
+              Tạo Hackathon
+            </button>
+          )}
+        </header>
+
+        {/* Mobile Fallback Navigation */}
+        <div className="md:hidden flex gap-2 px-4 py-3 bg-white border-b border-gray-200 overflow-x-auto hide-scrollbar flex-shrink-0 shadow-sm">
+          {['overview', 'events', 'permissions', 'settings'].map(tab => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-4 py-2 rounded-lg font-medium transition-all text-xs whitespace-nowrap cursor-pointer ${
+                activeTab === tab
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-200'
+                  : 'text-gray-600 bg-gray-50 hover:bg-gray-100 hover:text-gray-900'
+              }`}
+            >
+              {tab === 'overview'     && 'Tổng quan'}
+              {tab === 'events'       && 'Hackathon'}
+              {tab === 'permissions'  && 'Phân quyền'}
+              {tab === 'settings'     && 'Cài đặt'}
+            </button>
+          ))}
+        </div>
+
+        {/* Scrollable Content Body */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
 
         {/* ── Tab: Tổng quan ── */}
         {activeTab === 'overview' && (
@@ -1503,10 +1600,10 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
                     />
                   </div>
                   <button
-                    onClick={() => setShowCreateJudgeModal(true)}
+                    onClick={() => setShowCreateAccountModal(true)}
                     className="flex-shrink-0 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-semibold flex items-center justify-center gap-2 shadow-sm"
                   >
-                    <Plus size={16} /> Tạo Giám khảo
+                    <Plus size={16} /> Tạo Giám khảo / Mentor
                   </button>
                 </div>
               </div>
@@ -1584,6 +1681,7 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
                                 >
                                   <option value="PARTICIPANT">Thí sinh (PARTICIPANT)</option>
                                   <option value="JUDGE">Giám khảo (JUDGE)</option>
+                                  <option value="MENTOR">Cố vấn (MENTOR)</option>
                                   <option value="ADMIN">Ban tổ chức (ADMIN)</option>
                                 </select>
                               )}
@@ -1731,6 +1829,15 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
                               />
                             </div>
                             <div>
+                              <label className="block text-xs font-bold text-gray-700 mb-1.5 text-left">Thời gian công bố đề bài (Dự kiến)</label>
+                              <input
+                                type="datetime-local"
+                                value={challengeForm.scheduledReleaseTime || ''}
+                                onChange={e => setChallengeForm(p => ({ ...p, scheduledReleaseTime: e.target.value }))}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-orange-400 focus:outline-none"
+                              />
+                            </div>
+                            <div>
                               <label className="block text-xs font-bold text-gray-700 mb-1.5 text-left">Nội dung / Mô tả chi tiết *</label>
                               <textarea
                                 rows={6}
@@ -1764,9 +1871,9 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
                                   Tải lên file
                                   <input type="file" className="hidden" accept=".pdf,.zip,.docx" onChange={handleFileUpload} disabled={uploadingFile} />
                                 </label>
-                                {challenge?.fileUrl ? (
-                                  <a href={`http://localhost:8000${challenge.fileUrl}`} target="_blank" rel="noreferrer" className="text-sm text-blue-600 hover:underline flex-1 truncate text-left">
-                                    {challenge.fileName || 'Đã đính kèm file'}
+                                {challenge?.file_url ? (
+                                  <a href={`http://localhost:8000${challenge.file_url}`} target="_blank" rel="noreferrer" className="text-sm text-blue-600 hover:underline flex-1 truncate text-left">
+                                    {challenge.file_name || 'Đã đính kèm file'}
                                   </a>
                                 ) : (
                                   <span className="text-xs text-gray-500 italic">Chưa có file đính kèm</span>
@@ -2150,7 +2257,8 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
             </div>
           </div>
         )}
-      </div>
+        </div>
+      </main>
     </div>
   );
 }

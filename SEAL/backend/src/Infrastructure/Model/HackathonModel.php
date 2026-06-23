@@ -31,6 +31,9 @@ class HackathonModel
     #[ORM\Column(type: 'datetime', nullable: true)]
     public ?\DateTimeInterface $registrationEnd = null;
 
+    #[ORM\Column(name: 'submission_deadline', type: 'datetime', nullable: true)]
+    public ?\DateTimeInterface $submissionDeadline = null;
+
     #[ORM\Column(type: 'string', length: 50, options: ['default' => 'UPCOMING'])]
     public string $status = 'UPCOMING';
 

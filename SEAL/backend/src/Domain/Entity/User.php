@@ -33,6 +33,11 @@ class User
         return strtoupper($this->role) === 'JUDGE'; 
     }
 
+    public function isMentor(): bool 
+    { 
+        return strtoupper($this->role) === 'MENTOR'; 
+    }
+
     public function verifyPassword(string $password): bool 
     {
         return password_verify($password, $this->password);

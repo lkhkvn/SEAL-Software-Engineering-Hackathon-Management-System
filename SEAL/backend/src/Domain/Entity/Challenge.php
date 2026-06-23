@@ -20,6 +20,7 @@ class Challenge
         public readonly ?\DateTimeInterface $createdAt  = null,
         public readonly ?string $fileUrl      = null,   // URL file đề bài
         public readonly ?string $fileName     = null,   // Tên gốc file
+        public readonly ?\DateTimeInterface $submissionDeadline = null, // Hạn nộp bài
     ) {}
 
     /**
@@ -50,6 +51,7 @@ class Challenge
             createdAt:    $this->createdAt,
             fileUrl:      $this->fileUrl,
             fileName:     $this->fileName,
+            submissionDeadline: $this->submissionDeadline,
         );
     }
 }

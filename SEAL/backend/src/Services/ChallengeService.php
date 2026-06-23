@@ -40,6 +40,7 @@ class ChallengeService
                 createdAt:    $existing->createdAt,
                 fileUrl:      $existing->fileUrl,   // giữ nguyên file_url cũ khi upsert text
                 fileName:     $existing->fileName,
+                submissionDeadline: !empty($data['submissionDeadline']) ? new \DateTimeImmutable($data['submissionDeadline']) : $existing->submissionDeadline,
             );
             $this->challengeRepository->update($updated);
             return ['id' => $existing->id, 'action' => 'updated'];
@@ -54,6 +55,7 @@ class ChallengeService
             resources:    trim($data['resources']    ?? '') ?: null,
             constraints:  trim($data['constraints']  ?? '') ?: null,
             criteriaJson: $data['criteria_json']     ?? null,
+            submissionDeadline: !empty($data['submissionDeadline']) ? new \DateTimeImmutable($data['submissionDeadline']) : null,
         );
 
         if (empty($newChallenge->title)) {
@@ -83,6 +85,7 @@ class ChallengeService
                 createdAt:    null,
                 fileUrl:      $fileUrl,
                 fileName:     $fileName,
+                submissionDeadline: null,
             );
             $this->challengeRepository->save($draftChallenge);
             return;
@@ -100,6 +103,7 @@ class ChallengeService
             createdAt:    $existing->createdAt,
             fileUrl:      $fileUrl,
             fileName:     $fileName,
+            submissionDeadline: $existing->submissionDeadline,
         );
         $this->challengeRepository->update($updated);
     }
@@ -171,6 +175,7 @@ class ChallengeService
             'start_date'   => $contest['start_date'],
             'file_url'     => $challenge->fileUrl,
             'file_name'    => $challenge->fileName,
+            'submissionDeadline' => $challenge->submissionDeadline?->format('c'),
         ];
     }
 
@@ -210,6 +215,7 @@ class ChallengeService
             'start_date'    => $contest['start_date'],
             'file_url'      => $challenge->fileUrl,
             'file_name'     => $challenge->fileName,
+            'submissionDeadline' => $challenge->submissionDeadline?->format('c'),
         ];
     }
 

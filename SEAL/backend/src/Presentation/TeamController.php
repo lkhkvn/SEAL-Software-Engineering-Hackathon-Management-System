@@ -761,14 +761,24 @@ class TeamController {
             }
 
             // Kiểm tra deadline
-            $contest = $conn->executeQuery("SELECT end_date FROM contests WHERE id = :contestId", ['contestId' => $contestId])->fetchAssociative();
-            if ($contest) {
-                $endDate = new \DateTime($contest['end_date']);
-                $endDate->setTime(23, 59, 59);
-                if (new \DateTime() > $endDate) {
+            $challenge = $conn->executeQuery("SELECT submission_deadline FROM contest_problems WHERE contest_id = :contestId", ['contestId' => $contestId])->fetchAssociative();
+            if ($challenge && !empty($challenge['submission_deadline'])) {
+                $deadline = new \DateTime($challenge['submission_deadline']);
+                if (new \DateTime() > $deadline) {
                     http_response_code(400);
                     echo json_encode(["status" => "error", "message" => "Đã hết hạn nộp bài cho sự kiện này!"], JSON_UNESCAPED_UNICODE);
                     return;
+                }
+            } else {
+                $contest = $conn->executeQuery("SELECT end_date FROM contests WHERE id = :contestId", ['contestId' => $contestId])->fetchAssociative();
+                if ($contest) {
+                    $endDate = new \DateTime($contest['end_date']);
+                    $endDate->setTime(23, 59, 59);
+                    if (new \DateTime() > $endDate) {
+                        http_response_code(400);
+                        echo json_encode(["status" => "error", "message" => "Đã hết hạn nộp bài cho sự kiện này!"], JSON_UNESCAPED_UNICODE);
+                        return;
+                    }
                 }
             }
 

@@ -45,7 +45,7 @@ class AdminUserController {
             throw new Exception("Thiếu thông tin userId hoặc vai trò (role)!");
         }
 
-        $allowedRoles = ['ADMIN', 'JUDGE', 'PARTICIPANT'];
+        $allowedRoles = ['ADMIN', 'JUDGE', 'PARTICIPANT', 'MENTOR'];
         if (!in_array(strtoupper($newRole), $allowedRoles)) {
             throw new Exception("Vai trò mới không hợp lệ!");
         }
