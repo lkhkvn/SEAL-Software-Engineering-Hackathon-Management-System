@@ -105,11 +105,7 @@ CREATE TABLE `contest_registrations` (
 
 LOCK TABLES `contest_registrations` WRITE;
 /*!40000 ALTER TABLE `contest_registrations` DISABLE KEYS */;
-<<<<<<< HEAD
-INSERT INTO `contest_registrations` VALUES (1,9,1,'2026-06-08 08:32:07'),(2,9,2,'2026-06-08 14:49:46'),(3,9,5,'2026-06-21 18:24:19');
-=======
-INSERT INTO `contest_registrations` (`id`, `contest_id`, `team_id`, `registered_at`) VALUES (1,9,1,'2026-06-08 08:32:07'),(2,9,2,'2026-06-08 14:49:46');
->>>>>>> eb0977fe0ac8bb475e4fdfffaa1ce7bff0cb7962
+INSERT INTO `contest_registrations` (`id`, `contest_id`, `team_id`, `registered_at`) VALUES (1,9,1,'2026-06-08 08:32:07'),(2,9,2,'2026-06-08 14:49:46'),(3,9,5,'2026-06-21 18:24:19');
 /*!40000 ALTER TABLE `contest_registrations` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -188,33 +184,6 @@ UNLOCK TABLES;
 --
 
 DROP TABLE IF EXISTS `hackathons`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
-CREATE TABLE `hackathons` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `name` varchar(255) NOT NULL,
-  `description` longtext,
-  `startDate` datetime DEFAULT NULL,
-  `endDate` datetime DEFAULT NULL,
-  `registrationStart` datetime DEFAULT NULL,
-  `registrationEnd` datetime DEFAULT NULL,
-  `submission_deadline` datetime DEFAULT NULL,
-  `status` varchar(50) NOT NULL DEFAULT 'UPCOMING',
-  `category` varchar(50) DEFAULT NULL,
-  `location` varchar(255) DEFAULT NULL,
-  `max_teams` int DEFAULT NULL,
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
--- Dumping data for table `hackathons`
---
-
-LOCK TABLES `hackathons` WRITE;
-/*!40000 ALTER TABLE `hackathons` DISABLE KEYS */;
-/*!40000 ALTER TABLE `hackathons` ENABLE KEYS */;
-UNLOCK TABLES;
 
 --
 -- Table structure for table `judging_assignments`
@@ -560,11 +529,7 @@ CREATE TABLE `users` (
 
 LOCK TABLES `users` WRITE;
 /*!40000 ALTER TABLE `users` DISABLE KEYS */;
-<<<<<<< HEAD
-INSERT INTO `users` VALUES (7,'Nguyễn Văn A','khiem100705@gmail.com','$2y$10$0Lj4uQWYVDK4hWn1vsAtNe3V5D60ty2r5ZfXSgNPX6wwPCYpVHmL.','PARTICIPANT',NULL,'React, MySQL, PostgreSQL, Django, Python',3,0,NULL,NULL,NULL,NULL,'ocean'),(8,'Admin Hệ Thống','admin1@gmail.com','$2y$10$W.AAB4MaV2AqEqnlagLDwOmAJ4MdVErgWSh1aJ8p96fs78rRAVexG','ADMIN',NULL,NULL,NULL,0,NULL,NULL,NULL,NULL,'ocean'),(9,'Nguyen Van B','khiemlam10072005@gmail.com','$2y$10$QGQKiAeiaeErehG42kTH5.EvjhCH77MMhL3jw/pX8RK13E.m25F8S','PARTICIPANT',NULL,'Angular, Next.js, Docker, Spring Boot, Python',4,0,NULL,NULL,NULL,NULL,'ocean'),(10,'Nguyen Quoc Danh','nguyenquocdanh@gmail.com','$2y$10$O4YgrDnIh1AyYKQEQ5O1lOHSvI2GH44oiaSVPCeSvsH4Eejj0gUGi','JUDGE',NULL,NULL,NULL,0,NULL,NULL,NULL,NULL,'ocean'),(11,'Nguyen Van C','lamkhiem10062005@gmail.com','$2y$10$AV1SBO0K8o6TzNpS.B.7mODZb2goob34TsrqSOTjIDB/E5TFPpl1u','PARTICIPANT',NULL,'React, Next.js, Node.js, TypeScript, MySQL, Spring Boot, Python',5,0,NULL,NULL,NULL,NULL,'ocean'),(12,'test1','test1@test.com','$2y$10$93Wc3HPRFbBWXXY7XAQvLOviIpdCa0ydchPuhcJNbv/kZb6NMrrou','JUDGE',NULL,NULL,NULL,0,NULL,NULL,NULL,NULL,'ocean'),(13,'mentor1','mentor1@gmail.com','$2y$10$IgJaYMDaH2/dTBMkiHf39ee0M8cdbHD/ZoIOn88E63uQ4PzrH4d3m','MENTOR',NULL,NULL,NULL,0,NULL,NULL,NULL,NULL,'ocean');
-=======
-INSERT INTO `users` (`id`, `name`, `email`, `password`, `role`, `phone`, `skills`, `team_id`, `is_looking_for_team`) VALUES (1,'Khiêm Lâm','admin@gmail.com','$2y$10$sCMOe2mqYu5oLAkcu8VGn..5KKbyEXUYhH1iQs2FIimW2P04n8IVW','PARTICIPANT',NULL,NULL,NULL,0),(2,'Admin 1','admin1@gmail.com','$2y$10$DVaLzfjRI/P7M4SXt72wTu75VM/zZaVMwJOmUzaOnZoqXahjhawQu','ADMIN',NULL,NULL,NULL,1),(3,'Quoc Danh','danh@gmail.com','$2y$10$TLhgxOftfwnhmzwLOjTnwe4OiYi0YUa.9k0BQGi9dYZfd1vShSsMe','PARTICIPANT',NULL,NULL,NULL,0),(4,'Nguyen Van E','lamkhiem100305@gmail.com','$2y$10$BIA8vuh2eVrtpDPlcOtVE.WVqFd0I.f12NbuRI2NLMId3DvDFzR9q','PARTICIPANT',NULL,'Next.js, React, MySQL, Docker, Spring Boot, Python',1,1),(5,'Nguyen Van F','lamkhiem100405@gmail.com','$2y$10$5k7vrvb4HGiG1UawRqOJP.jv8NiiofpnVmfB8QKMHkc.VwKgTROIe','PARTICIPANT',NULL,NULL,1,0),(6,'Nguyễn Văn P','khiem@gmail.com','$2y$10$xxq36wt0omYEUq9fxl.X6O/TV2Lt6psfevIojoExe7v/MANjbwMJC','PARTICIPANT',NULL,'MySQL, React, Spring Boot, Python, Docker',2,0);
->>>>>>> eb0977fe0ac8bb475e4fdfffaa1ce7bff0cb7962
+INSERT INTO `users` (`id`, `name`, `email`, `password`, `role`, `phone`, `skills`, `team_id`, `is_looking_for_team`, `cv_summary`, `cv_education`, `cv_experience`, `cv_portfolio_url`, `cv_theme`) VALUES (1,'Khiêm Lâm','admin@gmail.com','$2y$10$sCMOe2mqYu5oLAkcu8VGn..5KKbyEXUYhH1iQs2FIimW2P04n8IVW','PARTICIPANT',NULL,NULL,NULL,0,NULL,NULL,NULL,NULL,'ocean'),(2,'Admin 1','admin2@gmail.com','$2y$10$DVaLzfjRI/P7M4SXt72wTu75VM/zZaVMwJOmUzaOnZoqXahjhawQu','ADMIN',NULL,NULL,NULL,1,NULL,NULL,NULL,NULL,'ocean'),(3,'Quoc Danh','danh@gmail.com','$2y$10$TLhgxOftfwnhmzwLOjTnwe4OiYi0YUa.9k0BQGi9dYZfd1vShSsMe','PARTICIPANT',NULL,NULL,NULL,0,NULL,NULL,NULL,NULL,'ocean'),(4,'Nguyen Van E','lamkhiem100305@gmail.com','$2y$10$BIA8vuh2eVrtpDPlcOtVE.WVqFd0I.f12NbuRI2NLMId3DvDFzR9q','PARTICIPANT',NULL,'Next.js, React, MySQL, Docker, Spring Boot, Python',1,1,NULL,NULL,NULL,NULL,'ocean'),(5,'Nguyen Van F','lamkhiem100405@gmail.com','$2y$10$5k7vrvb4HGiG1UawRqOJP.jv8NiiofpnVmfB8QKMHkc.VwKgTROIe','PARTICIPANT',NULL,NULL,1,0,NULL,NULL,NULL,NULL,'ocean'),(6,'Nguyễn Văn P','khiem@gmail.com','$2y$10$xxq36wt0omYEUq9fxl.X6O/TV2Lt6psfevIojoExe7v/MANjbwMJC','PARTICIPANT',NULL,'MySQL, React, Spring Boot, Python, Docker',2,0,NULL,NULL,NULL,NULL,'ocean'),(7,'Nguyễn Văn A','khiem100705@gmail.com','$2y$10$0Lj4uQWYVDK4hWn1vsAtNe3V5D60ty2r5ZfXSgNPX6wwPCYpVHmL.','PARTICIPANT',NULL,'React, MySQL, PostgreSQL, Django, Python',3,0,NULL,NULL,NULL,NULL,'ocean'),(8,'Admin Hệ Thống','admin1@gmail.com','$2y$10$W.AAB4MaV2AqEqnlagLDwOmAJ4MdVErgWSh1aJ8p96fs78rRAVexG','ADMIN',NULL,NULL,NULL,0,NULL,NULL,NULL,NULL,'ocean'),(9,'Nguyen Van B','khiemlam10072005@gmail.com','$2y$10$QGQKiAeiaeErehG42kTH5.EvjhCH77MMhL3jw/pX8RK13E.m25F8S','PARTICIPANT',NULL,'Angular, Next.js, Docker, Spring Boot, Python',4,0,NULL,NULL,NULL,NULL,'ocean'),(10,'Nguyen Quoc Danh','nguyenquocdanh@gmail.com','$2y$10$O4YgrDnIh1AyYKQEQ5O1lOHSvI2GH44oiaSVPCeSvsH4Eejj0gUGi','JUDGE',NULL,NULL,NULL,0,NULL,NULL,NULL,NULL,'ocean'),(11,'Nguyen Van C','lamkhiem10062005@gmail.com','$2y$10$AV1SBO0K8o6TzNpS.B.7mODZb2goob34TsrqSOTjIDB/E5TFPpl1u','PARTICIPANT',NULL,'React, Next.js, Node.js, TypeScript, MySQL, Spring Boot, Python',5,0,NULL,NULL,NULL,NULL,'ocean'),(12,'test1','test1@test.com','$2y$10$93Wc3HPRFbBWXXY7XAQvLOviIpdCa0ydchPuhcJNbv/kZb6NMrrou','JUDGE',NULL,NULL,NULL,0,NULL,NULL,NULL,NULL,'ocean'),(13,'mentor1','mentor1@gmail.com','$2y$10$IgJaYMDaH2/dTBMkiHf39ee0M8cdbHD/ZoIOn88E63uQ4PzrH4d3m','MENTOR',NULL,NULL,NULL,0,NULL,NULL,NULL,NULL,'ocean');
 /*!40000 ALTER TABLE `users` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -638,9 +603,4 @@ CREATE TABLE `admin_activity_logs` (
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
-<<<<<<< HEAD
 -- Dump completed on 2026-06-23  5:21:11
-=======
--- Dump completed on 2026-06-09 14:16:07
-
->>>>>>> eb0977fe0ac8bb475e4fdfffaa1ce7bff0cb7962
