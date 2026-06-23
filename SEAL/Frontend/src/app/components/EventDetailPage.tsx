@@ -200,19 +200,24 @@ export function EventDetailPage() {
 
         // Lấy đề bài (nếu đã release)
         try {
-          const challRes = await fetch(`http://localhost:8000/index.php/api/hackathons/${id}/challenge`);
-          if (challRes.ok) {
-            const challData = await challRes.json();
-            if (challData.status === 'success') {
-              setChallenge(challData.data);
-            }
+          const headers: Record<string, string> = {};
+          if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+          }
+          const challRes = await fetch(`http://localhost:8000/index.php/api/hackathons/${id}/challenge`, {
+            headers
+          });
+          const challData = await challRes.json();
+          if (challRes.ok && challData.status === 'success') {
+            setChallenge(challData.data);
+          } else {
+            setChallenge({ available: false, message: challData.message || 'Bạn không có quyền xem đề bài.' });
           }
         } catch (e) {
           // Ignored
         }
 
         // Kiểm tra xem đội hiện tại đã đăng ký chưa
-        const token = localStorage.getItem('auth_token');
         if (token) {
           try {
             const contestsRes = await fetch(`${API}/teams/my-team/contests`, { headers: { Authorization: `Bearer ${token}` } });
@@ -834,8 +839,12 @@ export function EventDetailPage() {
                     ) : (
                       <div className="py-12 text-center">
                         <Lock size={48} className="mx-auto text-gray-300 mb-4" />
-                        <h3 className="text-lg font-semibold text-gray-900 mb-2">Đề bài chưa được công bố</h3>
-                        <p className="text-gray-500">Đề bài sẽ được mở khóa khi cuộc thi chính thức bắt đầu.</p>
+                        <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                          {challenge?.message ? 'Không thể xem đề bài' : 'Đề bài chưa được công bố'}
+                        </h3>
+                        <p className="text-gray-500 max-w-md mx-auto">
+                          {challenge?.message || 'Đề bài sẽ được mở khóa khi cuộc thi chính thức bắt đầu.'}
+                        </p>
                       </div>
                     )}
                   </div>

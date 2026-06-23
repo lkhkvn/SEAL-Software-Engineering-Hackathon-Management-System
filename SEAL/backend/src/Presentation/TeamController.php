@@ -782,15 +782,21 @@ class TeamController {
                 }
             }
 
-            // Kiểm tra đăng ký sự kiện
-            $registration = $conn->executeQuery("SELECT id FROM contest_registrations WHERE team_id = :teamId AND contest_id = :contestId", [
+            // Kiểm tra đăng ký sự kiện và trạng thái duyệt
+            $registration = $conn->executeQuery("SELECT status FROM contest_registrations WHERE team_id = :teamId AND contest_id = :contestId", [
                 'teamId' => $currentUser->teamId,
                 'contestId' => $contestId
-            ])->fetchOne();
+            ])->fetchAssociative();
 
             if (!$registration) {
                 http_response_code(403);
                 echo json_encode(["status" => "error", "message" => "Đội của bạn chưa đăng ký tham gia sự kiện này!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            if ($registration['status'] !== 'APPROVED') {
+                http_response_code(403);
+                echo json_encode(["status" => "error", "message" => "Đăng ký của đội bạn hiện đang chờ duyệt hoặc đã bị từ chối!"], JSON_UNESCAPED_UNICODE);
                 return;
             }
 
@@ -881,8 +887,26 @@ class TeamController {
                 return;
             }
 
-
             $conn = $this->em->getConnection();
+
+            // Kiểm tra đăng ký sự kiện và trạng thái duyệt
+            $registration = $conn->executeQuery("SELECT status FROM contest_registrations WHERE team_id = :teamId AND contest_id = :contestId", [
+                'teamId' => $currentUser->teamId,
+                'contestId' => $contestId
+            ])->fetchAssociative();
+
+            if (!$registration) {
+                http_response_code(403);
+                echo json_encode(["status" => "error", "message" => "Đội của bạn chưa đăng ký tham gia sự kiện này!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            if ($registration['status'] !== 'APPROVED') {
+                http_response_code(403);
+                echo json_encode(["status" => "error", "message" => "Đăng ký của đội bạn hiện đang chờ duyệt hoặc đã bị từ chối!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
             $submission = $conn->executeQuery("SELECT project_name as projectName, description, github_url as githubUrl, demo_video_url as demoVideoUrl, file_url as fileUrl FROM submissions WHERE team_id = :teamId AND contest_id = :contestId", [
                 'teamId' => $currentUser->teamId,
                 'contestId' => $contestId
@@ -902,6 +926,225 @@ class TeamController {
         }
     }
 
+    
+    /**
+     * POST /api/teams/{id}/members - Add a member to a team (leader only)
+     */
+    public function addMember(int $teamId): void {
+        try {
+            $currentUser = $this->requireCurrentUser();
+            // Ensure current user is the leader of the team
+            $conn = $this->em->getConnection();
+            $team = $conn->executeQuery("SELECT leader_id, max_members FROM teams WHERE id = :teamId", ['teamId' => $teamId])->fetchAssociative();
+            if (!$team) {
+                http_response_code(404);
+                echo json_encode(["status" => "error", "message" => "Đội không tồn tại!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            if ((int)$team['leader_id'] !== $currentUser->id && !$currentUser->isAdmin()) {
+                http_response_code(403);
+                echo json_encode(["status" => "error", "message" => "Bạn không có quyền thêm thành viên!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            $input = json_decode(file_get_contents('php://input'), true) ?? [];
+            $userId = (int)($input['userId'] ?? 0);
+            if ($userId <= 0) {
+                http_response_code(400);
+                echo json_encode(["status" => "error", "message" => "userId không hợp lệ!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            // Check if user already in a team
+            $existingTeam = $conn->executeQuery("SELECT team_id FROM users WHERE id = :userId", ['userId' => $userId])->fetchOne();
+            if ($existingTeam !== null) {
+                http_response_code(400);
+                echo json_encode(["status" => "error", "message" => "Thành viên này đã thuộc một đội khác!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            // Check max members
+            $memberCount = $conn->executeQuery("SELECT COUNT(*) FROM team_members tm WHERE tm.team_id = :teamId", ['teamId' => $teamId])->fetchOne();
+            if ($memberCount >= $team['max_members']) {
+                http_response_code(400);
+                echo json_encode(["status" => "error", "message" => "Đội đã đạt số lượng thành viên tối đa!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            // Add member
+            $conn->beginTransaction();
+            $conn->executeStatement("INSERT INTO team_members (team_id, user_id, role_in_team) VALUES (:teamId, :userId, 'MEMBER')", ['teamId' => $teamId, 'userId' => $userId]);
+            $conn->executeStatement("UPDATE users SET team_id = :teamId WHERE id = :userId", ['teamId' => $teamId, 'userId' => $userId]);
+            $conn->commit();
+            http_response_code(201);
+            echo json_encode(["status" => "success", "message" => "Thêm thành viên thành công!"] , JSON_UNESCAPED_UNICODE);
+        } catch (\Exception $e) {
+            if (isset($conn) && $conn->isTransactionActive()) {
+                $conn->rollBack();
+            }
+            http_response_code(400);
+            echo json_encode(["status" => "error", "message" => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        }
+    }
+
+    /**
+     * DELETE /api/teams/{id}/members/{userId} - Remove a member (leader or self)
+     */
+    public function removeMember(int $teamId, int $userId): void {
+        try {
+            $currentUser = $this->requireCurrentUser();
+            $conn = $this->em->getConnection();
+            $team = $conn->executeQuery("SELECT leader_id FROM teams WHERE id = :teamId", ['teamId' => $teamId])->fetchAssociative();
+            if (!$team) {
+                http_response_code(404);
+                echo json_encode(["status" => "error", "message" => "Đội không tồn tại!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            // Permission: leader can remove any member, member can remove self, admin can remove anyone
+            $isLeader = ((int)$team['leader_id'] === $currentUser->id);
+            $isSelf = ($currentUser->id === $userId);
+            if (!($isLeader || $isSelf || $currentUser->isAdmin())) {
+                http_response_code(403);
+                echo json_encode(["status" => "error", "message" => "Bạn không có quyền xóa thành viên này!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            // Ensure the user is actually a member of the team
+            $memberExists = $conn->executeQuery("SELECT id FROM team_members WHERE team_id = :teamId AND user_id = :userId", ['teamId' => $teamId, 'userId' => $userId])->fetchOne();
+            if (!$memberExists) {
+                http_response_code(400);
+                echo json_encode(["status" => "error", "message" => "Thành viên không thuộc đội này!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            $conn->beginTransaction();
+            // Delete from team_members
+            $conn->executeStatement("DELETE FROM team_members WHERE team_id = :teamId AND user_id = :userId", ['teamId' => $teamId, 'userId' => $userId]);
+            // Reset user's team_id
+            $conn->executeStatement("UPDATE users SET team_id = NULL WHERE id = :userId", ['userId' => $userId]);
+            // If the removed member was the leader, optionally transfer leadership to null (or keep unchanged, here we keep unchanged)
+            $conn->commit();
+            http_response_code(200);
+            echo json_encode(["status" => "success", "message" => "Xóa thành viên thành công!"], JSON_UNESCAPED_UNICODE);
+        } catch (\Exception $e) {
+            if (isset($conn) && $conn->isTransactionActive()) {
+                $conn->rollBack();
+            }
+            http_response_code(400);
+            echo json_encode(["status" => "error", "message" => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        }
+    }
+
+    /**
+     * DELETE /api/teams/{id} - Delete a team (leader or admin)
+     */
+    public function deleteTeam(int $teamId): void {
+        try {
+            $currentUser = $this->requireCurrentUser();
+            $conn = $this->em->getConnection();
+            $team = $conn->executeQuery("SELECT leader_id FROM teams WHERE id = :teamId", ['teamId' => $teamId])->fetchAssociative();
+            if (!$team) {
+                http_response_code(404);
+                echo json_encode(["status" => "error", "message" => "Đội không tồn tại!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            if ((int)$team['leader_id'] !== $currentUser->id && !$currentUser->isAdmin()) {
+                http_response_code(403);
+                echo json_encode(["status" => "error", "message" => "Bạn không có quyền xóa đội này!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            $conn->beginTransaction();
+            // Remove members and reset their team_id
+            $conn->executeStatement("UPDATE users SET team_id = NULL WHERE team_id = :teamId", ['teamId' => $teamId]);
+            $conn->executeStatement("DELETE FROM team_members WHERE team_id = :teamId", ['teamId' => $teamId]);
+            // Delete pending join requests
+            $conn->executeStatement("DELETE FROM team_join_requests WHERE team_id = :teamId", ['teamId' => $teamId]);
+            // Finally delete the team
+            $conn->executeStatement("DELETE FROM teams WHERE id = :teamId", ['teamId' => $teamId]);
+            $conn->commit();
+            http_response_code(200);
+            echo json_encode(["status" => "success", "message" => "Xóa đội thành công!"] , JSON_UNESCAPED_UNICODE);
+        } catch (\Exception $e) {
+            if (isset($conn) && $conn->isTransactionActive()) {
+                $conn->rollBack();
+            }
+            http_response_code(400);
+            echo json_encode(["status" => "error", "message" => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        }
+    }
+
+    /**
+     * POST /api/teams/{id}/leave - Member leaves the team (or leader can disband)
+     */
+    public function leaveTeam(int $teamId): void {
+        try {
+            $currentUser = $this->requireCurrentUser();
+            $conn = $this->em->getConnection();
+            $team = $conn->executeQuery("SELECT leader_id FROM teams WHERE id = :teamId", ['teamId' => $teamId])->fetchAssociative();
+            if (!$team) {
+                http_response_code(404);
+                echo json_encode(["status" => "error", "message" => "Đội không tồn tại!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            $isLeader = ((int)$team['leader_id'] === $currentUser->id);
+            // If leader leaves, we treat as team deletion (optional). Here we prevent leader from leaving without assigning new leader.
+            if ($isLeader) {
+                http_response_code(400);
+                echo json_encode(["status" => "error", "message" => "Trưởng nhóm không thể rời đội mà không chuyển quyền!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            // Remove member from team
+            $this->removeMember($teamId, $currentUser->id);
+        } catch (\Exception $e) {
+            http_response_code(400);
+            echo json_encode(["status" => "error", "message" => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        }
+    }
+
+    /**
+     * PUT /api/teams/{id}/leader - Assign new leader (current leader only)
+     */
+    public function changeLeader(int $teamId): void {
+        try {
+            $currentUser = $this->requireCurrentUser();
+            $conn = $this->em->getConnection();
+            $team = $conn->executeQuery("SELECT leader_id FROM teams WHERE id = :teamId", ['teamId' => $teamId])->fetchAssociative();
+            if (!$team) {
+                http_response_code(404);
+                echo json_encode(["status" => "error", "message" => "Đội không tồn tại!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            if ((int)$team['leader_id'] !== $currentUser->id && !$currentUser->isAdmin()) {
+                http_response_code(403);
+                echo json_encode(["status" => "error", "message" => "Bạn không có quyền chuyển trưởng nhóm!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            $input = json_decode(file_get_contents('php://input'), true) ?? [];
+            $newLeaderId = (int)($input['newLeaderId'] ?? 0);
+            if ($newLeaderId <= 0) {
+                http_response_code(400);
+                echo json_encode(["status" => "error", "message" => "newLeaderId không hợp lệ!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            // Verify new leader is a member of the team
+            $memberCheck = $conn->executeQuery("SELECT id FROM team_members WHERE team_id = :teamId AND user_id = :userId", ['teamId' => $teamId, 'userId' => $newLeaderId])->fetchOne();
+            if (!$memberCheck) {
+                http_response_code(400);
+                echo json_encode(["status" => "error", "message" => "Người dùng không phải là thành viên của đội!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            $conn->beginTransaction();
+            // Update role of previous leader to MEMBER
+            $conn->executeStatement("UPDATE team_members SET role_in_team = 'MEMBER' WHERE team_id = :teamId AND user_id = :oldLeaderId", ['teamId' => $teamId, 'oldLeaderId' => $team['leader_id']]);
+            // Update new leader role
+            $conn->executeStatement("UPDATE team_members SET role_in_team = 'LEAD' WHERE team_id = :teamId AND user_id = :newLeaderId", ['teamId' => $teamId, 'newLeaderId' => $newLeaderId]);
+            // Update teams table
+            $conn->executeStatement("UPDATE teams SET leader_id = :newLeaderId WHERE id = :teamId", ['newLeaderId' => $newLeaderId, 'teamId' => $teamId]);
+            $conn->commit();
+            http_response_code(200);
+            echo json_encode(["status" => "success", "message" => "Đổi trưởng nhóm thành công!"] , JSON_UNESCAPED_UNICODE);
+        } catch (\Exception $e) {
+            if (isset($conn) && $conn->isTransactionActive()) {
+                $conn->rollBack();
+            }
+            http_response_code(400);
+            echo json_encode(["status" => "error", "message" => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        }
+    }
     public function getMyTeamContests(): void {
         try {
             $headers = getallheaders();

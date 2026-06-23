@@ -22,10 +22,10 @@ class ScheduleModel
     #[ORM\Column(type: 'text', nullable: true)]
     public ?string $description = null;
 
-    #[ORM\Column(type: 'datetime')]
+    #[ORM\Column(name: 'start_time', type: 'datetime')]
     public \DateTimeInterface $startTime;
 
-    #[ORM\Column(type: 'datetime', nullable: true)]
+    #[ORM\Column(name: 'end_time', type: 'datetime', nullable: true)]
     public ?\DateTimeInterface $endTime = null;
 
     #[ORM\Column(type: 'string', length: 255, nullable: true)]

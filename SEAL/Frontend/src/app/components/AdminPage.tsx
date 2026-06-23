@@ -29,6 +29,18 @@ import {
   PlayCircle,
   UploadCloud
 } from 'lucide-react';
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip as ChartTooltip,
+  Legend,
+  Cell,
+  PieChart,
+  Pie
+} from 'recharts';
 
 interface AdminPageProps {
   currentUser: any;
@@ -112,6 +124,13 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
 
+  // ── Nhật ký hoạt động ──
+  const [logs, setLogs] = useState<any[]>([]);
+  const [loadingLogs, setLoadingLogs] = useState(false);
+  const [logsSearchTerm, setLogsSearchTerm] = useState('');
+  const [logsActionFilter, setLogsActionFilter] = useState('');
+  const [logsTypeFilter, setLogsTypeFilter] = useState('');
+
   // ── Phân quyền ──
   const [users, setUsers]               = useState<any[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
@@ -143,6 +162,7 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
   const [registeredTeams, setRegisteredTeams] = useState<any[]>([]);
   const [loadingTeams, setLoadingTeams] = useState(false);
   const [removingTeamId, setRemovingTeamId] = useState<number | null>(null);
+  const [processingRegId, setProcessingRegId] = useState<number | null>(null);
 
   // Tạo tài khoản (Giám Khảo / Mentor)
   const [showCreateAccountModal, setShowCreateAccountModal] = useState(false);
@@ -183,6 +203,19 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
     criteriaItems: [{ name: '', weight: 30 }],
   });
 
+  // ── Criteria Management ──
+  const [criteriaList, setCriteriaList] = useState<any[]>([]);
+  const [loadingCriteria, setLoadingCriteria] = useState(false);
+  const [submittingCriteria, setSubmittingCriteria] = useState(false);
+  const [criteriaForm, setCriteriaForm] = useState({ name: '', weight: 20, maxScore: 10 });
+
+  // ── Judging Assignments ──
+  const [assignments, setAssignments] = useState<any[]>([]);
+  const [loadingAssignments, setLoadingAssignments] = useState(false);
+  const [teamsList, setTeamsList] = useState<any[]>([]);
+  const [selectedJudgeForAssignments, setSelectedJudgeForAssignments] = useState<any | null>(null);
+  const [showAssignmentsModal, setShowAssignmentsModal] = useState(false);
+
   const isAdmin = currentUser && currentUser.role?.toUpperCase() === 'ADMIN';
 
   const toast = (type: 'success' | 'error', message: string) => {
@@ -190,10 +223,168 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
     setTimeout(() => setNotification(null), 4000);
   };
 
-  // ── Fetch users ──
+  // ── Fetch users, criteria, assignments & teams ──
   useEffect(() => {
-    if ((activeTab === 'permissions' || activeTab === 'overview') && isAdmin && users.length === 0) fetchUsers();
+    if ((activeTab === 'permissions' || activeTab === 'overview') && isAdmin && users.length === 0) {
+      fetchUsers();
+    }
+    if (activeTab === 'permissions' && isAdmin) {
+      fetchAssignments();
+      fetchTeams();
+    }
+    if (activeTab === 'settings' && isAdmin) {
+      fetchCriteria();
+    }
+    if (activeTab === 'logs' && isAdmin) {
+      fetchLogs();
+    }
   }, [activeTab, isAdmin]);
+
+  const fetchLogs = async () => {
+    setLoadingLogs(true);
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch('http://localhost:8000/index.php/api/admin/activity-logs', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const result = await res.json();
+      if (res.ok && result.status === 'success') {
+        setLogs(result.data || []);
+      }
+    } catch (e) {
+      console.error('Lỗi tải nhật ký hoạt động:', e);
+    } finally {
+      setLoadingLogs(false);
+    }
+  };
+
+  const fetchCriteria = async () => {
+    setLoadingCriteria(true);
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch('http://localhost:8000/index.php/api/admin/criteria', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const result = await res.json();
+      if (res.ok && result.status === 'success') {
+        setCriteriaList(result.data || []);
+      }
+    } catch (e) {
+      console.error('Lỗi tải tiêu chí:', e);
+    } finally {
+      setLoadingCriteria(false);
+    }
+  };
+
+  const handleCreateCriteria = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!criteriaForm.name.trim() || criteriaForm.weight <= 0) {
+      toast('error', 'Vui lòng nhập tên tiêu chí và trọng số hợp lệ.');
+      return;
+    }
+    setSubmittingCriteria(true);
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch('http://localhost:8000/index.php/api/admin/criteria', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          name: criteriaForm.name,
+          weight: criteriaForm.weight / 100, // decimal weight
+          maxScore: criteriaForm.maxScore
+        })
+      });
+      const result = await res.json();
+      if (!res.ok || result.status === 'error') throw new Error(result.message);
+      toast('success', 'Thêm tiêu chí chấm điểm mới thành công!');
+      setCriteriaForm({ name: '', weight: 20, maxScore: 10 });
+      fetchCriteria();
+    } catch (e: any) {
+      toast('error', e.message || 'Không thể thêm tiêu chí.');
+    } finally {
+      setSubmittingCriteria(false);
+    }
+  };
+
+  const handleDeleteCriteria = async (id: number) => {
+    if (!confirm('Bạn có chắc muốn xóa tiêu chí chấm điểm này?')) return;
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch(`http://localhost:8000/index.php/api/admin/criteria/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const result = await res.json();
+      if (!res.ok || result.status === 'error') throw new Error(result.message);
+      toast('success', 'Đã xóa tiêu chí chấm điểm thành công!');
+      fetchCriteria();
+    } catch (e: any) {
+      toast('error', e.message || 'Không thể xóa tiêu chí.');
+    }
+  };
+
+  const fetchAssignments = async () => {
+    setLoadingAssignments(true);
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch('http://localhost:8000/index.php/api/admin/assignments', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const result = await res.json();
+      if (res.ok && result.status === 'success') {
+        setAssignments(result.data || []);
+      }
+    } catch (e) {
+      console.error('Lỗi tải danh sách phân công:', e);
+    } finally {
+      setLoadingAssignments(false);
+    }
+  };
+
+  const fetchTeams = async () => {
+    try {
+      const res = await fetch('http://localhost:8000/index.php/api/teams');
+      const result = await res.json();
+      if (res.ok && result.status === 'success') {
+        setTeamsList(result.data || []);
+      }
+    } catch (e) {
+      console.error('Lỗi tải danh sách đội thi:', e);
+    }
+  };
+
+  const handleToggleAssignment = async (judgeId: number, teamId: number) => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch('http://localhost:8000/index.php/api/admin/assignments/toggle', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ judgeId, teamId })
+      });
+      const result = await res.json();
+      if (res.ok && result.status === 'success') {
+        setAssignments(prev => {
+          const exists = prev.some(a => Number(a.judgeId) === judgeId && Number(a.teamId) === teamId);
+          if (exists) {
+            return prev.filter(a => !(Number(a.judgeId) === judgeId && Number(a.teamId) === teamId));
+          } else {
+            return [...prev, { judgeId, teamId }];
+          }
+        });
+        toast('success', 'Cập nhật phân công chấm thi thành công!');
+      } else {
+        throw new Error(result.message);
+      }
+    } catch (e: any) {
+      toast('error', e.message || 'Lỗi khi cập nhật phân công.');
+    }
+  };
 
   const fetchUsers = async () => {
     setLoadingUsers(true);
@@ -472,6 +663,46 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
       toast('error', e.message || 'Không thể xoá đội thi.');
     } finally {
       setRemovingTeamId(null);
+    }
+  };
+
+  const handleApproveRegistration = async (teamId: number) => {
+    if (!selectedHackathonForTeams) return;
+    setProcessingRegId(teamId);
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch(`http://localhost:8000/index.php/api/admin/hackathons/${selectedHackathonForTeams.id}/teams/${teamId}/approve`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const result = await res.json();
+      if (!res.ok || result.status === 'error') throw new Error(result.message);
+      toast('success', 'Đã duyệt đội thi đăng ký thành công!');
+      setRegisteredTeams(prev => prev.map(t => t.id === teamId ? { ...t, status: 'APPROVED' } : t));
+    } catch (e: any) {
+      toast('error', e.message || 'Lỗi khi duyệt đội thi.');
+    } finally {
+      setProcessingRegId(null);
+    }
+  };
+
+  const handleRejectRegistration = async (teamId: number) => {
+    if (!selectedHackathonForTeams) return;
+    setProcessingRegId(teamId);
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch(`http://localhost:8000/index.php/api/admin/hackathons/${selectedHackathonForTeams.id}/teams/${teamId}/reject`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const result = await res.json();
+      if (!res.ok || result.status === 'error') throw new Error(result.message);
+      toast('success', 'Đã từ chối đơn đăng ký đội thi!');
+      setRegisteredTeams(prev => prev.map(t => t.id === teamId ? { ...t, status: 'REJECTED' } : t));
+    } catch (e: any) {
+      toast('error', e.message || 'Lỗi khi từ chối đội thi.');
+    } finally {
+      setProcessingRegId(null);
     }
   };
 
@@ -948,8 +1179,9 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
                         <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Tên Đội</th>
                         <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Đội Trưởng</th>
                         <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Mô tả</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Trạng thái</th>
                         <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Đăng ký lúc</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-24">Thao tác</th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-48">Thao tác</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -963,19 +1195,74 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
                           <td className="px-4 py-3 text-sm text-gray-500 max-w-[200px] truncate" title={team.description}>
                             {team.description || '-'}
                           </td>
+                          <td className="px-4 py-3 text-sm">
+                            <span className={`px-2.5 py-1 text-xs font-semibold rounded-full border ${
+                              team.status === 'APPROVED' ? 'bg-green-50 text-green-700 border-green-200' :
+                              team.status === 'REJECTED' ? 'bg-red-50 text-red-700 border-red-200' :
+                              'bg-yellow-50 text-yellow-700 border-yellow-200'
+                            }`}>
+                              {team.status === 'APPROVED' ? 'Đã duyệt' :
+                               team.status === 'REJECTED' ? 'Từ chối' : 'Chờ duyệt'}
+                            </span>
+                          </td>
                           <td className="px-4 py-3 text-sm text-gray-500">
                             {new Date(team.registered_at).toLocaleString('vi-VN')}
                           </td>
                           <td className="px-4 py-3 text-center">
-                            <button
-                              onClick={() => handleRemoveTeam(team.id)}
-                              disabled={removingTeamId === team.id}
-                              className="px-3 py-1.5 bg-red-50 text-red-600 rounded hover:bg-red-100 transition-colors text-xs font-semibold flex items-center gap-1 mx-auto disabled:opacity-50 cursor-pointer"
-                              title="Xoá đội khỏi sự kiện"
-                            >
-                              {removingTeamId === team.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-                              Xoá
-                            </button>
+                            <div className="flex items-center justify-center gap-1.5">
+                              {(team.status === 'PENDING' || !team.status) && (
+                                <>
+                                  <button
+                                    onClick={() => handleApproveRegistration(team.id)}
+                                    disabled={processingRegId === team.id}
+                                    className="px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors text-xs font-semibold flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                                    title="Duyệt tham gia"
+                                  >
+                                    {processingRegId === team.id ? <Loader2 size={12} className="animate-spin" /> : null}
+                                    Duyệt
+                                  </button>
+                                  <button
+                                    onClick={() => handleRejectRegistration(team.id)}
+                                    disabled={processingRegId === team.id}
+                                    className="px-2 py-1 bg-amber-500 text-white rounded hover:bg-amber-600 transition-colors text-xs font-semibold flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                                    title="Từ chối tham gia"
+                                  >
+                                    {processingRegId === team.id ? <Loader2 size={12} className="animate-spin" /> : null}
+                                    Từ chối
+                                  </button>
+                                </>
+                              )}
+                              {team.status === 'APPROVED' && (
+                                <button
+                                  onClick={() => handleRejectRegistration(team.id)}
+                                  disabled={processingRegId === team.id}
+                                  className="px-2 py-1 bg-amber-500 text-white rounded hover:bg-amber-600 transition-colors text-xs font-semibold flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                                  title="Từ chối tham gia"
+                                >
+                                  {processingRegId === team.id ? <Loader2 size={12} className="animate-spin" /> : null}
+                                  Từ chối
+                                </button>
+                              )}
+                              {team.status === 'REJECTED' && (
+                                <button
+                                  onClick={() => handleApproveRegistration(team.id)}
+                                  disabled={processingRegId === team.id}
+                                  className="px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors text-xs font-semibold flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                                  title="Duyệt tham gia"
+                                >
+                                  {processingRegId === team.id ? <Loader2 size={12} className="animate-spin" /> : null}
+                                  Duyệt
+                                </button>
+                              )}
+                              <button
+                                onClick={() => handleRemoveTeam(team.id)}
+                                disabled={removingTeamId === team.id}
+                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors cursor-pointer disabled:opacity-50"
+                                title="Xoá đội khỏi sự kiện"
+                              >
+                                {removingTeamId === team.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -1355,26 +1642,120 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
 
         {/* ── Tab: Tổng quan ── */}
-        {activeTab === 'overview' && (
-          <div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-              {stats.map((stat, i) => {
-                const Icon = stat.icon;
-                return (
-                  <div key={i} className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-lg transition-all hover:-translate-y-0.5">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600">
-                        <Icon size={24} />
-                      </div>
-                    </div>
-                    <div className="text-3xl font-bold text-gray-900 mb-1 tracking-tight">{stat.value}</div>
-                    <div className="text-gray-500 text-sm font-medium">{stat.label}</div>
-                  </div>
-                );
-              })}
-            </div>
+        {activeTab === 'overview' && (() => {
+          const categoryData = CATEGORIES.map(cat => ({
+            name: cat,
+            count: contests.filter(c => c.category === cat).length
+          })).filter(item => item.count > 0 || item.name === 'AI & ML' || item.name === 'Healthcare' || item.name === 'Education');
 
-            {/* Danh sách cuộc thi gần đây */}
+          const statusData = [
+            { name: 'Sắp diễn ra', value: contests.filter(c => c.status === 'UPCOMING').length, color: '#3B82F6' },
+            { name: 'Đang diễn ra', value: contests.filter(c => c.status === 'ACTIVE').length, color: '#10B981' },
+            { name: 'Đã kết thúc', value: contests.filter(c => c.status === 'COMPLETED').length, color: '#6B7280' },
+            { name: 'Đã huỷ', value: contests.filter(c => c.status === 'CANCELLED').length, color: '#EF4444' }
+          ].filter(item => item.value > 0);
+
+          return (
+            <div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                {stats.map((stat, i) => {
+                  const Icon = stat.icon;
+                  return (
+                    <div key={i} className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-lg transition-all hover:-translate-y-0.5">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600">
+                          <Icon size={24} />
+                        </div>
+                      </div>
+                      <div className="text-3xl font-bold text-gray-900 mb-1 tracking-tight">{stat.value}</div>
+                      <div className="text-gray-500 text-sm font-medium">{stat.label}</div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* ── Thống kê trực quan (Charts Section) ── */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                {/* Cột 1 & 2: Biểu đồ cột phân loại */}
+                <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm lg:col-span-2 text-left">
+                  <h3 className="text-base font-bold text-gray-900 mb-4">Phân bố Hackathon theo Danh mục</h3>
+                  <div className="h-64">
+                    {contests.length === 0 ? (
+                      <div className="h-full flex items-center justify-center text-gray-400 text-sm italic">
+                        Chưa có dữ liệu thống kê
+                      </div>
+                    ) : (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={categoryData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                          <XAxis dataKey="name" stroke="#9CA3AF" fontSize={11} tickLine={false} />
+                          <YAxis stroke="#9CA3AF" fontSize={11} tickLine={false} allowDecimals={false} />
+                          <ChartTooltip 
+                            contentStyle={{ background: '#FFF', border: '1px solid #E5E7EB', borderRadius: '8px', fontSize: '12px' }}
+                            labelStyle={{ fontWeight: 'bold', color: '#111827' }}
+                          />
+                          <Bar dataKey="count" radius={[4, 4, 0, 0]} fill="#3B82F6" barSize={32}>
+                            {categoryData.map((entry, index) => {
+                              const colors = ['#3B82F6', '#8B5CF6', '#EC4899', '#10B981', '#F59E0B', '#EF4444', '#14B8A6'];
+                              return <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />;
+                            })}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    )}
+                  </div>
+                </div>
+
+                {/* Cột 3: Biểu đồ tròn trạng thái */}
+                <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm text-left">
+                  <h3 className="text-base font-bold text-gray-900 mb-4">Tỷ lệ trạng thái sự kiện</h3>
+                  <div className="h-64 flex flex-col justify-between">
+                    {contests.length === 0 ? (
+                      <div className="h-full flex items-center justify-center text-gray-400 text-sm italic">
+                        Chưa có dữ liệu thống kê
+                      </div>
+                    ) : statusData.length === 0 ? (
+                      <div className="h-full flex items-center justify-center text-gray-400 text-sm italic">
+                        Không có trạng thái hợp lệ
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex-1 min-h-0">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie
+                                data={statusData}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={60}
+                                outerRadius={80}
+                                paddingAngle={4}
+                                dataKey="value"
+                              >
+                                {statusData.map((entry, index) => (
+                                  <Cell key={`cell-${index}`} fill={entry.color} />
+                                ))}
+                              </Pie>
+                              <ChartTooltip
+                                contentStyle={{ background: '#FFF', border: '1px solid #E5E7EB', borderRadius: '8px', fontSize: '12px' }}
+                              />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        </div>
+                        <div className="flex flex-wrap gap-x-4 gap-y-1.5 justify-center mt-2 border-t border-gray-100 pt-3">
+                          {statusData.map((item, idx) => (
+                            <div key={idx} className="flex items-center gap-1.5 text-xs font-semibold text-gray-600">
+                              <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: item.color }}></span>
+                              <span>{item.name}: {item.value}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Danh sách cuộc thi gần đây */}
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
               <div className="p-6 border-b border-gray-200 flex items-center justify-between">
                 <h2 className="text-xl font-bold text-gray-900">Hackathon gần đây</h2>
@@ -1417,7 +1798,8 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
               </div>
             </div>
           </div>
-        )}
+        );
+      })()}
 
         {/* ── Tab: Quản lý Hackathon (CRUD) ── */}
         {activeTab === 'events' && (
@@ -1634,6 +2016,7 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
                         <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Email</th>
                         <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Vai trò hiện tại</th>
                         <th className="px-6 py-4 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider w-56">Phân quyền vai trò</th>
+                        <th className="px-6 py-4 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider w-40">Phân công</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
@@ -1686,11 +2069,27 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
                                 </select>
                               )}
                             </td>
+                            <td className="px-6 py-4 text-center">
+                              {user.role?.toUpperCase() === 'JUDGE' ? (
+                                <button
+                                  onClick={() => {
+                                    setSelectedJudgeForAssignments(user);
+                                    setShowAssignmentsModal(true);
+                                  }}
+                                  className="px-3 py-1.5 bg-purple-50 text-purple-600 border border-purple-200 hover:bg-purple-100 transition-colors text-xs font-semibold rounded shadow-sm inline-flex items-center gap-1 cursor-pointer"
+                                >
+                                  <Award size={13} />
+                                  Chấm đội thi
+                                </button>
+                              ) : (
+                                <span className="text-gray-400 text-xs italic">—</span>
+                              )}
+                            </td>
                           </tr>
                         ))
                       ) : (
                         <tr>
-                          <td colSpan={5} className="px-6 py-12 text-center text-gray-500 text-sm">
+                          <td colSpan={6} className="px-6 py-12 text-center text-gray-500 text-sm">
                             Không tìm thấy thành viên nào phù hợp với từ khoá tìm kiếm.
                           </td>
                         </tr>
@@ -1705,11 +2104,336 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
 
         {/* ── Tab: Cài đặt ── */}
         {activeTab === 'settings' && (
-          <div className="bg-white rounded-xl border border-gray-200 p-8 shadow-sm">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Cài đặt hệ thống</h2>
-            <p className="text-gray-500">Tính năng cài đặt đang được phát triển...</p>
+          <div className="space-y-6">
+            <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+              <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2 mb-2">
+                <SettingsIcon className="text-blue-600" size={22} />
+                Quản lý Tiêu chí chấm điểm toàn cục
+              </h2>
+              <p className="text-sm text-gray-500 mb-6">
+                Thiết lập các tiêu chí chấm điểm (như Tính sáng tạo, Kỹ thuật...) để Giám khảo sử dụng khi đánh giá các đội thi.
+              </p>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Form thêm tiêu chí */}
+                <div className="bg-gray-50 p-5 rounded-xl border border-gray-200 self-start">
+                  <h3 className="font-bold text-gray-900 text-sm mb-4 text-left">Thêm tiêu chí mới</h3>
+                  <form onSubmit={handleCreateCriteria} className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 mb-1.5 text-left">Tên tiêu chí *</label>
+                      <input
+                        type="text"
+                        required
+                        value={criteriaForm.name}
+                        onChange={e => setCriteriaForm(p => ({ ...p, name: e.target.value }))}
+                        placeholder="VD: Tính thực tiễn, Sáng tạo..."
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-bold text-gray-700 mb-1.5 text-left">Trọng số (%) *</label>
+                        <input
+                          type="number"
+                          required
+                          min={1}
+                          max={100}
+                          value={criteriaForm.weight}
+                          onChange={e => setCriteriaForm(p => ({ ...p, weight: Number(e.target.value) }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none text-center"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-gray-700 mb-1.5 text-left">Điểm tối đa *</label>
+                        <input
+                          type="number"
+                          required
+                          min={1}
+                          value={criteriaForm.maxScore}
+                          onChange={e => setCriteriaForm(p => ({ ...p, maxScore: Number(e.target.value) }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none text-center"
+                        />
+                      </div>
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={submittingCriteria}
+                      className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-lg font-bold text-xs shadow transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      {submittingCriteria ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+                      Thêm tiêu chí
+                    </button>
+                  </form>
+                </div>
+
+                {/* Danh sách tiêu chí */}
+                <div className="lg:col-span-2 space-y-4">
+                  {loadingCriteria ? (
+                    <div className="flex flex-col items-center justify-center py-12 gap-2 text-gray-500 text-sm">
+                      <Loader2 className="animate-spin text-blue-600" size={24} />
+                      <span>Đang tải danh sách tiêu chí...</span>
+                    </div>
+                  ) : criteriaList.length === 0 ? (
+                    <div className="text-center py-12 border border-dashed border-gray-300 rounded-xl">
+                      <SettingsIcon size={40} className="mx-auto text-gray-300 mb-2" />
+                      <p className="text-gray-500 text-sm font-medium">Chưa có tiêu chí nào được thiết lập.</p>
+                      <p className="text-gray-400 text-xs mt-1">Giám khảo sẽ không thể chấm điểm nếu không có tiêu chí.</p>
+                    </div>
+                  ) : (
+                    <div className="border border-gray-150 rounded-xl overflow-hidden shadow-sm bg-white">
+                      <table className="w-full border-collapse">
+                        <thead className="bg-gray-50 border-b border-gray-200">
+                          <tr>
+                            <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Tên tiêu chí</th>
+                            <th className="px-4 py-3 text-center text-xs font-bold text-gray-500 uppercase">Trọng số</th>
+                            <th className="px-4 py-3 text-center text-xs font-bold text-gray-500 uppercase">Điểm tối đa</th>
+                            <th className="px-4 py-3 text-center text-xs font-bold text-gray-500 uppercase w-20">Thao tác</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-150">
+                          {criteriaList.map(crit => (
+                            <tr key={crit.id} className="hover:bg-gray-50 transition-colors">
+                              <td className="px-4 py-3.5 text-sm font-semibold text-gray-800 text-left">{crit.name}</td>
+                              <td className="px-4 py-3.5 text-sm font-medium text-gray-600 text-center">
+                                {Math.round(parseFloat(crit.weight) * 100)}%
+                              </td>
+                              <td className="px-4 py-3.5 text-sm font-medium text-gray-600 text-center">{crit.max_score}</td>
+                              <td className="px-4 py-3.5 text-center">
+                                <button
+                                  onClick={() => handleDeleteCriteria(crit.id)}
+                                  className="p-1 text-gray-400 hover:text-red-500 transition-colors cursor-pointer"
+                                  title="Xoá tiêu chí"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <div className="bg-gray-50 px-4 py-3 border-t border-gray-200 flex justify-between items-center text-xs font-bold">
+                        <span className="text-gray-600">Tổng trọng số:</span>
+                        {(() => {
+                          const totalW = criteriaList.reduce((sum, item) => sum + Math.round(parseFloat(item.weight) * 100), 0);
+                          return (
+                            <span className={totalW === 100 ? 'text-green-600' : 'text-red-500'}>
+                              {totalW}% {totalW === 100 ? '✓' : '(Yêu cầu phải bằng 100%)'}
+                            </span>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         )}
+
+        {/* ── Tab: Nhật ký hoạt động ── */}
+        {activeTab === 'logs' && (
+          <div className="space-y-6">
+            <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+                <div className="text-left">
+                  <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2 mb-2">
+                    <FileText className="text-blue-600" size={22} />
+                    Nhật ký hoạt động của Admin
+                  </h2>
+                  <p className="text-sm text-gray-500">
+                    Theo dõi lịch sử các thao tác thay đổi dữ liệu, đăng nhập và đăng xuất của Ban tổ chức.
+                  </p>
+                </div>
+                <button
+                  onClick={fetchLogs}
+                  disabled={loadingLogs}
+                  className="flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 text-sm font-semibold rounded-lg bg-white hover:bg-gray-50 text-gray-700 transition-colors disabled:opacity-50"
+                >
+                  {loadingLogs ? <Loader2 className="animate-spin" size={16} /> : <Search size={16} />}
+                  Làm mới
+                </button>
+              </div>
+
+              {/* Bộ lọc & Tìm kiếm */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Search className="text-gray-400" size={18} />
+                  </span>
+                  <input
+                    type="text"
+                    value={logsSearchTerm}
+                    onChange={e => setLogsSearchTerm(e.target.value)}
+                    placeholder="Tìm theo mô tả, tên admin..."
+                    className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <select
+                    value={logsActionFilter}
+                    onChange={e => setLogsActionFilter(e.target.value)}
+                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-left"
+                  >
+                    <option value="">Tất cả hành động</option>
+                    <option value="LOGIN">Đăng nhập (LOGIN)</option>
+                    <option value="LOGOUT">Đăng xuất (LOGOUT)</option>
+                    <option value="CREATE">Tạo mới (CREATE)</option>
+                    <option value="UPDATE">Cập nhật (UPDATE)</option>
+                    <option value="DELETE">Xóa (DELETE)</option>
+                    <option value="APPROVE_TEAM">Duyệt đội thi</option>
+                    <option value="REJECT_TEAM">Từ chối đội thi</option>
+                    <option value="REMOVE_TEAM">Xóa đội thi khỏi cuộc thi</option>
+                    <option value="RELEASE_CHALLENGE">Phát đề thi</option>
+                    <option value="UPLOAD_FILE">Tải lên file</option>
+                    <option value="ASSIGN_JUDGE">Phân công giám khảo</option>
+                  </select>
+                </div>
+                <div>
+                  <select
+                    value={logsTypeFilter}
+                    onChange={e => setLogsTypeFilter(e.target.value)}
+                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-left"
+                  >
+                    <option value="">Tất cả đối tượng tác động</option>
+                    <option value="users">Người dùng / Giám khảo</option>
+                    <option value="contests">Cuộc thi (Contest)</option>
+                    <option value="teams">Đội thi (Team)</option>
+                    <option value="contest_problems">Đề thi (Challenge)</option>
+                    <option value="milestones">Mốc thời gian (Milestone)</option>
+                    <option value="schedules">Lịch trình (Schedule)</option>
+                    <option value="criteria">Tiêu chí chấm điểm</option>
+                    <option value="judging_assignments">Phân công chấm thi</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Danh sách log */}
+              {loadingLogs ? (
+                <div className="flex flex-col items-center justify-center py-16 gap-3">
+                  <Loader2 className="animate-spin text-blue-600" size={32} />
+                  <span className="text-sm text-gray-500">Đang tải nhật ký hoạt động...</span>
+                </div>
+              ) : (() => {
+                const filteredLogs = logs.filter(log => {
+                  const matchesSearch = 
+                    (log.description || '').toLowerCase().includes(logsSearchTerm.toLowerCase()) ||
+                    (log.adminName || '').toLowerCase().includes(logsSearchTerm.toLowerCase()) ||
+                    (log.adminEmail || '').toLowerCase().includes(logsSearchTerm.toLowerCase());
+                  const matchesAction = !logsActionFilter || log.action === logsActionFilter;
+                  const matchesType = !logsTypeFilter || log.targetType === logsTypeFilter;
+                  return matchesSearch && matchesAction && matchesType;
+                });
+
+                if (filteredLogs.length === 0) {
+                  return (
+                    <div className="text-center py-16 border border-dashed border-gray-300 rounded-xl">
+                      <FileText size={48} className="mx-auto text-gray-300 mb-3" />
+                      <p className="text-gray-500 font-medium">Không tìm thấy hoạt động nào phù hợp.</p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="border border-gray-200 rounded-xl overflow-hidden shadow-sm bg-white">
+                    <div className="overflow-x-auto">
+                      <table className="w-full border-collapse">
+                        <thead className="bg-gray-50 border-b border-gray-200">
+                          <tr>
+                            <th className="px-6 py-3.5 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Thời gian</th>
+                            <th className="px-6 py-3.5 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Người thực hiện</th>
+                            <th className="px-6 py-3.5 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Hành động</th>
+                            <th className="px-6 py-3.5 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Mô tả chi tiết</th>
+                            <th className="px-6 py-3.5 text-left text-xs font-bold text-gray-500 uppercase tracking-wider w-32">Địa chỉ IP</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-150">
+                          {filteredLogs.map(log => {
+                            let actionColor = 'bg-gray-100 text-gray-800 border-gray-200';
+                            let actionLabel = log.action;
+                            
+                            switch (log.action) {
+                              case 'LOGIN':
+                                actionColor = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+                                actionLabel = 'Đăng nhập';
+                                break;
+                              case 'LOGOUT':
+                                actionColor = 'bg-gray-50 text-gray-600 border-gray-200';
+                                actionLabel = 'Đăng xuất';
+                                break;
+                              case 'CREATE':
+                                actionColor = 'bg-blue-50 text-blue-700 border-blue-200';
+                                actionLabel = 'Tạo mới';
+                                break;
+                              case 'UPDATE':
+                                actionColor = 'bg-indigo-50 text-indigo-700 border-indigo-200';
+                                actionLabel = 'Cập nhật';
+                                break;
+                              case 'DELETE':
+                                actionColor = 'bg-red-50 text-red-700 border-red-200';
+                                actionLabel = 'Xóa vĩnh viễn';
+                                break;
+                              case 'APPROVE_TEAM':
+                                actionColor = 'bg-green-50 text-green-700 border-green-200';
+                                actionLabel = 'Duyệt đội thi';
+                                break;
+                              case 'REJECT_TEAM':
+                                actionColor = 'bg-amber-50 text-amber-700 border-amber-200';
+                                actionLabel = 'Từ chối đội';
+                                break;
+                              case 'REMOVE_TEAM':
+                                actionColor = 'bg-rose-50 text-rose-700 border-rose-200';
+                                actionLabel = 'Loại đội thi';
+                                break;
+                              case 'RELEASE_CHALLENGE':
+                                actionColor = 'bg-orange-50 text-orange-700 border-orange-200';
+                                actionLabel = 'Phát đề thi';
+                                break;
+                              case 'UPLOAD_FILE':
+                                actionColor = 'bg-cyan-50 text-cyan-700 border-cyan-200';
+                                actionLabel = 'Tải lên file';
+                                break;
+                              case 'ASSIGN_JUDGE':
+                                actionColor = 'bg-purple-50 text-purple-700 border-purple-200';
+                                actionLabel = 'Giao chấm thi';
+                                break;
+                            }
+
+                            return (
+                              <tr key={log.id} className="hover:bg-gray-50/50 transition-colors text-sm">
+                                <td className="px-6 py-4 text-gray-500 whitespace-nowrap text-left font-medium">
+                                  <div className="flex items-center gap-1.5">
+                                    <Clock size={14} className="text-gray-400" />
+                                    <span>{new Date(log.createdAt).toLocaleString('vi-VN')}</span>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 text-left">
+                                  <div className="font-semibold text-gray-900">{log.adminName}</div>
+                                  <div className="text-xs text-gray-400">{log.adminEmail}</div>
+                                </td>
+                                <td className="px-6 py-4 text-left whitespace-nowrap">
+                                  <span className={`px-2.5 py-1 text-xs font-bold rounded-full border ${actionColor}`}>
+                                    {actionLabel}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 text-gray-700 font-medium text-left max-w-md break-words">
+                                  {log.description}
+                                </td>
+                                <td className="px-6 py-4 text-gray-500 whitespace-nowrap text-left font-mono text-xs">
+                                  {log.ipAddress || '—'}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        )}
+
 
         {/* ── Timeline & Schedule Modal ── */}
         {selectedHackathonForTimeline && (
@@ -2259,6 +2983,98 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
         )}
         </div>
       </main>
+
+        {/* ── Phân công Giám khảo Modal ── */}
+        {showAssignmentsModal && selectedJudgeForAssignments && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl border border-gray-200 max-h-[85vh] flex flex-col">
+              {/* Header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 flex-shrink-0 bg-gray-50">
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                    <Award size={20} className="text-purple-600" />
+                    Phân công chấm thi
+                  </h3>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Giám khảo: <span className="font-semibold text-gray-800">{selectedJudgeForAssignments.username}</span> ({selectedJudgeForAssignments.email})
+                  </p>
+                </div>
+                <button 
+                  onClick={() => {
+                    setShowAssignmentsModal(false);
+                    setSelectedJudgeForAssignments(null);
+                  }} 
+                  className="p-1.5 hover:bg-gray-200 rounded-lg transition-colors cursor-pointer"
+                >
+                  <X size={20} className="text-gray-500" />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                <p className="text-xs text-gray-500 font-medium text-left">
+                  Tích chọn các đội thi mà Giám khảo này có nhiệm vụ đánh giá và chấm điểm.
+                </p>
+
+                {teamsList.length === 0 ? (
+                  <div className="text-center py-12 text-gray-400 text-sm">
+                    Chưa có đội thi nào trong hệ thống để phân công.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                    {teamsList.map(team => {
+                      const isAssigned = assignments.some(
+                        a => Number(a.judgeId) === Number(selectedJudgeForAssignments.id) && Number(a.teamId) === Number(team.id)
+                      );
+                      return (
+                        <div 
+                          key={team.id} 
+                          onClick={() => handleToggleAssignment(Number(selectedJudgeForAssignments.id), Number(team.id))}
+                          className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-center gap-3 ${
+                            isAssigned 
+                              ? 'bg-purple-50/50 border-purple-300 shadow-sm' 
+                              : 'bg-white border-gray-200 hover:border-gray-300'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isAssigned}
+                            onChange={() => {}} // toggle is handled by parent div onClick
+                            className="w-4 h-4 text-purple-600 bg-gray-100 border-gray-300 rounded focus:ring-purple-500 focus:ring-2"
+                          />
+                          <div className="flex-1 min-w-0 text-left">
+                            <p className="font-bold text-gray-900 text-sm truncate">{team.name}</p>
+                            <p className="text-xs text-gray-500 truncate mt-0.5">{team.category}</p>
+                            {team.project ? (
+                              <p className="text-[11px] text-purple-600 font-medium truncate mt-1">
+                                Dự án: {team.project.name}
+                              </p>
+                            ) : (
+                              <p className="text-[11px] text-gray-400 italic mt-1">Chưa nộp dự án</p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="flex items-center justify-end px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-2xl flex-shrink-0">
+                <button
+                  onClick={() => {
+                    setShowAssignmentsModal(false);
+                    setSelectedJudgeForAssignments(null);
+                  }}
+                  className="px-5 py-2.5 text-sm font-semibold bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors cursor-pointer"
+                >
+                  Hoàn tất
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
     </div>
   );
 }

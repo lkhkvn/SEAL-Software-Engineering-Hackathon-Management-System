@@ -46,13 +46,27 @@ function AppRoutes() {
   };
 
   // Xử lý khi đăng xuất
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    const token = localStorage.getItem('auth_token');
+    if (token) {
+      try {
+        await fetch('http://localhost:8000/index.php/api/auth/logout', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        });
+      } catch (e) {
+        console.error('Lỗi khi gọi API logout:', e);
+      }
+    }
     setCurrentUser(null);
     localStorage.removeItem('user');
     localStorage.removeItem('auth_token');
     console.log("Đã đăng xuất khỏi hệ thống!");
     navigate('/login');
   };
+
 
   return (
     <Routes>

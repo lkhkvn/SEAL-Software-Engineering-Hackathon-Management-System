@@ -4,6 +4,7 @@ namespace App\Presentation;
 use App\Services\HackathonService;
 use App\Services\AuthService;
 use App\Services\NotificationService;
+use App\Services\ActivityLogService;
 use Exception;
 
 
@@ -11,14 +12,22 @@ class HackathonController {
     private HackathonService $hackathonService;
     private AuthService $authService;
     private NotificationService $notificationService;
+    private ActivityLogService $activityLogService;
 
-    public function __construct(HackathonService $hackathonService, AuthService $authService, NotificationService $notificationService) {
+    public function __construct(
+        HackathonService $hackathonService,
+        AuthService $authService,
+        NotificationService $notificationService,
+        ActivityLogService $activityLogService
+    ) {
         $this->hackathonService = $hackathonService;
         $this->authService = $authService;
         $this->notificationService = $notificationService;
+        $this->activityLogService = $activityLogService;
     }
 
     public function getAllHackathons(): void {
+        $this->hackathonService->syncContestStatuses($this->notificationService);
         $contests = $this->hackathonService->getAllHackathons();
         http_response_code(200);
         echo json_encode([
@@ -28,6 +37,7 @@ class HackathonController {
     }
 
     public function getHackathonById(int $id): void {
+        $this->hackathonService->syncContestStatuses($this->notificationService);
         $contest = $this->hackathonService->getHackathonById($id);
         if (!$contest) {
             http_response_code(404);
@@ -75,9 +85,19 @@ class HackathonController {
     }
 
     public function startContest(int $id): void {
-        $this->requireAdmin();
+        $currentUser = $this->requireAdmin();
         try {
             $result = $this->hackathonService->startContest($id, $this->notificationService);
+
+            $this->activityLogService->logActivity(
+                $currentUser->id,
+                'UPDATE',
+                'contests',
+                $id,
+                "Bắt đầu cuộc thi và phát đề bài cho cuộc thi ID: " . $id,
+                $_SERVER['REMOTE_ADDR'] ?? null
+            );
+
             http_response_code(200);
             echo json_encode([
                 "status"  => "success",
@@ -92,7 +112,7 @@ class HackathonController {
 
     /** POST /api/admin/hackathons */
     public function createHackathon(): void {
-        $this->requireAdmin();
+        $currentUser = $this->requireAdmin();
         $data = json_decode(file_get_contents('php://input'), true) ?? [];
 
         $name     = trim($data['name']     ?? '');
@@ -107,13 +127,23 @@ class HackathonController {
         }
 
         $newId = $this->hackathonService->createHackathon($data);
+
+        $this->activityLogService->logActivity(
+            $currentUser->id,
+            'CREATE',
+            'contests',
+            $newId,
+            "Tạo mới cuộc thi: " . $name,
+            $_SERVER['REMOTE_ADDR'] ?? null
+        );
+
         http_response_code(201);
         echo json_encode(['status' => 'success', 'message' => 'Tạo cuộc thi mới thành công!', 'data' => ['id' => $newId, 'name' => $name]], JSON_UNESCAPED_UNICODE);
     }
 
     /** PUT /api/admin/hackathons/{id} */
     public function updateHackathon(int $id): void {
-        $this->requireAdmin();
+        $currentUser = $this->requireAdmin();
         $data = json_decode(file_get_contents('php://input'), true) ?? [];
 
         $name     = trim($data['name']     ?? '');
@@ -128,14 +158,34 @@ class HackathonController {
         }
 
         $this->hackathonService->updateHackathon($id, $data);
+
+        $this->activityLogService->logActivity(
+            $currentUser->id,
+            'UPDATE',
+            'contests',
+            $id,
+            "Cập nhật cuộc thi: " . $name,
+            $_SERVER['REMOTE_ADDR'] ?? null
+        );
+
         http_response_code(200);
         echo json_encode(['status' => 'success', 'message' => 'Cập nhật cuộc thi thành công!', 'data' => ['id' => $id, 'name' => $name]], JSON_UNESCAPED_UNICODE);
     }
 
     /** DELETE /api/admin/hackathons/{id} */
     public function deleteHackathon(int $id): void {
-        $this->requireAdmin();
+        $currentUser = $this->requireAdmin();
         $name = $this->hackathonService->deleteHackathon($id);
+
+        $this->activityLogService->logActivity(
+            $currentUser->id,
+            'DELETE',
+            'contests',
+            $id,
+            "Xóa cuộc thi: " . $name,
+            $_SERVER['REMOTE_ADDR'] ?? null
+        );
+
         http_response_code(200);
         echo json_encode(['status' => 'success', 'message' => "Đã xoá cuộc thi \"$name\" thành công!"], JSON_UNESCAPED_UNICODE);
     }
@@ -155,9 +205,19 @@ class HackathonController {
 
     /** DELETE /api/admin/hackathons/{id}/teams/{teamId} */
     public function removeTeam(int $contestId, int $teamId): void {
-        $this->requireAdmin();
+        $currentUser = $this->requireAdmin();
         try {
             $this->hackathonService->removeTeam($contestId, $teamId);
+
+            $this->activityLogService->logActivity(
+                $currentUser->id,
+                'REMOVE_TEAM',
+                'teams',
+                $teamId,
+                "Loại đội thi ID: " . $teamId . " khỏi cuộc thi ID: " . $contestId,
+                $_SERVER['REMOTE_ADDR'] ?? null
+            );
+
             http_response_code(200);
             echo json_encode(['status' => 'success', 'message' => 'Đã xóa đội thi khỏi cuộc thi thành công!'], JSON_UNESCAPED_UNICODE);
         } catch (\Exception $e) {
@@ -166,7 +226,53 @@ class HackathonController {
         }
     }
 
-    private function requireAdmin(): void {
+    /** POST /api/admin/hackathons/{contestId}/teams/{teamId}/approve */
+    public function approveRegistration(int $contestId, int $teamId): void {
+        $currentUser = $this->requireAdmin();
+        try {
+            $this->hackathonService->approveRegistration($contestId, $teamId);
+
+            $this->activityLogService->logActivity(
+                $currentUser->id,
+                'APPROVE_TEAM',
+                'teams',
+                $teamId,
+                "Duyệt đơn đăng ký của đội thi ID: " . $teamId . " tham gia cuộc thi ID: " . $contestId,
+                $_SERVER['REMOTE_ADDR'] ?? null
+            );
+
+            http_response_code(200);
+            echo json_encode(['status' => 'success', 'message' => 'Đã duyệt đội thi thành công!'], JSON_UNESCAPED_UNICODE);
+        } catch (\Exception $e) {
+            http_response_code(400);
+            echo json_encode(['status' => 'error', 'message' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        }
+    }
+
+    /** POST /api/admin/hackathons/{contestId}/teams/{teamId}/reject */
+    public function rejectRegistration(int $contestId, int $teamId): void {
+        $currentUser = $this->requireAdmin();
+        try {
+            $this->hackathonService->rejectRegistration($contestId, $teamId);
+
+            $this->activityLogService->logActivity(
+                $currentUser->id,
+                'REJECT_TEAM',
+                'teams',
+                $teamId,
+                "Từ chối đơn đăng ký của đội thi ID: " . $teamId . " tham gia cuộc thi ID: " . $contestId,
+                $_SERVER['REMOTE_ADDR'] ?? null
+            );
+
+            http_response_code(200);
+            echo json_encode(['status' => 'success', 'message' => 'Đã từ chối đội thi thành công!'], JSON_UNESCAPED_UNICODE);
+        } catch (\Exception $e) {
+            http_response_code(400);
+            echo json_encode(['status' => 'error', 'message' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        }
+    }
+
+    private function requireAdmin(): \App\Domain\Entity\User {
         $headers = getallheaders();
         $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
         if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
@@ -180,5 +286,7 @@ class HackathonController {
             echo json_encode(['status' => 'error', 'message' => 'Chỉ Ban tổ chức (ADMIN) mới có quyền thực hiện!'], JSON_UNESCAPED_UNICODE);
             exit(0);
         }
+        return $user;
     }
 }
+

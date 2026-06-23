@@ -22,6 +22,6 @@ class MilestoneModel
     #[ORM\Column(type: 'text', nullable: true)]
     public ?string $description = null;
 
-    #[ORM\Column(type: 'datetime', nullable: true)]
+    #[ORM\Column(name: 'due_date', type: 'datetime', nullable: true)]
     public ?\DateTimeInterface $dueDate = null;
 }

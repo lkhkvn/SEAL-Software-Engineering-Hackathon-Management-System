@@ -47,6 +47,7 @@ use App\Presentation\ScoreController;
 use App\Infrastructure\Persistence\DoctrineMentorTicketRepository;
 use App\Services\MentorTicketService;
 use App\Presentation\MentorController;
+use App\Services\ActivityLogService;
 
 try {
     if (file_exists(__DIR__ . '/../vendor/autoload.php')) {
@@ -81,19 +82,21 @@ try {
     $notificationService  = new NotificationService($entityManager);
     $fileUploadService    = new FileUploadService();
 
-    $authController        = new AuthController($authService);
-    $adminUserController   = new AdminUserController($authService, $userRepository);
+    $activityLogService    = new ActivityLogService($entityManager);
+
+    $authController        = new AuthController($authService, $activityLogService);
+    $adminUserController   = new AdminUserController($authService, $userRepository, $activityLogService);
     $teamController        = new TeamController($teamService, $authService, $entityManager);
-    $hackathonController   = new HackathonController($hackathonService, $authService, $notificationService);
+    $hackathonController   = new HackathonController($hackathonService, $authService, $notificationService, $activityLogService);
     $leaderboardController = new LeaderboardController($leaderboardService);
-    $milestoneController   = new MilestoneController($milestoneService, $authService);
-    $scheduleController    = new ScheduleController($scheduleService, $authService);
+    $milestoneController   = new MilestoneController($milestoneService, $authService, $activityLogService);
+    $scheduleController    = new ScheduleController($scheduleService, $authService, $activityLogService);
     $userController        = new UserController($authService, $entityManager);
-    $challengeController   = new ChallengeController($challengeService, $authService, $fileUploadService);
+    $challengeController   = new ChallengeController($challengeService, $authService, $fileUploadService, $activityLogService);
     $notificationController= new NotificationController($notificationService, $authService);
     
     $scoreService          = new ScoreService($entityManager);
-    $scoreController       = new ScoreController($scoreService, $authService, $notificationService);
+    $scoreController       = new ScoreController($scoreService, $authService, $notificationService, $activityLogService);
     
     $mentorTicketRepository = new DoctrineMentorTicketRepository($entityManager);
     $mentorTicketService   = new MentorTicketService($mentorTicketRepository);
@@ -113,6 +116,9 @@ try {
     }
     if ($path === '/api/auth/login' && $method === 'POST') {
         $authController->login(); exit(0);
+    }
+    if ($path === '/api/auth/logout' && $method === 'POST') {
+        $authController->logout(); exit(0);
     }
     // ------------------------------------------------------------------
     // USER ROUTES
@@ -139,6 +145,9 @@ try {
     }
     if ($path === '/api/admin/users/update-role' && $method === 'POST') {
         $adminUserController->updateRole(); exit(0);
+    }
+    if ($path === '/api/admin/activity-logs' && $method === 'GET') {
+        $adminUserController->getActivityLogs(); exit(0);
     }
 
     // ------------------------------------------------------------------
@@ -208,6 +217,15 @@ try {
     if (preg_match('#^/api/hackathons/(\d+)/register$#', $path, $m) && $method === 'POST') {
         $hackathonController->registerTeam((int)$m[1]); exit(0);
     }
+    if ($path === '/api/hackathons' && $method === 'POST') {
+        $hackathonController->createHackathon(); exit(0);
+    }
+    if (preg_match('#^/api/hackathons/(\d+)$#', $path, $m) && $method === 'PUT') {
+        $hackathonController->updateHackathon((int)$m[1]); exit(0);
+    }
+    if (preg_match('#^/api/hackathons/(\d+)$#', $path, $m) && $method === 'DELETE') {
+        $hackathonController->deleteHackathon((int)$m[1]); exit(0);
+    }
 
     // ------------------------------------------------------------------
     // HACKATHON ADMIN ROUTES
@@ -229,6 +247,12 @@ try {
     }
     if (preg_match('#^/api/admin/hackathons/(\d+)/teams/(\d+)$#', $path, $m) && $method === 'DELETE') {
         $hackathonController->removeTeam((int)$m[1], (int)$m[2]); exit(0);
+    }
+    if (preg_match('#^/api/admin/hackathons/(\d+)/teams/(\d+)/approve$#', $path, $m) && $method === 'POST') {
+        $hackathonController->approveRegistration((int)$m[1], (int)$m[2]); exit(0);
+    }
+    if (preg_match('#^/api/admin/hackathons/(\d+)/teams/(\d+)/reject$#', $path, $m) && $method === 'POST') {
+        $hackathonController->rejectRegistration((int)$m[1], (int)$m[2]); exit(0);
     }
 
     // ------------------------------------------------------------------
@@ -309,6 +333,21 @@ try {
     }
     if ($path === '/api/scores' && $method === 'POST') {
         $scoreController->submitScores(); exit(0);
+    }
+    if ($path === '/api/admin/criteria' && $method === 'GET') {
+        $scoreController->getAllCriteria(); exit(0);
+    }
+    if ($path === '/api/admin/criteria' && $method === 'POST') {
+        $scoreController->createCriteria(); exit(0);
+    }
+    if (preg_match('#^/api/admin/criteria/(\d+)$#', $path, $m) && $method === 'DELETE') {
+        $scoreController->deleteCriteria((int)$m[1]); exit(0);
+    }
+    if ($path === '/api/admin/assignments' && $method === 'GET') {
+        $scoreController->getAssignments(); exit(0);
+    }
+    if ($path === '/api/admin/assignments/toggle' && $method === 'POST') {
+        $scoreController->toggleAssignment(); exit(0);
     }
 
     // ------------------------------------------------------------------

@@ -5,7 +5,7 @@ namespace App\Infrastructure\Model;
 use Doctrine\ORM\Mapping as ORM;
 
 #[ORM\Entity]
-#[ORM\Table(name: 'hackathons')]
+#[ORM\Table(name: 'contests')]
 class HackathonModel
 {
     #[ORM\Id]
@@ -19,17 +19,14 @@ class HackathonModel
     #[ORM\Column(type: 'text', nullable: true)]
     public ?string $description = null;
 
-    #[ORM\Column(type: 'datetime', nullable: true)]
+    #[ORM\Column(name: 'start_date', type: 'datetime', nullable: true)]
     public ?\DateTimeInterface $startDate = null;
 
-    #[ORM\Column(type: 'datetime', nullable: true)]
+    #[ORM\Column(name: 'end_date', type: 'datetime', nullable: true)]
     public ?\DateTimeInterface $endDate = null;
 
-    #[ORM\Column(type: 'datetime', nullable: true)]
-    public ?\DateTimeInterface $registrationStart = null;
-
-    #[ORM\Column(type: 'datetime', nullable: true)]
-    public ?\DateTimeInterface $registrationEnd = null;
+    #[ORM\Column(name: 'registration_deadline', type: 'datetime', nullable: true)]
+    public ?\DateTimeInterface $registrationDeadline = null;
 
     #[ORM\Column(name: 'submission_deadline', type: 'datetime', nullable: true)]
     public ?\DateTimeInterface $submissionDeadline = null;
