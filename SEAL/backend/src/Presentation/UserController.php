@@ -74,7 +74,7 @@ class UserController {
             
             $conn = $this->em->getConnection();
             $row = $conn->executeQuery("
-                SELECT cv_summary, cv_education, cv_experience, cv_portfolio_url, cv_theme, skills
+                SELECT cv_summary, cv_education, cv_experience, cv_portfolio_url, cv_theme, skills, avatar_url, date_of_birth
                 FROM users
                 WHERE id = :id
             ", ['id' => $currentUser->id])->fetchAssociative();
@@ -88,7 +88,9 @@ class UserController {
                     'experience' => $row['cv_experience'] ?? '',
                     'portfolioUrl' => $row['cv_portfolio_url'] ?? '',
                     'theme' => $row['cv_theme'] ?? 'ocean',
-                    'skills' => $row['skills'] ?? ''
+                    'skills' => $row['skills'] ?? '',
+                    'avatarUrl' => $row['avatar_url'] ?? '',
+                    'dateOfBirth' => $row['date_of_birth'] ?? '',
                 ]
             ], JSON_UNESCAPED_UNICODE);
         } catch (Exception $e) {
@@ -118,9 +120,19 @@ class UserController {
             $portfolioUrl = trim($input['portfolioUrl'] ?? '');
             $theme = trim($input['theme'] ?? 'ocean');
             $skills = trim($input['skills'] ?? '');
+            $dateOfBirth = trim($input['dateOfBirth'] ?? '');
 
             if (!in_array($theme, ['ocean', 'emerald', 'sunset', 'midnight'])) {
                 $theme = 'ocean';
+            }
+
+            // Validate date_of_birth format (YYYY-MM-DD)
+            $dobValue = null;
+            if (!empty($dateOfBirth)) {
+                $d = \DateTime::createFromFormat('Y-m-d', $dateOfBirth);
+                if ($d && $d->format('Y-m-d') === $dateOfBirth) {
+                    $dobValue = $dateOfBirth;
+                }
             }
 
             $conn = $this->em->getConnection();
@@ -131,7 +143,8 @@ class UserController {
                     cv_experience = :experience,
                     cv_portfolio_url = :portfolioUrl,
                     cv_theme = :theme,
-                    skills = :skills
+                    skills = :skills,
+                    date_of_birth = :dateOfBirth
                 WHERE id = :id
             ", [
                 'summary' => $summary ?: null,
@@ -140,6 +153,7 @@ class UserController {
                 'portfolioUrl' => $portfolioUrl ?: null,
                 'theme' => $theme,
                 'skills' => $skills ?: null,
+                'dateOfBirth' => $dobValue,
                 'id' => $currentUser->id
             ]);
 
@@ -149,5 +163,122 @@ class UserController {
             http_response_code(400);
             echo json_encode(['status' => 'error', 'message' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
         }
+    }
+
+    /** POST /api/users/me/avatar - Upload ảnh đại diện */
+    public function uploadAvatar(): void {
+        try {
+            $headers = getallheaders();
+            $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+
+            if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
+                http_response_code(401);
+                echo json_encode(['status' => 'error', 'message' => 'Yêu cầu phải có Token xác thực!'], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            $currentUser = $this->authService->verifyToken($matches[1]);
+
+            // Kiểm tra file upload
+            if (!isset($_FILES['avatar']) || $_FILES['avatar']['error'] !== UPLOAD_ERR_OK) {
+                http_response_code(400);
+                echo json_encode(['status' => 'error', 'message' => 'Vui lòng chọn ảnh đại diện!'], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            $file = $_FILES['avatar'];
+            $maxSize = 5 * 1024 * 1024; // 5MB
+
+            if ($file['size'] > $maxSize) {
+                http_response_code(400);
+                echo json_encode(['status' => 'error', 'message' => 'Ảnh quá lớn! Giới hạn tối đa 5MB.'], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            // Kiểm tra extension
+            $allowedExts = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
+            $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+            if (!in_array($ext, $allowedExts)) {
+                http_response_code(400);
+                echo json_encode(['status' => 'error', 'message' => 'Chỉ hỗ trợ ảnh JPG, PNG, WebP, GIF.'], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            // Kiểm tra MIME type
+            $allowedMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+            $finfo = new \finfo(FILEINFO_MIME_TYPE);
+            $mimeType = $finfo->file($file['tmp_name']);
+            if (!in_array($mimeType, $allowedMimes)) {
+                http_response_code(400);
+                echo json_encode(['status' => 'error', 'message' => 'Nội dung file không phải ảnh hợp lệ.'], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            // Tạo thư mục avatars
+            $avatarDir = __DIR__ . '/../../storage/uploads/avatars/';
+            if (!is_dir($avatarDir)) {
+                mkdir($avatarDir, 0755, true);
+            }
+
+            // Xóa avatar cũ nếu có
+            $conn = $this->em->getConnection();
+            $oldAvatar = $conn->executeQuery("SELECT avatar_url FROM users WHERE id = :id", ['id' => $currentUser->id])->fetchOne();
+            if ($oldAvatar) {
+                $oldFilename = basename($oldAvatar);
+                $oldPath = $avatarDir . $oldFilename;
+                if (file_exists($oldPath)) {
+                    unlink($oldPath);
+                }
+            }
+
+            // Tạo tên file unique
+            $uniqueName = 'avatar_' . $currentUser->id . '_' . time() . '.' . $ext;
+            $destPath = $avatarDir . $uniqueName;
+
+            if (!move_uploaded_file($file['tmp_name'], $destPath)) {
+                http_response_code(500);
+                echo json_encode(['status' => 'error', 'message' => 'Không thể lưu ảnh lên server.'], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            // Cập nhật DB
+            $avatarUrl = '/api/avatars/' . $uniqueName;
+            $conn->executeStatement("UPDATE users SET avatar_url = :url WHERE id = :id", [
+                'url' => $avatarUrl,
+                'id' => $currentUser->id
+            ]);
+
+            http_response_code(200);
+            echo json_encode([
+                'status' => 'success',
+                'message' => 'Upload ảnh đại diện thành công!',
+                'data' => ['avatarUrl' => $avatarUrl]
+            ], JSON_UNESCAPED_UNICODE);
+
+        } catch (Exception $e) {
+            http_response_code(400);
+            echo json_encode(['status' => 'error', 'message' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        }
+    }
+
+    /** GET /api/avatars/{filename} - Phục vụ file ảnh avatar */
+    public function serveAvatar(string $filename): void {
+        // Chống path traversal
+        $filename = basename($filename);
+        $filePath = __DIR__ . '/../../storage/uploads/avatars/' . $filename;
+
+        if (!file_exists($filePath)) {
+            http_response_code(404);
+            echo json_encode(['status' => 'error', 'message' => 'Ảnh không tồn tại.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+
+        $finfo = new \finfo(FILEINFO_MIME_TYPE);
+        $mimeType = $finfo->file($filePath);
+
+        header('Content-Type: ' . $mimeType);
+        header('Content-Length: ' . filesize($filePath));
+        header('Cache-Control: public, max-age=31536000');
+        readfile($filePath);
     }
 }

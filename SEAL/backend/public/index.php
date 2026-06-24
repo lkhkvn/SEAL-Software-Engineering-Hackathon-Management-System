@@ -132,6 +132,12 @@ try {
     if ($path === '/api/users/me/cv' && $method === 'POST') {
         $userController->updateCV(); exit(0);
     }
+    if ($path === '/api/users/me/avatar' && $method === 'POST') {
+        $userController->uploadAvatar(); exit(0);
+    }
+    if (preg_match('#^/api/avatars/([^/]+)$#', $path, $m) && $method === 'GET') {
+        $userController->serveAvatar($m[1]); exit(0);
+    }
 
     if ($path === '/api/auth/create-account' && $method === 'POST') {
         $authController->createAccount(); exit(0);

@@ -3,7 +3,8 @@ import {
   Users, Search, Trophy, Code, Target, Loader2, X,
   Github, Video, FileText, User, Plus, LogIn, Sparkles,
   Copy, Check, AlertCircle, Crown, Shield, Hash,
-  Briefcase, GraduationCap, Link as LinkIcon, HelpCircle
+  Briefcase, GraduationCap, Link as LinkIcon, HelpCircle,
+  Camera, Calendar
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Skeleton } from './ui/skeleton';
@@ -45,7 +46,7 @@ const CV_THEMES: Record<string, {
   }
 };
 
-function CVViewLayout({ name, email, summary, education, experience, portfolioUrl, theme, skills }: {
+function CVViewLayout({ name, email, summary, education, experience, portfolioUrl, theme, skills, avatarUrl, dateOfBirth }: {
   name: string;
   email: string;
   summary: string;
@@ -54,26 +55,53 @@ function CVViewLayout({ name, email, summary, education, experience, portfolioUr
   portfolioUrl: string;
   theme: string;
   skills: string[];
+  avatarUrl?: string;
+  dateOfBirth?: string;
 }) {
   const currentTheme = CV_THEMES[theme] || CV_THEMES.ocean;
+
+  const formatDOB = (dob: string) => {
+    if (!dob) return '';
+    try {
+      const d = new Date(dob);
+      return d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    } catch { return dob; }
+  };
 
   return (
     <div className="bg-white text-gray-800 rounded-2xl overflow-hidden shadow-sm">
       {/* Header Banner */}
       <div className="p-6 text-white" style={{ background: currentTheme.headerBg }}>
-        <h3 className="text-2xl font-bold tracking-tight">{name}</h3>
-        <p className="text-white/80 text-xs mt-1">{email}</p>
-        {portfolioUrl && (
-          <a
-            href={portfolioUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-xs text-white/90 hover:text-white mt-2 font-medium bg-white/10 px-2.5 py-1 rounded-lg transition-colors"
-          >
-            <Github size={12} />
-            <span>GitHub / Portfolio</span>
-          </a>
-        )}
+        <div className="flex items-center gap-4">
+          {/* Avatar */}
+          <div className="w-16 h-16 rounded-full border-2 border-white/40 overflow-hidden shrink-0 bg-white/20 flex items-center justify-center">
+            {avatarUrl ? (
+              <img src={`http://localhost:8000/index.php${avatarUrl}`} alt={name} className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-2xl font-black text-white/80">{name.charAt(0).toUpperCase()}</span>
+            )}
+          </div>
+          <div>
+            <h3 className="text-2xl font-bold tracking-tight">{name}</h3>
+            <p className="text-white/80 text-xs mt-0.5">{email}</p>
+            {dateOfBirth && (
+              <p className="text-white/70 text-xs mt-0.5 flex items-center gap-1">
+                <Calendar size={11} /> Ngày sinh: {formatDOB(dateOfBirth)}
+              </p>
+            )}
+            {portfolioUrl && (
+              <a
+                href={portfolioUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-xs text-white/90 hover:text-white mt-1.5 font-medium bg-white/10 px-2.5 py-1 rounded-lg transition-colors"
+              >
+                <Github size={12} />
+                <span>GitHub / Portfolio</span>
+              </a>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Main Grid */}
@@ -527,6 +555,10 @@ function MyCVModal({ onClose }: { onClose: () => void }) {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState('');
+  const [avatarPreview, setAvatarPreview] = useState('');
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [dateOfBirth, setDateOfBirth] = useState('');
 
   const PRESET_SKILLS = [
     'React', 'Vue.js', 'Angular', 'Next.js',
@@ -551,6 +583,8 @@ function MyCVModal({ onClose }: { onClose: () => void }) {
           setExperience(cv.experience || '');
           setPortfolioUrl(cv.portfolioUrl || '');
           setTheme(cv.theme || 'ocean');
+          setAvatarUrl(cv.avatarUrl || '');
+          setDateOfBirth(cv.dateOfBirth || '');
           if (cv.skills) {
             setSelectedSkills(cv.skills.split(',').map((s: string) => s.trim()).filter(Boolean));
           }
@@ -570,6 +604,34 @@ function MyCVModal({ onClose }: { onClose: () => void }) {
     );
   };
 
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // Preview ngay lập tức
+    const previewUrl = URL.createObjectURL(file);
+    setAvatarPreview(previewUrl);
+    // Upload lên server
+    setUploadingAvatar(true);
+    try {
+      const formData = new FormData();
+      formData.append('avatar', file);
+      const res = await fetch(`${API}/users/me/avatar`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${getToken()}` },
+        body: formData
+      });
+      const data = await res.json();
+      if (!res.ok || data.status === 'error') throw new Error(data.message);
+      setAvatarUrl(data.data.avatarUrl);
+      setAvatarPreview('');
+    } catch (err: any) {
+      setError(err.message || 'Lỗi upload ảnh đại diện.');
+      setAvatarPreview('');
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -584,7 +646,8 @@ function MyCVModal({ onClose }: { onClose: () => void }) {
           experience,
           portfolioUrl,
           theme,
-          skills: selectedSkills.join(', ')
+          skills: selectedSkills.join(', '),
+          dateOfBirth
         })
       });
       const data = await res.json();
@@ -671,20 +734,79 @@ function MyCVModal({ onClose }: { onClose: () => void }) {
             </div>
           ) : activeTab === 'edit' ? (
             <form onSubmit={handleSave} className="space-y-6 bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
-              {/* Giới thiệu bản thân */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5 flex items-center gap-1.5">
-                  <User size={15} className="text-blue-600" />
-                  Tóm tắt / Giới thiệu bản thân
-                </label>
-                <textarea
-                  value={summary}
-                  onChange={e => setSummary(e.target.value)}
-                  placeholder="VD: Mình là nhà phát triển Frontend với hơn 1 năm kinh nghiệm phát triển các ứng dụng Web sử dụng React và Tailwind CSS. Có khả năng tự học tốt và sẵn sàng cống hiến..."
-                  rows={3}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                  maxLength={500}
-                />
+              {/* Ảnh đại diện + Ngày sinh */}
+              <div className="flex flex-col sm:flex-row items-start gap-5">
+                {/* Avatar Upload */}
+                <div className="flex flex-col items-center gap-2">
+                  <label className="block text-sm font-semibold text-gray-700 mb-1 flex items-center gap-1.5">
+                    <Camera size={15} className="text-blue-600" />
+                    Ảnh đại diện
+                  </label>
+                  <div className="relative group cursor-pointer">
+                    <div className="w-24 h-24 rounded-full border-2 border-dashed border-gray-300 group-hover:border-blue-400 overflow-hidden flex items-center justify-center bg-gray-50 transition-colors">
+                      {(avatarPreview || avatarUrl) ? (
+                        <img
+                          src={avatarPreview || `http://localhost:8000/index.php${avatarUrl}`}
+                          alt="Avatar"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex flex-col items-center gap-1 text-gray-400">
+                          <Camera size={20} />
+                          <span className="text-[9px] font-semibold">Tải ảnh</span>
+                        </div>
+                      )}
+                      {uploadingAvatar && (
+                        <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center">
+                          <Loader2 className="text-white animate-spin" size={20} />
+                        </div>
+                      )}
+                    </div>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      onChange={handleAvatarUpload}
+                      className="absolute inset-0 opacity-0 cursor-pointer"
+                    />
+                    <div className="absolute -bottom-0.5 -right-0.5 w-7 h-7 bg-blue-600 rounded-full flex items-center justify-center shadow-md border-2 border-white">
+                      <Camera size={12} className="text-white" />
+                    </div>
+                  </div>
+                  <span className="text-[10px] text-gray-400">JPG, PNG, WebP (tối đa 5MB)</span>
+                </div>
+
+                <div className="flex-1 space-y-4 w-full">
+                  {/* Ngày tháng năm sinh */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1.5 flex items-center gap-1.5">
+                      <Calendar size={15} className="text-blue-600" />
+                      Ngày tháng năm sinh
+                    </label>
+                    <input
+                      type="date"
+                      value={dateOfBirth}
+                      onChange={e => setDateOfBirth(e.target.value)}
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                      max={new Date().toISOString().split('T')[0]}
+                    />
+                  </div>
+
+                  {/* Giới thiệu bản thân */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1.5 flex items-center gap-1.5">
+                      <User size={15} className="text-blue-600" />
+                      Tóm tắt / Giới thiệu bản thân
+                    </label>
+                    <textarea
+                      value={summary}
+                      onChange={e => setSummary(e.target.value)}
+                      placeholder="VD: Mình là nhà phát triển Frontend với hơn 1 năm kinh nghiệm phát triển các ứng dụng Web sử dụng React và Tailwind CSS. Có khả năng tự học tốt và sẵn sàng cống hiến..."
+                      rows={3}
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                      maxLength={500}
+                    />
+                  </div>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -823,6 +945,8 @@ function MyCVModal({ onClose }: { onClose: () => void }) {
                 portfolioUrl={portfolioUrl}
                 theme={theme}
                 skills={selectedSkills}
+                avatarUrl={avatarUrl}
+                dateOfBirth={dateOfBirth}
               />
             </div>
           )}
@@ -1016,16 +1140,45 @@ function JoinTeamModal({ teams, onClose, onJoined }: { teams: Team[]; onClose: (
 
 // ────────── Modal: Xem chi tiết đội ──────────
 function TeamDetailModal({ team, onClose }: { team: Team; onClose: () => void }) {
+  const [teamMembers, setTeamMembers] = useState<any[]>([]);
+  const [loadingMembers, setLoadingMembers] = useState(true);
+
+  useEffect(() => {
+    const fetchMembers = async () => {
+      setLoadingMembers(true);
+      try {
+        const res = await fetch(`${API}/teams/${team.id}`);
+        const data = await res.json();
+        if (res.ok && data.status === 'success') {
+          setTeamMembers(data.data.members || []);
+        }
+      } catch (err) {
+        console.error('Lỗi khi tải danh sách thành viên:', err);
+      } finally {
+        setLoadingMembers(false);
+      }
+    };
+    fetchMembers();
+  }, [team.id]);
+
+  const formatDOB = (dob: string) => {
+    if (!dob) return '';
+    try {
+      const d = new Date(dob);
+      return d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    } catch { return dob; }
+  };
+
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden">
-        {/* Banner */}
-        <div className="h-28 relative flex items-end p-5" style={{ background: getAvatarGradient(team.id) }}>
+        {/* Banner - Màu cam */}
+        <div className="h-28 relative flex items-end p-5" style={{ background: 'linear-gradient(135deg, #f97316, #f59e0b)' }}>
           <button onClick={onClose} className="absolute top-4 right-4 p-1.5 bg-black/20 hover:bg-black/40 rounded-full text-white transition-colors">
             <X size={18} />
           </button>
           <div className="flex items-end gap-4">
-            <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center shadow-lg text-3xl font-black text-gray-700">
+            <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center shadow-lg text-3xl font-black text-orange-600">
               {team.name.charAt(0).toUpperCase()}
             </div>
             <div className="pb-1">
@@ -1055,6 +1208,59 @@ function TeamDetailModal({ team, onClose }: { team: Team; onClose: () => void })
             </div>
           </div>
 
+          {/* Danh sách thành viên */}
+          <div>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+              <Users size={12} className="text-orange-500" /> Danh sách thành viên ({teamMembers.length})
+            </p>
+            {loadingMembers ? (
+              <div className="flex items-center justify-center py-4 gap-2">
+                <Loader2 size={16} className="animate-spin text-orange-500" />
+                <span className="text-xs text-gray-400">Đang tải...</span>
+              </div>
+            ) : teamMembers.length > 0 ? (
+              <div className="space-y-2">
+                {teamMembers.map((member, idx) => (
+                  <div key={idx} className="flex items-center gap-3 bg-gradient-to-r from-orange-50 to-amber-50 px-3 py-2.5 rounded-xl border border-orange-100 hover:shadow-sm transition-shadow">
+                    {/* Avatar */}
+                    <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 bg-orange-100 flex items-center justify-center border border-orange-200">
+                      {member.avatarUrl ? (
+                        <img src={`http://localhost:8000/index.php${member.avatarUrl}`} alt={member.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-sm font-bold text-orange-600">{member.name?.charAt(0).toUpperCase()}</span>
+                      )}
+                    </div>
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-gray-800 truncate">{member.name}</span>
+                        {member.role === 'LEAD' && (
+                          <span className="px-1.5 py-0.5 bg-yellow-100 text-yellow-700 rounded text-[9px] font-bold border border-yellow-200 shrink-0 flex items-center gap-0.5">
+                            <Crown size={9} /> Trưởng nhóm
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3 mt-0.5">
+                        {member.email && (
+                          <span className="text-[10px] text-gray-400 truncate">{member.email}</span>
+                        )}
+                        {member.dateOfBirth && (
+                          <span className="text-[10px] text-gray-400 flex items-center gap-0.5 shrink-0">
+                            <Calendar size={9} /> {formatDOB(member.dateOfBirth)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-4 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                <span className="text-xs text-gray-400">Chưa có thành viên</span>
+              </div>
+            )}
+          </div>
+
           {/* Công nghệ */}
           <div>
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
@@ -1073,7 +1279,7 @@ function TeamDetailModal({ team, onClose }: { team: Team; onClose: () => void })
               <Shield size={12} /> Dự án
             </p>
             {team.project ? (
-              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-100 space-y-2">
+              <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-xl p-4 border border-orange-100 space-y-2">
                 <p className="font-bold text-gray-900">{team.project.name}</p>
                 <p className="text-sm text-gray-600 leading-relaxed">{team.project.description}</p>
                 <div className="flex flex-wrap gap-2 pt-1">
@@ -1101,7 +1307,7 @@ function TeamDetailModal({ team, onClose }: { team: Team; onClose: () => void })
         </div>
 
         <div className="p-4 border-t border-gray-100">
-          <button onClick={onClose} className="w-full py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-semibold text-sm transition-colors">
+          <button onClick={onClose} className="w-full py-2.5 bg-orange-50 hover:bg-orange-100 text-orange-700 rounded-xl font-semibold text-sm transition-colors border border-orange-200">
             Đóng
           </button>
         </div>

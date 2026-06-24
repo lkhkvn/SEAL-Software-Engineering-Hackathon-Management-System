@@ -371,7 +371,7 @@ class TeamController {
             }
 
             $members = $conn->executeQuery(
-                "SELECT u.id, u.name, u.email, u.skills, tm.role_in_team as role
+                "SELECT u.id, u.name, u.email, u.skills, u.avatar_url, u.date_of_birth, tm.role_in_team as role
                  FROM team_members tm
                  JOIN users u ON tm.user_id = u.id
                  WHERE tm.team_id = :teamId",
@@ -395,7 +395,9 @@ class TeamController {
                     'name' => $m['name'],
                     'email' => $m['email'] ?? null,
                     'skills' => $m['skills'] ?? null,
-                    'role' => $m['role'] ?? 'MEMBER'
+                    'role' => $m['role'] ?? 'MEMBER',
+                    'avatarUrl' => $m['avatar_url'] ?? null,
+                    'dateOfBirth' => $m['date_of_birth'] ?? null
                 ];
             }, $members);
 
