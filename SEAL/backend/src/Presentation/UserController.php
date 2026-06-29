@@ -74,7 +74,7 @@ class UserController {
             
             $conn = $this->em->getConnection();
             $row = $conn->executeQuery("
-                SELECT cv_summary, cv_education, cv_experience, cv_portfolio_url, cv_theme, skills, avatar_url, date_of_birth
+                SELECT name, email, role, phone, cv_summary, cv_education, cv_experience, cv_portfolio_url, cv_theme, skills, avatar_url, date_of_birth
                 FROM users
                 WHERE id = :id
             ", ['id' => $currentUser->id])->fetchAssociative();
@@ -83,6 +83,10 @@ class UserController {
             echo json_encode([
                 'status' => 'success',
                 'data' => [
+                    'name' => $row['name'] ?? '',
+                    'email' => $row['email'] ?? '',
+                    'role' => $row['role'] ?? '',
+                    'phone' => $row['phone'] ?? '',
                     'summary' => $row['cv_summary'] ?? '',
                     'education' => $row['cv_education'] ?? '',
                     'experience' => $row['cv_experience'] ?? '',
@@ -114,6 +118,8 @@ class UserController {
             $currentUser = $this->authService->verifyToken($matches[1]);
             
             $input = json_decode(file_get_contents('php://input'), true) ?? [];
+            $name = trim($input['name'] ?? '');
+            $phone = trim($input['phone'] ?? '');
             $summary = trim($input['summary'] ?? '');
             $education = trim($input['education'] ?? '');
             $experience = trim($input['experience'] ?? '');
@@ -138,7 +144,9 @@ class UserController {
             $conn = $this->em->getConnection();
             $conn->executeStatement("
                 UPDATE users 
-                SET cv_summary = :summary,
+                SET name = COALESCE(NULLIF(:name, ''), name),
+                    phone = :phone,
+                    cv_summary = :summary,
                     cv_education = :education,
                     cv_experience = :experience,
                     cv_portfolio_url = :portfolioUrl,
@@ -147,6 +155,8 @@ class UserController {
                     date_of_birth = :dateOfBirth
                 WHERE id = :id
             ", [
+                'name' => $name,
+                'phone' => $phone ?: null,
                 'summary' => $summary ?: null,
                 'education' => $education ?: null,
                 'experience' => $experience ?: null,

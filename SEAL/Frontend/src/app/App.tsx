@@ -41,8 +41,8 @@ function AppRoutes() {
     localStorage.setItem('user', JSON.stringify(userData));
     console.log("Đăng nhập thành công! Dữ liệu User:", userData);
     
-    // Điều hướng về trang chủ sau khi xác thực thành công
-    navigate('/');
+    // Điều hướng về trang profile sau khi xác thực thành công để user nhập thông tin
+    navigate('/profile');
   };
 
   // Xử lý khi đăng xuất

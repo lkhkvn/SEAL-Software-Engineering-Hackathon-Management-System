@@ -81,8 +81,9 @@ class TeamController {
             $joinCode = null;
             $attempt = 0;
             do {
-                $prefix = strtoupper(substr(str_replace(' ', '', $teamName), 0, 2));
-                if (strlen($prefix) < 2) {
+                $cleanName = str_replace(' ', '', $teamName);
+                $prefix = mb_strtoupper(mb_substr($cleanName, 0, 2, 'UTF-8'), 'UTF-8');
+                if (mb_strlen($prefix, 'UTF-8') < 2) {
                     $prefix = 'TM';
                 }
                 $joinCode = $prefix . rand(1000, 9999);

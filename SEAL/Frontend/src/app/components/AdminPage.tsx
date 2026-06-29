@@ -23,6 +23,7 @@ import {
   Award,
   FileText,
   BookOpen,
+  Save,
   Send,
   Lock,
   Unlock,
@@ -65,6 +66,12 @@ interface Hackathon {
   rules?: string;
   criteria?: string;
   registrationDeadline?: string;
+  image?: string;
+  logo_url?: string;
+  submissionDeadline?: string;
+  criteriaItems?: { name: string; weight: number }[];
+  judgeCount?: number;
+  scheduleItems?: { name: string; time: string }[];
 }
 
 interface Milestone {
@@ -102,6 +109,12 @@ const EMPTY_FORM: Omit<Hackathon, 'id'> = {
   prizeDetails: '',
   rules: '',
   criteria: '',
+  image: '',
+  logo_url: '',
+  submissionDeadline: '',
+  criteriaItems: [{ name: '', weight: 100 }],
+  judgeCount: 3,
+  scheduleItems: [],
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -147,6 +160,7 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
 
   // Modal tạo / chỉnh sửa
   const [showModal, setShowModal]       = useState(false);
+  const [modalStep, setModalStep]       = useState(1);
   const [editingContest, setEditingContest] = useState<Hackathon | null>(null);
   const [formData, setFormData]         = useState({ ...EMPTY_FORM });
   const [submitting, setSubmitting]     = useState(false);
@@ -509,6 +523,7 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
   const openCreate = () => {
     setEditingContest(null);
     setFormData({ ...EMPTY_FORM });
+    setModalStep(1);
     setFormError(null);
     setShowModal(true);
   };
@@ -522,17 +537,55 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
       location: c.location || '',
       startDate: c.startDate ? c.startDate.replace(' ', 'T').slice(0, 16) : '',
       endDate: c.endDate ? c.endDate.replace(' ', 'T').slice(0, 16) : '',
-      registrationStart: c.registrationStart ? c.registrationStart.replace(' ', 'T').slice(0, 16) : '',
-      registrationEnd: c.registrationEnd ? c.registrationEnd.replace(' ', 'T').slice(0, 16) : '',
+      registrationStart: (() => {
+        try {
+          const parsed = c.schedule ? JSON.parse(c.schedule) : null;
+          if (parsed && !Array.isArray(parsed) && parsed.registrationStart) {
+            return parsed.registrationStart.replace(' ', 'T').slice(0, 16);
+          }
+        } catch {}
+        return (c as any).registration_start ? (c as any).registration_start.replace(' ', 'T').slice(0, 16) : '';
+      })(),
+      registrationEnd: (() => {
+        try {
+          const parsed = c.schedule ? JSON.parse(c.schedule) : null;
+          if (parsed && !Array.isArray(parsed) && parsed.registrationEnd) {
+            return parsed.registrationEnd.replace(' ', 'T').slice(0, 16);
+          }
+        } catch {}
+        return (c as any).registration_end ? (c as any).registration_end.replace(' ', 'T').slice(0, 16) : ((c as any).registration_deadline ? (c as any).registration_deadline.replace(' ', 'T').slice(0, 16) : '');
+      })(),
       registrationDeadline: (c as any).registration_deadline ? (c as any).registration_deadline.replace(' ', 'T').slice(0, 16) : (c.registrationEnd ? c.registrationEnd.replace(' ', 'T').slice(0, 16) : ''),
       maxTeams: c.maxTeams || 50,
       status: c.status,
       organizer: c.organizer || '',
       schedule: c.schedule || '',
+      scheduleItems: (() => {
+        try {
+          const parsed = c.schedule ? JSON.parse(c.schedule) : null;
+          return Array.isArray(parsed) ? parsed : (parsed?.items || []);
+        } catch {
+          return [];
+        }
+      })(),
       prizeDetails: (c as any).prize_details || c.prizeDetails || '',
       rules: c.rules || '',
       criteria: c.criteria || '',
+      image: c.image || '',
+      logo_url: (c as any).logo_url || '',
+      submissionDeadline: (() => {
+        try {
+          const parsed = c.schedule ? JSON.parse(c.schedule) : null;
+          if (parsed && !Array.isArray(parsed) && parsed.submissionDeadline) {
+            return parsed.submissionDeadline.replace(' ', 'T').slice(0, 16);
+          }
+        } catch {}
+        return (c as any).submission_deadline ? (c as any).submission_deadline.replace(' ', 'T').slice(0, 16) : '';
+      })(),
+      criteriaItems: (c as any).criteriaItems || [{ name: 'Sáng tạo', weight: 30 }, { name: 'Kỹ thuật', weight: 40 }, { name: 'Trình bày', weight: 30 }],
+      judgeCount: (c as any).judgeCount || 3,
     });
+    setModalStep(1);
     setFormError(null);
     setShowModal(true);
   };
@@ -544,6 +597,39 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
   };
 
   // ── Submit form (tạo / cập nhật) ──
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: 'image' | 'logo_url') => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    const file = e.target.files[0];
+    
+    if (file.size > 5 * 1024 * 1024) {
+      setFormError('Ảnh tải lên không được vượt quá 5MB.');
+      return;
+    }
+
+    const token = localStorage.getItem('auth_token');
+    const uploadData = new FormData();
+    uploadData.append('file', file);
+
+    try {
+      const response = await fetch('http://localhost:8000/index.php/api/admin/hackathons/upload-image', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: uploadData,
+      });
+      const result = await response.json();
+      if (response.ok && result.status === 'success') {
+        const fullUrl = 'http://localhost:8000/index.php' + result.url;
+        setFormData(p => ({ ...p, [field]: fullUrl }));
+      } else {
+        setFormError(result.message || 'Lỗi tải ảnh lên.');
+      }
+    } catch (err) {
+      setFormError('Không thể kết nối đến máy chủ.');
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
@@ -584,11 +670,19 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
           max_teams: Number(formData.maxTeams),
           status: formData.status,
           organizer: formData.organizer,
-          schedule: formData.schedule,
+          schedule: JSON.stringify({
+            registrationStart: formData.registrationStart.replace('T', ' ') + ':00',
+            registrationEnd: formData.registrationEnd.replace('T', ' ') + ':00',
+            submissionDeadline: formData.submissionDeadline ? formData.submissionDeadline.replace('T', ' ') + ':00' : null,
+            items: formData.scheduleItems || []
+          }),
           prize_details: formData.prizeDetails,
           rules: formData.rules,
-          criteria: formData.criteria,
+          criteria: JSON.stringify({ items: formData.criteriaItems, judgeCount: formData.judgeCount }),
+          image: formData.image,
+          logo_url: formData.logo_url,
           registration_deadline: (formData.registrationDeadline || formData.registrationEnd).replace('T', ' ') + ':00',
+          submission_deadline: formData.submissionDeadline ? formData.submissionDeadline.replace('T', ' ') + ':00' : null,
         }),
       });
       const result = await res.json();
@@ -1299,239 +1393,502 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
                 </div>
               )}
 
-              {/* Tên Hackathon */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">
-                  Tên Hackathon <span className="text-red-500">*</span>
-                </label>
-                <input
-                  id="contest-name"
-                  type="text"
-                  value={formData.name}
-                  onChange={e => setFormData(p => ({ ...p, name: e.target.value }))}
-                  placeholder="VD: AI Innovation Hackathon 2026"
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white"
-                  required
-                />
+              {/* Tabs / Steps Navigation */}
+              <div className="flex border-b border-gray-200 mb-4 sticky top-0 bg-white z-10">
+                <button
+                  type="button"
+                  onClick={() => setModalStep(1)}
+                  className={`px-4 py-3 font-semibold text-sm transition-colors flex-1 ${modalStep === 1 ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                  Thông tin chung
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModalStep(2)}
+                  className={`px-4 py-3 font-semibold text-sm transition-colors flex-1 ${modalStep === 2 ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                  Lịch trình
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModalStep(3)}
+                  className={`px-4 py-3 font-semibold text-sm transition-colors flex-1 ${modalStep === 3 ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                  Chi tiết
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModalStep(4)}
+                  className={`px-4 py-3 font-semibold text-sm transition-colors flex-1 ${modalStep === 4 ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                  Hình ảnh
+                </button>
               </div>
 
-              {/* Danh mục + Trạng thái */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">
-                    Danh mục <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    id="contest-category"
-                    value={formData.category}
-                    onChange={e => setFormData(p => ({ ...p, category: e.target.value }))}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-sm"
-                  >
-                    {CATEGORIES.map(c => <option key={c}>{c}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Trạng thái</label>
-                  <select
-                    id="contest-status"
-                    value={formData.status}
-                    onChange={e => setFormData(p => ({ ...p, status: e.target.value }))}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-sm"
-                  >
-                    <option value="UPCOMING">Sắp diễn ra</option>
-                    <option value="ACTIVE">Đang diễn ra</option>
-                    <option value="COMPLETED">Đã kết thúc</option>
-                    <option value="CANCELLED">Đã huỷ</option>
-                  </select>
-                </div>
-              </div>
+              {/* Step 1: Basic Info */}
+              {modalStep === 1 && (
+                <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                  {/* Tên Hackathon */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                      Tên Hackathon <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      id="contest-name"
+                      type="text"
+                      value={formData.name}
+                      onChange={e => setFormData(p => ({ ...p, name: e.target.value }))}
+                      placeholder="VD: AI Innovation Hackathon 2026"
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white"
+                      required
+                    />
+                  </div>
 
-              {/* Thời gian Đăng ký */}
-              <div className="grid grid-cols-2 gap-4 p-3.5 bg-blue-50/50 rounded-xl border border-blue-100">
-                <div className="col-span-2">
-                  <h4 className="text-xs font-bold text-blue-700 uppercase tracking-wider">Thời gian đăng ký của thí sinh</h4>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                    Mở đăng ký <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    id="contest-reg-start"
-                    type="datetime-local"
-                    value={formData.registrationStart}
-                    onChange={e => setFormData(p => ({ ...p, registrationStart: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs bg-white"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                    Hạn chót đăng ký <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    id="contest-reg-end"
-                    type="datetime-local"
-                    value={formData.registrationEnd}
-                    onChange={e => setFormData(p => ({ ...p, registrationEnd: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs bg-white"
-                    required
-                  />
-                </div>
-              </div>
+                  {/* Danh mục + Trạng thái */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                        Danh mục <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        id="contest-category"
+                        value={formData.category}
+                        onChange={e => setFormData(p => ({ ...p, category: e.target.value }))}
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-sm"
+                      >
+                        {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-1.5">Trạng thái</label>
+                      <select
+                        id="contest-status"
+                        value={formData.status}
+                        onChange={e => setFormData(p => ({ ...p, status: e.target.value }))}
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-sm"
+                      >
+                        <option value="UPCOMING">Sắp diễn ra</option>
+                        <option value="ACTIVE">Đang diễn ra</option>
+                        <option value="COMPLETED">Đã kết thúc</option>
+                        <option value="CANCELLED">Đã huỷ</option>
+                      </select>
+                    </div>
+                  </div>
 
-              {/* Thời gian Diễn ra sự kiện */}
-              <div className="grid grid-cols-2 gap-4 p-3.5 bg-purple-50/50 rounded-xl border border-purple-100">
-                <div className="col-span-2">
-                  <h4 className="text-xs font-bold text-purple-700 uppercase tracking-wider">Thời gian diễn ra sự kiện</h4>
+                  {/* Địa điểm + Số đội tối đa */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-1.5">Địa điểm</label>
+                      <input
+                        id="contest-location"
+                        list="locations-list"
+                        type="text"
+                        value={formData.location}
+                        onChange={e => setFormData(p => ({ ...p, location: e.target.value }))}
+                        placeholder="VD: TP. Hồ Chí Minh"
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white"
+                      />
+                      <datalist id="locations-list">
+                        <option value="Hà Nội" />
+                        <option value="TP. Hồ Chí Minh" />
+                        <option value="Đà Nẵng" />
+                        <option value="Cần Thơ" />
+                        <option value="Hải Phòng" />
+                        <option value="Trực tuyến (Online)" />
+                      </datalist>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-1.5">Số đội tối đa</label>
+                      <input
+                        id="contest-max-teams"
+                        type="number"
+                        min={1}
+                        value={formData.maxTeams}
+                        onChange={e => setFormData(p => ({ ...p, maxTeams: Number(e.target.value) }))}
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Ban tổ chức */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Ban tổ chức</label>
+                    <input
+                      id="contest-organizer"
+                      list="organizers-list"
+                      type="text"
+                      value={formData.organizer}
+                      onChange={e => setFormData(p => ({ ...p, organizer: e.target.value }))}
+                      placeholder="VD: Bộ Khoa học và Công nghệ"
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white"
+                    />
+                    <datalist id="organizers-list">
+                      <option value="Bộ Khoa học và Công nghệ" />
+                      <option value="FPT Software" />
+                      <option value="VNG Corporation" />
+                      <option value="Viettel" />
+                      <option value="Đại học Quốc gia Hà Nội" />
+                      <option value="Đại học Quốc gia TP.HCM" />
+                      <option value="Đại học Bách Khoa" />
+                      <option value="Google Developer Groups (GDG)" />
+                    </datalist>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                    Ngày bắt đầu <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    id="contest-start-date"
-                    type="datetime-local"
-                    value={formData.startDate}
-                    onChange={e => setFormData(p => ({ ...p, startDate: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs bg-white"
-                    required
-                  />
+              )}
+
+              {/* Step 2: Timeline */}
+              {modalStep === 2 && (
+                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                  {/* Thời gian Đăng ký */}
+                  <div className="grid grid-cols-2 gap-4 p-4 bg-blue-50/40 rounded-xl border border-blue-100">
+                    <div className="col-span-2">
+                      <h4 className="text-sm font-bold text-blue-700 flex items-center gap-2">
+                        <Users size={16} /> Thời gian đăng ký của thí sinh
+                      </h4>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                        Mở đăng ký <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        id="contest-reg-start"
+                        type="datetime-local"
+                        value={formData.registrationStart}
+                        onChange={e => setFormData(p => ({ ...p, registrationStart: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white"
+                        required={modalStep === 2}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                        Hạn chót đăng ký <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        id="contest-reg-end"
+                        type="datetime-local"
+                        value={formData.registrationEnd}
+                        onChange={e => setFormData(p => ({ ...p, registrationEnd: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white"
+                        required={modalStep === 2}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Thời gian Diễn ra sự kiện */}
+                  <div className="grid grid-cols-2 gap-4 p-4 bg-purple-50/40 rounded-xl border border-purple-100">
+                    <div className="col-span-2">
+                      <h4 className="text-sm font-bold text-purple-700 flex items-center gap-2">
+                        <Calendar size={16} /> Thời gian diễn ra sự kiện
+                      </h4>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                        Ngày bắt đầu <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        id="contest-start-date"
+                        type="datetime-local"
+                        value={formData.startDate}
+                        onChange={e => setFormData(p => ({ ...p, startDate: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm bg-white"
+                        required={modalStep === 2}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                        Ngày kết thúc <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        id="contest-end-date"
+                        type="datetime-local"
+                        value={formData.endDate}
+                        onChange={e => setFormData(p => ({ ...p, endDate: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm bg-white"
+                        required={modalStep === 2}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Thời gian Tuỳ chọn (Nộp bài/Khác) */}
+                  <div className="grid grid-cols-2 gap-4 p-4 bg-orange-50/40 rounded-xl border border-orange-100">
+                    <div className="col-span-2">
+                      <h4 className="text-sm font-bold text-orange-700 flex items-center gap-2">
+                        <Clock size={16} /> Thời gian nộp bài / Tuỳ chỉnh khác (Không bắt buộc)
+                      </h4>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                        Hạn chót nộp bài
+                      </label>
+                      <input
+                        type="datetime-local"
+                        value={formData.submissionDeadline || ''}
+                        onChange={e => setFormData(p => ({ ...p, submissionDeadline: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm bg-white"
+                      />
+                    </div>
+                    <div className="flex items-center">
+                      <p className="text-xs text-orange-600/80 italic mt-6">
+                        *Admin có thể cài đặt mốc thời gian này nếu Hackathon yêu cầu thí sinh nộp bài trước một thời điểm cụ thể.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Các mốc thời gian tuỳ chỉnh */}
+                  <div className="mt-4 pt-4 border-t border-orange-200/50">
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700">Các mốc thời gian khác (Tuỳ chọn)</label>
+                        <p className="text-xs text-gray-500 mt-0.5">Thêm các mốc sự kiện cụ thể như: Khai mạc, Bế mạc, Hạn chót nộp slide...</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setFormData(p => ({
+                          ...p,
+                          scheduleItems: [...(p.scheduleItems || []), { name: '', time: '' }]
+                        }))}
+                        className="text-xs text-blue-600 font-bold hover:underline cursor-pointer bg-blue-50 px-3 py-1.5 rounded-lg flex items-center gap-1"
+                      >
+                        <Plus size={14} /> Thêm mốc
+                      </button>
+                    </div>
+                    <div className="space-y-3">
+                      {(formData.scheduleItems || []).map((item, idx) => (
+                        <div key={idx} className="flex gap-3 items-center bg-white p-2.5 rounded-xl border border-gray-200 shadow-sm">
+                          <div className="flex-1">
+                            <input
+                              type="text"
+                              value={item.name}
+                              onChange={e => {
+                                const updated = [...(formData.scheduleItems || [])];
+                                updated[idx] = { ...updated[idx], name: e.target.value };
+                                setFormData(p => ({ ...p, scheduleItems: updated }));
+                              }}
+                              placeholder="Tên mốc thời gian (VD: Khai mạc)"
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                            />
+                          </div>
+                          <div className="flex-1">
+                            <input
+                              type="datetime-local"
+                              value={item.time}
+                              onChange={e => {
+                                const updated = [...(formData.scheduleItems || [])];
+                                updated[idx] = { ...updated[idx], time: e.target.value };
+                                setFormData(p => ({ ...p, scheduleItems: updated }));
+                              }}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setFormData(p => ({
+                              ...p,
+                              scheduleItems: (p.scheduleItems || []).filter((_, i) => i !== idx)
+                            }))}
+                            className="text-gray-400 hover:text-red-500 hover:bg-red-50 p-1.5 rounded-lg transition-colors cursor-pointer"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      ))}
+                      {(!formData.scheduleItems || formData.scheduleItems.length === 0) && (
+                        <div className="text-center py-6 border border-dashed border-gray-300 rounded-xl bg-gray-50/50">
+                          <Clock size={24} className="mx-auto text-gray-300 mb-2" />
+                          <p className="text-xs text-gray-500">Chưa có mốc thời gian tuỳ chỉnh nào.</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                    Ngày kết thúc <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    id="contest-end-date"
-                    type="datetime-local"
-                    value={formData.endDate}
-                    onChange={e => setFormData(p => ({ ...p, endDate: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs bg-white"
-                    required
-                  />
+              )}
+
+              {/* Step 3: Detailed Content */}
+              {modalStep === 3 && (
+                <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                  {/* Mô tả */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Mô tả chi tiết</label>
+                    <textarea
+                      id="contest-description"
+                      rows={4}
+                      value={formData.description}
+                      onChange={e => setFormData(p => ({ ...p, description: e.target.value }))}
+                      placeholder="Nhập mô tả chi tiết về Hackathon..."
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm resize-none bg-white"
+                    />
+                  </div>
+
+
+
+                  {/* Cơ cấu giải thưởng */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Cơ cấu giải thưởng</label>
+                    <textarea
+                      id="contest-prize"
+                      rows={3}
+                      value={formData.prizeDetails}
+                      onChange={e => setFormData(p => ({ ...p, prizeDetails: e.target.value }))}
+                      placeholder="Giải nhất: 100tr, Giải nhì: 50tr..."
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm resize-none bg-white"
+                    />
+                  </div>
+
+                  {/* Quy tắc tham gia */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Quy tắc tham gia</label>
+                    <textarea
+                      id="contest-rules"
+                      rows={4}
+                      value={formData.rules}
+                      onChange={e => setFormData(p => ({ ...p, rules: e.target.value }))}
+                      placeholder="Nhập quy tắc, điều khoản tham gia cuộc thi..."
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm resize-none bg-white"
+                    />
+                  </div>
+
+                  {/* Ban giám khảo & Tiêu chí chấm điểm */}
+                  <div className="bg-indigo-50/50 p-4 rounded-xl border border-indigo-100 space-y-4">
+                    <div>
+                      <h4 className="text-sm font-bold text-indigo-800 flex items-center gap-2 mb-2">
+                        <Users size={16} /> Thông tin Ban giám khảo
+                      </h4>
+                      <p className="text-xs text-indigo-600 mb-3">
+                        Số lượng thành viên Ban giám khảo và bộ tiêu chí chấm điểm cho Hackathon này.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <label className="text-sm font-semibold text-gray-700">Số lượng giám khảo:</label>
+                      <input
+                        type="number"
+                        min={1} max={20}
+                        value={formData.judgeCount}
+                        onChange={e => setFormData(p => ({ ...p, judgeCount: Number(e.target.value) }))}
+                        className="w-20 px-3 py-1.5 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-400 focus:outline-none text-center font-bold"
+                      />
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-sm font-semibold text-gray-700">Tiêu chí chấm điểm</label>
+                        <button
+                          type="button"
+                          onClick={() => setFormData(p => ({
+                            ...p,
+                            criteriaItems: [...(p.criteriaItems || []), { name: '', weight: 20 }]
+                          }))}
+                          className="text-xs text-indigo-600 font-bold hover:underline cursor-pointer flex items-center gap-1"
+                        >
+                          <Plus size={14} /> Thêm tiêu chí
+                        </button>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        {(formData.criteriaItems || []).map((item, idx) => (
+                          <div key={idx} className="flex gap-2 items-center">
+                            <input
+                              type="text"
+                              value={item.name}
+                              onChange={e => {
+                                const updated = [...(formData.criteriaItems || [])];
+                                updated[idx] = { ...updated[idx], name: e.target.value };
+                                setFormData(p => ({ ...p, criteriaItems: updated }));
+                              }}
+                              placeholder="Tên tiêu chí (VD: Sáng tạo)"
+                              className="flex-1 px-3 py-1.5 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-indigo-400 focus:outline-none"
+                            />
+                            <div className="flex items-center gap-1">
+                              <input
+                                type="number"
+                                min={0} max={100}
+                                value={item.weight}
+                                onChange={e => {
+                                  const updated = [...(formData.criteriaItems || [])];
+                                  updated[idx] = { ...updated[idx], weight: Number(e.target.value) };
+                                  setFormData(p => ({ ...p, criteriaItems: updated }));
+                                }}
+                                className="w-16 px-2 py-1.5 border border-gray-300 rounded text-sm text-center focus:ring-1 focus:ring-indigo-400 focus:outline-none"
+                              />
+                              <span className="text-sm text-gray-500">%</span>
+                              {(formData.criteriaItems || []).length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => setFormData(p => ({
+                                    ...p,
+                                    criteriaItems: (p.criteriaItems || []).filter((_, i) => i !== idx)
+                                  }))}
+                                  className="text-gray-400 hover:text-red-500 cursor-pointer ml-1"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className={`text-xs font-bold text-right mt-2 ${(formData.criteriaItems || []).reduce((s, c) => s + c.weight, 0) === 100 ? 'text-green-600' : 'text-red-500'}`}>
+                        Tổng trọng số: {(formData.criteriaItems || []).reduce((s, c) => s + c.weight, 0)}%
+                        {(formData.criteriaItems || []).reduce((s, c) => s + c.weight, 0) !== 100 && ' (Vui lòng điều chỉnh tổng = 100%)'}
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
 
-              {/* Địa điểm + Số đội tối đa */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Địa điểm</label>
-                  <input
-                    id="contest-location"
-                    list="locations-list"
-                    type="text"
-                    value={formData.location}
-                    onChange={e => setFormData(p => ({ ...p, location: e.target.value }))}
-                    placeholder="VD: TP. Hồ Chí Minh"
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white"
-                  />
-                  <datalist id="locations-list">
-                    <option value="Hà Nội" />
-                    <option value="TP. Hồ Chí Minh" />
-                    <option value="Đà Nẵng" />
-                    <option value="Cần Thơ" />
-                    <option value="Hải Phòng" />
-                    <option value="Trực tuyến (Online)" />
-                  </datalist>
+              {/* Step 4: Images */}
+              {modalStep === 4 && (
+                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Ảnh bìa (Cover Image)</label>
+                    <p className="text-xs text-gray-500 mb-3">Nên sử dụng ảnh tỉ lệ 16:9, kích thước tối thiểu 1200x675px.</p>
+                    {formData.image ? (
+                      <div className="relative group rounded-xl overflow-hidden border border-gray-200">
+                        <img src={formData.image} alt="Cover Preview" className="w-full h-48 object-cover" />
+                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <label className="px-4 py-2 bg-white text-gray-900 rounded-lg font-semibold text-sm cursor-pointer hover:bg-gray-100">
+                            Thay đổi ảnh
+                            <input type="file" className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e, 'image')} />
+                          </label>
+                        </div>
+                      </div>
+                    ) : (
+                      <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors">
+                        <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                          <UploadCloud className="w-10 h-10 mb-3 text-gray-400" />
+                          <p className="mb-2 text-sm text-gray-500"><span className="font-semibold">Nhấn để tải lên</span> hoặc kéo thả</p>
+                          <p className="text-xs text-gray-500">SVG, PNG, JPG or GIF (Tối đa 5MB)</p>
+                        </div>
+                        <input type="file" className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e, 'image')} />
+                      </label>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Ảnh đại diện (Logo)</label>
+                    <p className="text-xs text-gray-500 mb-3">Nên sử dụng ảnh vuông (1:1), nền trong suốt.</p>
+                    {formData.logo_url ? (
+                      <div className="relative group w-32 h-32 rounded-xl overflow-hidden border border-gray-200 bg-white">
+                        <img src={formData.logo_url} alt="Logo Preview" className="w-full h-full object-contain p-2" />
+                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <label className="p-2 bg-white text-gray-900 rounded-full cursor-pointer hover:bg-gray-100" title="Thay đổi Logo">
+                            <Pencil size={16} />
+                            <input type="file" className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e, 'logo_url')} />
+                          </label>
+                        </div>
+                      </div>
+                    ) : (
+                      <label className="flex flex-col items-center justify-center w-32 h-32 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors">
+                        <div className="flex flex-col items-center justify-center">
+                          <UploadCloud className="w-8 h-8 mb-2 text-gray-400" />
+                          <p className="text-xs text-gray-500 font-semibold text-center px-2">Tải Logo</p>
+                        </div>
+                        <input type="file" className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e, 'logo_url')} />
+                      </label>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Số đội tối đa</label>
-                  <input
-                    id="contest-max-teams"
-                    type="number"
-                    min={1}
-                    value={formData.maxTeams}
-                    onChange={e => setFormData(p => ({ ...p, maxTeams: Number(e.target.value) }))}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white"
-                  />
-                </div>
-              </div>
-
-              {/* Ban tổ chức */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Ban tổ chức</label>
-                <input
-                  id="contest-organizer"
-                  list="organizers-list"
-                  type="text"
-                  value={formData.organizer}
-                  onChange={e => setFormData(p => ({ ...p, organizer: e.target.value }))}
-                  placeholder="VD: Bộ Khoa học và Công nghệ"
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white"
-                />
-                <datalist id="organizers-list">
-                  <option value="Bộ Khoa học và Công nghệ" />
-                  <option value="FPT Software" />
-                  <option value="VNG Corporation" />
-                  <option value="Viettel" />
-                  <option value="Đại học Quốc gia Hà Nội" />
-                  <option value="Đại học Quốc gia TP.HCM" />
-                  <option value="Đại học Bách Khoa" />
-                  <option value="Google Developer Groups (GDG)" />
-                </datalist>
-              </div>
-
-              {/* Mô tả */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Mô tả chi tiết</label>
-                <textarea
-                  id="contest-description"
-                  rows={4}
-                  value={formData.description}
-                  onChange={e => setFormData(p => ({ ...p, description: e.target.value }))}
-                  placeholder="Nhập mô tả chi tiết về Hackathon..."
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm resize-none bg-white"
-                />
-              </div>
-
-              {/* Các trường cấu hình nâng cao */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Tiêu chí đánh giá</label>
-                <textarea
-                  id="contest-criteria"
-                  rows={3}
-                  value={formData.criteria}
-                  onChange={e => setFormData(p => ({ ...p, criteria: e.target.value }))}
-                  placeholder="Ví dụ: Tính sáng tạo (30%), Khả năng ứng dụng (25%)..."
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm resize-none bg-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Lịch trình</label>
-                <textarea
-                  id="contest-schedule"
-                  rows={3}
-                  value={formData.schedule}
-                  onChange={e => setFormData(p => ({ ...p, schedule: e.target.value }))}
-                  placeholder="Ví dụ: 08:00 Khai mạc, 09:00 Bắt đầu..."
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm resize-none bg-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Cơ cấu giải thưởng</label>
-                <textarea
-                  id="contest-prize"
-                  rows={3}
-                  value={formData.prizeDetails}
-                  onChange={e => setFormData(p => ({ ...p, prizeDetails: e.target.value }))}
-                  placeholder="Ví dụ: Giải nhất: 70,000,000đ..."
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm resize-none bg-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Thể lệ chung</label>
-                <textarea
-                  id="contest-rules"
-                  rows={3}
-                  value={formData.rules}
-                  onChange={e => setFormData(p => ({ ...p, rules: e.target.value }))}
-                  placeholder="Ví dụ: Mỗi đội 3-5 người, bắt buộc AI/ML..."
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm resize-none bg-white"
-                />
-              </div>
+              )}
             </form>
 
             {/* Footer */}
@@ -1570,8 +1927,7 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
           {[
             { id: 'overview', icon: BarChart3, label: 'Tổng quan' },
             { id: 'events', icon: Calendar, label: 'Quản lý Hackathon' },
-            { id: 'permissions', icon: Shield, label: 'Phân quyền' },
-            { id: 'settings', icon: SettingsIcon, label: 'Cài đặt' }
+            { id: 'permissions', icon: Shield, label: 'Phân quyền' }
           ].map(tab => {
             const Icon = tab.icon;
             return (
@@ -1603,7 +1959,6 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
               {activeTab === 'overview' && 'Tổng quan hệ thống'}
               {activeTab === 'events' && 'Quản lý Hackathon'}
               {activeTab === 'permissions' && 'Phân quyền thành viên'}
-              {activeTab === 'settings' && 'Cài đặt chung'}
             </h1>
           </div>
           {activeTab === 'events' && (
@@ -1618,9 +1973,8 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
           )}
         </header>
 
-        {/* Mobile Fallback Navigation */}
         <div className="md:hidden flex gap-2 px-4 py-3 bg-white border-b border-gray-200 overflow-x-auto hide-scrollbar flex-shrink-0 shadow-sm">
-          {['overview', 'events', 'permissions', 'settings'].map(tab => (
+          {['overview', 'events', 'permissions'].map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -1633,7 +1987,6 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
               {tab === 'overview'     && 'Tổng quan'}
               {tab === 'events'       && 'Hackathon'}
               {tab === 'permissions'  && 'Phân quyền'}
-              {tab === 'settings'     && 'Cài đặt'}
             </button>
           ))}
         </div>
@@ -1847,69 +2200,94 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
                 {/* Grid cards */}
                 {filteredContests.length > 0 ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-                    {filteredContests.map(c => (
-                      <div key={c.id} className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5 flex flex-col overflow-hidden">
-                        {/* Card Header */}
-                        <div className="p-5 pb-3 flex-1">
-                          <div className="flex items-start justify-between gap-2 mb-3">
-                            <h3 className="font-bold text-gray-900 text-sm leading-snug line-clamp-2 text-left">{c.name}</h3>
-                            <span className={`flex-shrink-0 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${STATUS_COLORS[c.status] ?? 'bg-gray-100 text-gray-600'}`}>
-                              {STATUS_LABELS[c.status] ?? c.status}
-                            </span>
+                    {filteredContests.map(c => {
+                      // Helper for mock logo/cover just like in EventsPage
+                      const getMockLogo = (id: number) => {
+                        const logos = ['https://ui-avatars.com/api/?name=PO&background=0D8ABC&color=fff&size=128','https://ui-avatars.com/api/?name=CS&background=D32F2F&color=fff&size=128','https://ui-avatars.com/api/?name=HA&background=303F9F&color=fff&size=128','https://ui-avatars.com/api/?name=TK&background=388E3C&color=fff&size=128'];
+                        return logos[id % logos.length];
+                      };
+                      const getMockCover = (id: number) => {
+                        const covers = ['https://images.unsplash.com/photo-1555066931-4365d14bab8c?auto=format&fit=crop&q=80&w=800&h=400','https://images.unsplash.com/photo-1516116216624-53e697fedbea?auto=format&fit=crop&q=80&w=800&h=400','https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=800&h=400','https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&q=80&w=800&h=400'];
+                        return covers[id % covers.length];
+                      };
+                      const coverImage = (c.image && (c.image.startsWith('http') || c.image.startsWith('/'))) ? c.image : getMockCover(c.id);
+                      
+                      return (
+                      <div key={c.id} className="bg-white rounded-[24px] border border-gray-200 shadow-sm hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all duration-300 flex flex-col overflow-hidden">
+                        {/* Cover Image Section (Top half) */}
+                        <div className="relative h-[160px] w-full bg-gray-100 group">
+                          <img 
+                            src={coverImage}
+                            alt={c.name}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                          />
+                          {/* Badge */}
+                          <div className={`absolute top-4 left-4 px-2.5 py-1 rounded-lg text-xs font-bold shadow-sm border ${STATUS_COLORS[c.status] ?? 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+                            {STATUS_LABELS[c.status] ?? c.status}
+                          </div>
+                        </div>
+
+                        {/* Body Section */}
+                        <div className="relative p-5 pb-3 flex-col flex-1 pt-10">
+                          {/* Avatar Overlapping */}
+                          <div className="absolute -top-8 left-5">
+                            <div className="w-16 h-16 rounded-full border-4 border-white overflow-hidden bg-white shadow-sm">
+                              <img 
+                                src={c.logo_url || getMockLogo(c.id)} 
+                                alt="Org Avatar"
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
                           </div>
 
+                          <h3 className="font-bold text-gray-900 text-[18px] leading-snug line-clamp-2 text-left mb-2 group-hover:text-[#5027d9] transition-colors">{c.name}</h3>
+
                           {c.description && (
-                            <p className="text-gray-500 text-xs line-clamp-2 mb-3 text-left">{c.description}</p>
+                            <p className="text-gray-500 text-xs line-clamp-2 mb-4 text-left leading-relaxed">{c.description}</p>
                           )}
 
-                          <div className="space-y-1.5 text-left">
+                          <div className="space-y-1.5 text-left mb-2">
                             <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                              <Tag size={13} className="text-blue-400" />
-                              <span>{c.category}</span>
+                              <Tag size={13} className="text-[#5027d9]" />
+                              <span className="font-medium text-[#5027d9] bg-[#5027d9]/10 px-2 py-0.5 rounded">{c.category}</span>
                             </div>
                             {c.location && (
                               <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                                <MapPin size={13} className="text-rose-400" />
+                                <MapPin size={13} className="text-gray-400" />
                                 <span>{c.location}</span>
                               </div>
                             )}
                             <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                              <Calendar size={13} className="text-purple-400" />
+                              <Calendar size={13} className="text-gray-400" />
                               <span>Diễn ra: {c.startDate?.slice(0,10)} → {c.endDate?.slice(0,10)}</span>
                             </div>
                             <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                              <Clock size={13} className="text-amber-500" />
+                              <Clock size={13} className="text-gray-400" />
                               <span>Đăng ký: {c.registrationStart?.slice(0,10)} → {c.registrationEnd?.slice(0,10)}</span>
                             </div>
                             <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                              <Hash size={13} className="text-green-400" />
+                              <Hash size={13} className="text-gray-400" />
                               <span>Tối đa {c.maxTeams} đội</span>
                             </div>
                           </div>
                         </div>
 
                         {/* Card Footer: actions */}
-                        <div className="border-t border-gray-100 px-5 py-3 flex items-center justify-between bg-gray-50">
-                          <span className="text-xs text-gray-400">#{c.id}</span>
+                        <div className="border-t border-gray-100 px-5 py-3 flex items-center justify-between bg-white mt-auto">
+                          <span className="text-xs font-medium text-gray-400">#{c.id}</span>
                           <div className="flex gap-2">
                             <button
                               onClick={() => handleOpenTeams(c)}
-                              className="p-1.5 hover:bg-white hover:shadow rounded-lg transition-all text-gray-400 hover:text-indigo-600 cursor-pointer"
+                              className="p-1.5 bg-gray-50 hover:bg-indigo-50 hover:shadow-sm rounded-lg transition-all text-gray-400 hover:text-indigo-600 cursor-pointer"
                               title="Quản lý Đội thi"
                             >
                               <Users size={16} />
                             </button>
-                            <button
-                              onClick={() => setSelectedHackathonForTimeline(c)}
-                              className="p-1.5 hover:bg-white hover:shadow rounded-lg transition-all text-gray-400 hover:text-blue-600 cursor-pointer"
-                              title="Quản lý Timeline & Lịch trình"
-                            >
-                              <Clock size={16} />
-                            </button>
+
                             <button
                               id={`btn-edit-contest-${c.id}`}
                               onClick={() => openEdit(c)}
-                              className="p-1.5 hover:bg-blue-50 hover:shadow rounded-lg transition-all text-gray-400 hover:text-blue-600 cursor-pointer"
+                              className="p-1.5 bg-gray-50 hover:bg-blue-50 hover:shadow-sm rounded-lg transition-all text-gray-400 hover:text-blue-600 cursor-pointer"
                               title="Chỉnh sửa"
                             >
                               <Pencil size={16} />
@@ -1918,7 +2296,7 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
                               id={`btn-start-contest-${c.id}`}
                               onClick={() => handleStartContest(c.id)}
                               disabled={c.status === 'COMPLETED' || c.status === 'CANCELLED'}
-                              className="p-1.5 hover:bg-green-50 hover:shadow rounded-lg transition-all text-gray-400 hover:text-green-600 cursor-pointer disabled:opacity-40"
+                              className="p-1.5 bg-gray-50 hover:bg-green-50 hover:shadow-sm rounded-lg transition-all text-gray-400 hover:text-green-600 cursor-pointer disabled:opacity-40"
                               title="Bắt đầu cuộc thi"
                             >
                               <PlayCircle size={16} />
@@ -1927,7 +2305,7 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
                               id={`btn-delete-contest-${c.id}`}
                               onClick={() => setConfirmDelete(c)}
                               disabled={deletingId === c.id}
-                              className="p-1.5 hover:bg-red-50 hover:shadow rounded-lg transition-all text-gray-400 hover:text-red-500 disabled:opacity-40 cursor-pointer"
+                              className="p-1.5 bg-gray-50 hover:bg-red-50 hover:shadow-sm rounded-lg transition-all text-gray-400 hover:text-red-500 disabled:opacity-40 cursor-pointer"
                               title="Xoá Hackathon"
                             >
                               {deletingId === c.id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
@@ -1935,7 +2313,8 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
                           </div>
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="bg-white rounded-xl border border-gray-200 py-20 text-center">
@@ -2102,133 +2481,6 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
           </div>
         )}
 
-        {/* ── Tab: Cài đặt ── */}
-        {activeTab === 'settings' && (
-          <div className="space-y-6">
-            <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-              <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2 mb-2">
-                <SettingsIcon className="text-blue-600" size={22} />
-                Quản lý Tiêu chí chấm điểm toàn cục
-              </h2>
-              <p className="text-sm text-gray-500 mb-6">
-                Thiết lập các tiêu chí chấm điểm (như Tính sáng tạo, Kỹ thuật...) để Giám khảo sử dụng khi đánh giá các đội thi.
-              </p>
-
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Form thêm tiêu chí */}
-                <div className="bg-gray-50 p-5 rounded-xl border border-gray-200 self-start">
-                  <h3 className="font-bold text-gray-900 text-sm mb-4 text-left">Thêm tiêu chí mới</h3>
-                  <form onSubmit={handleCreateCriteria} className="space-y-4">
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 mb-1.5 text-left">Tên tiêu chí *</label>
-                      <input
-                        type="text"
-                        required
-                        value={criteriaForm.name}
-                        onChange={e => setCriteriaForm(p => ({ ...p, name: e.target.value }))}
-                        placeholder="VD: Tính thực tiễn, Sáng tạo..."
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs font-bold text-gray-700 mb-1.5 text-left">Trọng số (%) *</label>
-                        <input
-                          type="number"
-                          required
-                          min={1}
-                          max={100}
-                          value={criteriaForm.weight}
-                          onChange={e => setCriteriaForm(p => ({ ...p, weight: Number(e.target.value) }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none text-center"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-gray-700 mb-1.5 text-left">Điểm tối đa *</label>
-                        <input
-                          type="number"
-                          required
-                          min={1}
-                          value={criteriaForm.maxScore}
-                          onChange={e => setCriteriaForm(p => ({ ...p, maxScore: Number(e.target.value) }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none text-center"
-                        />
-                      </div>
-                    </div>
-                    <button
-                      type="submit"
-                      disabled={submittingCriteria}
-                      className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-lg font-bold text-xs shadow transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-                    >
-                      {submittingCriteria ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-                      Thêm tiêu chí
-                    </button>
-                  </form>
-                </div>
-
-                {/* Danh sách tiêu chí */}
-                <div className="lg:col-span-2 space-y-4">
-                  {loadingCriteria ? (
-                    <div className="flex flex-col items-center justify-center py-12 gap-2 text-gray-500 text-sm">
-                      <Loader2 className="animate-spin text-blue-600" size={24} />
-                      <span>Đang tải danh sách tiêu chí...</span>
-                    </div>
-                  ) : criteriaList.length === 0 ? (
-                    <div className="text-center py-12 border border-dashed border-gray-300 rounded-xl">
-                      <SettingsIcon size={40} className="mx-auto text-gray-300 mb-2" />
-                      <p className="text-gray-500 text-sm font-medium">Chưa có tiêu chí nào được thiết lập.</p>
-                      <p className="text-gray-400 text-xs mt-1">Giám khảo sẽ không thể chấm điểm nếu không có tiêu chí.</p>
-                    </div>
-                  ) : (
-                    <div className="border border-gray-150 rounded-xl overflow-hidden shadow-sm bg-white">
-                      <table className="w-full border-collapse">
-                        <thead className="bg-gray-50 border-b border-gray-200">
-                          <tr>
-                            <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Tên tiêu chí</th>
-                            <th className="px-4 py-3 text-center text-xs font-bold text-gray-500 uppercase">Trọng số</th>
-                            <th className="px-4 py-3 text-center text-xs font-bold text-gray-500 uppercase">Điểm tối đa</th>
-                            <th className="px-4 py-3 text-center text-xs font-bold text-gray-500 uppercase w-20">Thao tác</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-150">
-                          {criteriaList.map(crit => (
-                            <tr key={crit.id} className="hover:bg-gray-50 transition-colors">
-                              <td className="px-4 py-3.5 text-sm font-semibold text-gray-800 text-left">{crit.name}</td>
-                              <td className="px-4 py-3.5 text-sm font-medium text-gray-600 text-center">
-                                {Math.round(parseFloat(crit.weight) * 100)}%
-                              </td>
-                              <td className="px-4 py-3.5 text-sm font-medium text-gray-600 text-center">{crit.max_score}</td>
-                              <td className="px-4 py-3.5 text-center">
-                                <button
-                                  onClick={() => handleDeleteCriteria(crit.id)}
-                                  className="p-1 text-gray-400 hover:text-red-500 transition-colors cursor-pointer"
-                                  title="Xoá tiêu chí"
-                                >
-                                  <Trash2 size={16} />
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                      <div className="bg-gray-50 px-4 py-3 border-t border-gray-200 flex justify-between items-center text-xs font-bold">
-                        <span className="text-gray-600">Tổng trọng số:</span>
-                        {(() => {
-                          const totalW = criteriaList.reduce((sum, item) => sum + Math.round(parseFloat(item.weight) * 100), 0);
-                          return (
-                            <span className={totalW === 100 ? 'text-green-600' : 'text-red-500'}>
-                              {totalW}% {totalW === 100 ? '✓' : '(Yêu cầu phải bằng 100%)'}
-                            </span>
-                          );
-                        })()}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* ── Tab: Nhật ký hoạt động ── */}
         {activeTab === 'logs' && (
@@ -2453,256 +2705,12 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
                 </button>
               </div>
 
-              {/* Tab Selector */}
-              <div className="flex px-6 border-b border-gray-200 bg-gray-50 flex-shrink-0">
-                <button
-                  onClick={() => setActiveTimelineTab('milestones')}
-                  className={`px-4 py-3 font-semibold text-sm border-b-2 transition-colors cursor-pointer ${
-                    activeTimelineTab === 'milestones'
-                      ? 'border-blue-600 text-blue-600 font-bold'
-                      : 'border-transparent text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  Mốc thời gian (Timeline)
-                </button>
-                <button
-                  onClick={() => setActiveTimelineTab('schedules')}
-                  className={`px-4 py-3 font-semibold text-sm border-b-2 transition-colors cursor-pointer ${
-                    activeTimelineTab === 'schedules'
-                      ? 'border-blue-600 text-blue-600 font-bold'
-                      : 'border-transparent text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  Lịch trình sự kiện
-                </button>
-                <button
-                  onClick={() => setActiveTimelineTab('challenge')}
-                  className={`px-4 py-3 font-semibold text-sm border-b-2 transition-colors cursor-pointer flex items-center gap-1.5 ${
-                    activeTimelineTab === 'challenge'
-                      ? 'border-orange-500 text-orange-600 font-bold'
-                      : 'border-transparent text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  <BookOpen size={14} />
-                  Đề bài & Tiêu chí
-                  {challenge?.released_at && (
-                    <span className="ml-1 px-1.5 py-0.5 bg-green-100 text-green-700 rounded text-[10px] font-bold">ĐÃ PHÁT</span>
-                  )}
-                </button>
-              </div>
+
 
               {/* Body */}
               <div className="flex-1 overflow-y-auto p-6 flex flex-col lg:flex-row gap-6">
 
-                {/* ══ TAB: ĐỀ BÀI & TIÊU CHÍ ══ */}
-                {activeTimelineTab === 'challenge' && (
-                  <div className="w-full">
-                    {loadingChallenge ? (
-                      <div className="flex items-center justify-center py-16 gap-2 text-gray-500 text-sm">
-                        <Loader2 className="animate-spin text-orange-500" size={20} />
-                        <span>Đang tải đề bài...</span>
-                      </div>
-                    ) : (
-                      <form onSubmit={handleChallengeSave} className="space-y-5">
-
-                        {/* Status Banner */}
-                        {challenge?.released_at ? (
-                          <div className="flex items-center gap-3 p-3.5 bg-green-50 border border-green-200 rounded-xl">
-                            <Unlock size={18} className="text-green-600 flex-shrink-0" />
-                            <div className="text-left">
-                              <p className="text-sm font-bold text-green-800">Đề bài đã được phát công khai</p>
-                              <p className="text-xs text-green-600 mt-0.5">
-                                Phát lúc: {new Date(challenge.released_at).toLocaleString('vi-VN')}
-                              </p>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-3 p-3.5 bg-amber-50 border border-amber-200 rounded-xl">
-                            <Lock size={18} className="text-amber-600 flex-shrink-0" />
-                            <div className="flex-1 text-left">
-                              <p className="text-sm font-bold text-amber-800">Đề bài chưa được phát</p>
-                              <p className="text-xs text-amber-600 mt-0.5">
-                                Sẽ tự động hiển thị khi đến ngày bắt đầu cuộc thi, hoặc bạn có thể phát ngay.
-                              </p>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={handleChallengeRelease}
-                              disabled={!challenge || releasingChallenge}
-                              className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-xs font-bold rounded-lg transition-colors cursor-pointer"
-                            >
-                              {releasingChallenge ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
-                              Phát đề ngay
-                            </button>
-                          </div>
-                        )}
-
-                        {/* Grid: Left form + Right criteria */}
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                          {/* Left: Basic Info */}
-                          <div className="space-y-4">
-                            <div>
-                              <label className="block text-xs font-bold text-gray-700 mb-1.5 text-left">Tiêu đề đề bài *</label>
-                              <input
-                                type="text"
-                                required
-                                value={challengeForm.title}
-                                onChange={e => setChallengeForm(p => ({ ...p, title: e.target.value }))}
-                                placeholder="VD: Xây dựng hệ thống AI quản lý học tập..."
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-orange-400 focus:outline-none"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-xs font-bold text-gray-700 mb-1.5 text-left">Thời gian công bố đề bài (Dự kiến)</label>
-                              <input
-                                type="datetime-local"
-                                value={challengeForm.scheduledReleaseTime || ''}
-                                onChange={e => setChallengeForm(p => ({ ...p, scheduledReleaseTime: e.target.value }))}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-orange-400 focus:outline-none"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-xs font-bold text-gray-700 mb-1.5 text-left">Nội dung / Mô tả chi tiết *</label>
-                              <textarea
-                                rows={6}
-                                required
-                                value={challengeForm.description}
-                                onChange={e => setChallengeForm(p => ({ ...p, description: e.target.value }))}
-                                placeholder="Mô tả bài toán, context, mục tiêu cần đạt được..."
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white resize-none focus:ring-2 focus:ring-orange-400 focus:outline-none"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-xs font-bold text-gray-700 mb-1.5 text-left">
-                                <FileText size={12} className="inline mr-1" />
-                                Tài nguyên / API mẫu / Links
-                              </label>
-                              <textarea
-                                rows={3}
-                                value={challengeForm.resources}
-                                onChange={e => setChallengeForm(p => ({ ...p, resources: e.target.value }))}
-                                placeholder="VD: Dataset: https://... | API docs: https://..."
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white resize-none focus:ring-2 focus:ring-orange-400 focus:outline-none"
-                              />
-                            </div>
-                            
-                            {/* FILE UPLOAD */}
-                            <div className="bg-gray-50 p-3 rounded-lg border border-dashed border-gray-300">
-                              <label className="block text-xs font-bold text-gray-700 mb-1.5 text-left">File đính kèm đề bài (PDF, ZIP, DOCX)</label>
-                              <div className="flex items-center gap-3">
-                                <label className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-300 rounded cursor-pointer hover:bg-gray-50 transition-colors text-sm font-medium">
-                                  {uploadingFile ? <Loader2 size={14} className="animate-spin" /> : <UploadCloud size={14} />}
-                                  Tải lên file
-                                  <input type="file" className="hidden" accept=".pdf,.zip,.docx" onChange={handleFileUpload} disabled={uploadingFile} />
-                                </label>
-                                {challenge?.file_url ? (
-                                  <a href={`http://localhost:8000${challenge.file_url}`} target="_blank" rel="noreferrer" className="text-sm text-blue-600 hover:underline flex-1 truncate text-left">
-                                    {challenge.file_name || 'Đã đính kèm file'}
-                                  </a>
-                                ) : (
-                                  <span className="text-xs text-gray-500 italic">Chưa có file đính kèm</span>
-                                )}
-                              </div>
-                            </div>
-
-                            <div>
-                              <label className="block text-xs font-bold text-gray-700 mb-1.5 text-left">Ràng buộc kỹ thuật</label>
-                              <textarea
-                                rows={3}
-                                value={challengeForm.constraints}
-                                onChange={e => setChallengeForm(p => ({ ...p, constraints: e.target.value }))}
-                                placeholder="VD: Sử dụng Python/JS, không dùng API trả phí..."
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white resize-none focus:ring-2 focus:ring-orange-400 focus:outline-none"
-                              />
-                            </div>
-                          </div>
-
-                          {/* Right: Criteria */}
-                          <div>
-                            <div className="flex items-center justify-between mb-2">
-                              <label className="text-xs font-bold text-gray-700 text-left">Tiêu chí chấm điểm</label>
-                              <button
-                                type="button"
-                                onClick={() => setChallengeForm(p => ({
-                                  ...p,
-                                  criteriaItems: [...p.criteriaItems, { name: '', weight: 20 }]
-                                }))}
-                                className="text-xs text-orange-600 font-bold hover:underline cursor-pointer"
-                              >+ Thêm tiêu chí</button>
-                            </div>
-                            <div className="space-y-3">
-                              {challengeForm.criteriaItems.map((item, idx) => (
-                                <div key={idx} className="flex gap-2 items-center p-2.5 bg-gray-50 border border-gray-200 rounded-lg">
-                                  <div className="flex-1">
-                                    <input
-                                      type="text"
-                                      value={item.name}
-                                      onChange={e => {
-                                        const updated = [...challengeForm.criteriaItems];
-                                        updated[idx] = { ...updated[idx], name: e.target.value };
-                                        setChallengeForm(p => ({ ...p, criteriaItems: updated }));
-                                      }}
-                                      placeholder="Tên tiêu chí (VD: Sáng tạo)"
-                                      className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs bg-white focus:ring-1 focus:ring-orange-400 focus:outline-none"
-                                    />
-                                  </div>
-                                  <div className="flex items-center gap-1 flex-shrink-0">
-                                    <input
-                                      type="number"
-                                      min={0} max={100}
-                                      value={item.weight}
-                                      onChange={e => {
-                                        const updated = [...challengeForm.criteriaItems];
-                                        updated[idx] = { ...updated[idx], weight: Number(e.target.value) };
-                                        setChallengeForm(p => ({ ...p, criteriaItems: updated }));
-                                      }}
-                                      className="w-14 px-2 py-1.5 border border-gray-300 rounded text-xs text-center bg-white focus:ring-1 focus:ring-orange-400 focus:outline-none"
-                                    />
-                                    <span className="text-xs text-gray-500">%</span>
-                                    {challengeForm.criteriaItems.length > 1 && (
-                                      <button
-                                        type="button"
-                                        onClick={() => setChallengeForm(p => ({
-                                          ...p,
-                                          criteriaItems: p.criteriaItems.filter((_, i) => i !== idx)
-                                        }))}
-                                        className="text-gray-400 hover:text-red-500 transition-colors cursor-pointer p-0.5"
-                                      ><X size={13} /></button>
-                                    )}
-                                  </div>
-                                </div>
-                              ))}
-                              {/* Tổng trọng số */}
-                              <div className={`text-xs font-bold text-right pr-1 ${
-                                challengeForm.criteriaItems.reduce((s, c) => s + c.weight, 0) === 100
-                                  ? 'text-green-600' : 'text-red-500'
-                              }`}>
-                                Tổng: {challengeForm.criteriaItems.reduce((s, c) => s + c.weight, 0)}% 
-                                {challengeForm.criteriaItems.reduce((s, c) => s + c.weight, 0) === 100 ? '✓' : '(cần = 100%)'}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Save Button */}
-                        <div className="flex justify-end pt-2 border-t border-gray-100">
-                          <button
-                            type="submit"
-                            disabled={savingChallenge}
-                            className="flex items-center gap-2 px-5 py-2.5 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 text-white font-bold text-sm rounded-lg transition-colors shadow cursor-pointer"
-                          >
-                            {savingChallenge ? <Loader2 size={15} className="animate-spin" /> : <FileText size={15} />}
-                            {challenge ? 'Cập nhật đề bài' : 'Lưu đề bài'}
-                          </button>
-                        </div>
-                      </form>
-                    )}
-                  </div>
-                )}
-
-                {/* ══ TAB: MILESTONES & SCHEDULES ══ */}
-                {activeTimelineTab !== 'challenge' && (
-                  <>
+                {/* ══ TAB: MILESTONES ══ */}
                 {/* Left Column: Form */}
                 <div className="w-full lg:w-1/3 bg-gray-50 p-4 rounded-xl border border-gray-200 flex-shrink-0 self-start">
                   <h4 className="font-bold text-gray-900 text-sm mb-4">
@@ -2963,9 +2971,6 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
                     )
                   )}
                 </div>
-
-              </>
-              )}
 
               </div>
 

@@ -203,6 +203,45 @@ class HackathonController {
         }
     }
 
+    /** GET /api/hackathons/{id}/teams (Public) */
+    public function getPublicRegisteredTeams(int $id): void {
+        try {
+            $teams = $this->hackathonService->getRegisteredTeams($id);
+            // Return all teams regardless of status so users can see pending teams
+            http_response_code(200);
+            echo json_encode(['status' => 'success', 'data' => array_values($teams)], JSON_UNESCAPED_UNICODE);
+        } catch (\Exception $e) {
+            http_response_code(400);
+            echo json_encode(['status' => 'error', 'message' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        }
+    }
+
+    /** GET /api/hackathons/{id}/participants (Public) */
+    public function getPublicParticipants(int $id): void {
+        try {
+            $participants = $this->hackathonService->getContestParticipants($id);
+            
+            // Parse skills JSON string into array if needed, and set default avatars
+            foreach ($participants as &$p) {
+                $p['skills'] = $p['skills'] ? json_decode($p['skills'], true) : [];
+                if (!is_array($p['skills'])) {
+                    // if it wasn't valid json, try exploding by comma or just empty array
+                    $p['skills'] = $p['skills'] ? explode(',', $p['skills']) : [];
+                }
+                
+                if (empty($p['avatar_url'])) {
+                    $p['avatar_url'] = 'https://ui-avatars.com/api/?name=' . urlencode($p['name']) . '&background=random';
+                }
+            }
+            
+            http_response_code(200);
+            echo json_encode(['status' => 'success', 'data' => array_values($participants)], JSON_UNESCAPED_UNICODE);
+        } catch (\Exception $e) {
+            http_response_code(400);
+            echo json_encode(['status' => 'error', 'message' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        }
+    }
+
     /** DELETE /api/admin/hackathons/{id}/teams/{teamId} */
     public function removeTeam(int $contestId, int $teamId): void {
         $currentUser = $this->requireAdmin();
@@ -270,6 +309,59 @@ class HackathonController {
             http_response_code(400);
             echo json_encode(['status' => 'error', 'message' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
         }
+    }
+
+    /** POST /api/admin/hackathons/upload-image */
+    public function uploadImage(): void {
+        $this->requireAdmin();
+        if (!isset($_FILES['file']) || $_FILES['file']['error'] !== UPLOAD_ERR_OK) {
+            http_response_code(400);
+            echo json_encode(['status' => 'error', 'message' => 'Lỗi tải ảnh lên!'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+
+        $file = $_FILES['file'];
+        $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+        if (!in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp'])) {
+            http_response_code(400);
+            echo json_encode(['status' => 'error', 'message' => 'Chỉ chấp nhận ảnh (jpg, png, gif, svg, webp)!'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+
+        $uploadDir = __DIR__ . '/../../storage/uploads/images/';
+        if (!is_dir($uploadDir)) {
+            mkdir($uploadDir, 0755, true);
+        }
+
+        $newName = uniqid('hackathon_') . '.' . $ext;
+        if (move_uploaded_file($file['tmp_name'], $uploadDir . $newName)) {
+            $url = '/api/images/' . $newName;
+            http_response_code(200);
+            echo json_encode(['status' => 'success', 'url' => $url], JSON_UNESCAPED_UNICODE);
+        } else {
+            http_response_code(500);
+            echo json_encode(['status' => 'error', 'message' => 'Lưu file thất bại!'], JSON_UNESCAPED_UNICODE);
+        }
+    }
+
+    /** GET /api/images/{filename} - Serve uploaded hackathon images */
+    public function serveImage(string $filename): void {
+        $filename = basename($filename);
+        $filePath = __DIR__ . '/../../storage/uploads/images/' . $filename;
+
+        if (!file_exists($filePath)) {
+            http_response_code(404);
+            echo json_encode(['status' => 'error', 'message' => 'Ảnh không tồn tại.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+
+        $finfo = new \finfo(FILEINFO_MIME_TYPE);
+        $mimeType = $finfo->file($filePath);
+
+        header('Content-Type: ' . $mimeType);
+        header('Content-Length: ' . filesize($filePath));
+        header('Cache-Control: public, max-age=31536000');
+        readfile($filePath);
     }
 
     private function requireAdmin(): \App\Domain\Entity\User {

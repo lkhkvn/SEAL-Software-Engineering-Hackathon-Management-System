@@ -42,4 +42,7 @@ class HackathonModel
 
     #[ORM\Column(name: 'max_teams', type: 'integer', nullable: true)]
     public ?int $maxTeams = null;
+
+    #[ORM\Column(type: 'text', nullable: true)]
+    public ?string $rules = null;
 }

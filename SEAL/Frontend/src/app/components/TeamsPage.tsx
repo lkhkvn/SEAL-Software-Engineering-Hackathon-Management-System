@@ -1170,83 +1170,103 @@ function TeamDetailModal({ team, onClose }: { team: Team; onClose: () => void })
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden">
-        {/* Banner - Màu cam */}
-        <div className="h-28 relative flex items-end p-5" style={{ background: 'linear-gradient(135deg, #f97316, #f59e0b)' }}>
-          <button onClick={onClose} className="absolute top-4 right-4 p-1.5 bg-black/20 hover:bg-black/40 rounded-full text-white transition-colors">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl overflow-hidden ring-1 ring-white/20 transform transition-all animate-in fade-in zoom-in-95 duration-200">
+        {/* Premium Banner */}
+        <div className="h-32 relative flex items-end p-6 overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-orange-500 via-amber-500 to-orange-400"></div>
+          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 mix-blend-overlay"></div>
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none"></div>
+          
+          <button onClick={onClose} className="absolute top-4 right-4 p-2 bg-black/10 hover:bg-black/30 backdrop-blur-md rounded-full text-white transition-all hover:rotate-90 duration-300">
             <X size={18} />
           </button>
-          <div className="flex items-end gap-4">
-            <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center shadow-lg text-3xl font-black text-orange-600">
+          
+          <div className="relative flex items-end gap-5 z-10 w-full">
+            <div className="w-20 h-20 bg-white/95 backdrop-blur-sm rounded-2xl flex items-center justify-center shadow-xl shadow-orange-900/20 text-4xl font-black text-transparent bg-clip-text bg-gradient-to-br from-orange-500 to-amber-500 border-2 border-white/50 group hover:scale-105 hover:rotate-3 transition-transform duration-300">
               {team.name.charAt(0).toUpperCase()}
             </div>
-            <div className="pb-1">
-              <h3 className="text-2xl font-bold text-white drop-shadow">{team.name}</h3>
-              <p className="text-white/80 text-xs font-medium">{team.category}</p>
+            <div className="pb-1.5 flex-1 min-w-0">
+              <h3 className="text-3xl font-extrabold text-white drop-shadow-md truncate">{team.name}</h3>
+              <p className="text-orange-50 text-sm font-semibold tracking-wide uppercase mt-0.5 opacity-90">{team.category}</p>
             </div>
           </div>
         </div>
 
-        {/* Stats row */}
-        <div className="flex gap-2 p-4 border-b border-gray-100">
-          <StatChip icon={<Users size={13} />} label="Thành viên" value={`${team.members}/${team.maxMembers}`} />
-          <StatChip icon={<Target size={13} />} label="Điểm" value={team.score > 0 ? team.score : 'Chưa có'} />
-          <StatChip icon={<Hash size={13} />} label="Mã mời" value={<span className="font-mono">{team.joinCode}</span>} accent />
+        {/* Floating Stats */}
+        <div className="px-6 -mt-4 relative z-20">
+          <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-3 flex gap-2 justify-between">
+            <div className="flex-1 flex flex-col items-center p-2 rounded-xl bg-orange-50/50 hover:bg-orange-50 transition-colors">
+              <span className="text-xs text-gray-500 font-semibold mb-1 flex items-center gap-1"><Users size={12}/> Thành viên</span>
+              <span className="font-bold text-gray-900">{team.members}/{team.maxMembers}</span>
+            </div>
+            <div className="w-px bg-gray-100 my-2"></div>
+            <div className="flex-1 flex flex-col items-center p-2 rounded-xl bg-orange-50/50 hover:bg-orange-50 transition-colors">
+              <span className="text-xs text-gray-500 font-semibold mb-1 flex items-center gap-1"><Target size={12}/> Điểm</span>
+              <span className="font-bold text-orange-600">{team.score > 0 ? team.score : '—'}</span>
+            </div>
+            <div className="w-px bg-gray-100 my-2"></div>
+            <div className="flex-1 flex flex-col items-center p-2 rounded-xl bg-blue-50/50 hover:bg-blue-50 transition-colors">
+              <span className="text-xs text-blue-600/70 font-semibold mb-1 flex items-center gap-1"><Hash size={12}/> Mã mời</span>
+              <span className="font-bold text-blue-700 font-mono tracking-wider">{team.joinCode}</span>
+            </div>
+          </div>
         </div>
 
         {/* Body */}
-        <div className="p-5 space-y-4 max-h-[50vh] overflow-y-auto">
+        <div className="p-6 space-y-6 max-h-[50vh] overflow-y-auto mt-2 custom-scrollbar">
           {/* Trưởng nhóm */}
-          <div>
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-              <Crown size={12} className="text-yellow-500" /> Đội trưởng
+          <div className="group">
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+              <Crown size={14} className="text-yellow-500" /> Đội trưởng
             </p>
-            <div className="flex items-center gap-2 bg-gray-50 px-3 py-2.5 rounded-xl border border-gray-100">
-              <User size={16} className="text-blue-500" />
-              <span className="text-sm font-semibold text-gray-800">{team.leaderName || 'Chưa xác định'}</span>
+            <div className="flex items-center gap-3 bg-white px-4 py-3 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:border-yellow-200 transition-all duration-300">
+              <div className="w-10 h-10 bg-gradient-to-br from-yellow-100 to-amber-100 rounded-full flex items-center justify-center border border-yellow-200">
+                <User size={18} className="text-yellow-600" />
+              </div>
+              <span className="text-base font-bold text-gray-800">{team.leaderName || 'Chưa xác định'}</span>
             </div>
           </div>
 
           {/* Danh sách thành viên */}
           <div>
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-              <Users size={12} className="text-orange-500" /> Danh sách thành viên ({teamMembers.length})
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+              <Users size={14} className="text-orange-500" /> Danh sách thành viên ({teamMembers.length})
             </p>
             {loadingMembers ? (
-              <div className="flex items-center justify-center py-4 gap-2">
-                <Loader2 size={16} className="animate-spin text-orange-500" />
-                <span className="text-xs text-gray-400">Đang tải...</span>
+              <div className="flex flex-col items-center justify-center py-6 gap-3 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                <Loader2 size={24} className="animate-spin text-orange-500" />
+                <span className="text-sm font-medium text-gray-500">Đang tải hồ sơ thành viên...</span>
               </div>
             ) : teamMembers.length > 0 ? (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {teamMembers.map((member, idx) => (
-                  <div key={idx} className="flex items-center gap-3 bg-gradient-to-r from-orange-50 to-amber-50 px-3 py-2.5 rounded-xl border border-orange-100 hover:shadow-sm transition-shadow">
+                  <div key={idx} className="flex items-center gap-3 bg-white px-4 py-3 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 hover:border-orange-200 transition-all duration-300">
                     {/* Avatar */}
-                    <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 bg-orange-100 flex items-center justify-center border border-orange-200">
+                    <div className="w-12 h-12 rounded-full overflow-hidden shrink-0 bg-gradient-to-br from-orange-100 to-amber-100 flex items-center justify-center border-2 border-white shadow-sm ring-1 ring-black/5">
                       {member.avatarUrl ? (
                         <img src={`http://localhost:8000/index.php${member.avatarUrl}`} alt={member.name} className="w-full h-full object-cover" />
                       ) : (
-                        <span className="text-sm font-bold text-orange-600">{member.name?.charAt(0).toUpperCase()}</span>
+                        <span className="text-lg font-black text-orange-600">{member.name?.charAt(0).toUpperCase()}</span>
                       )}
                     </div>
                     {/* Info */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-gray-800 truncate">{member.name}</span>
+                        <span className="text-sm font-bold text-gray-900 truncate">{member.name}</span>
                         {member.role === 'LEAD' && (
-                          <span className="px-1.5 py-0.5 bg-yellow-100 text-yellow-700 rounded text-[9px] font-bold border border-yellow-200 shrink-0 flex items-center gap-0.5">
-                            <Crown size={9} /> Trưởng nhóm
+                          <span className="px-2 py-0.5 bg-gradient-to-r from-yellow-400 to-amber-500 text-white rounded-md text-[9px] font-black uppercase tracking-wider shadow-sm shrink-0 flex items-center gap-1">
+                            <Crown size={9} /> Lead
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-3 mt-0.5">
+                      <div className="flex items-center gap-3 mt-1">
                         {member.email && (
-                          <span className="text-[10px] text-gray-400 truncate">{member.email}</span>
+                          <span className="text-[11px] font-medium text-gray-500 truncate">{member.email}</span>
                         )}
                         {member.dateOfBirth && (
-                          <span className="text-[10px] text-gray-400 flex items-center gap-0.5 shrink-0">
-                            <Calendar size={9} /> {formatDOB(member.dateOfBirth)}
+                          <span className="text-[11px] font-medium text-gray-500 flex items-center gap-1 shrink-0">
+                            <Calendar size={10} /> {formatDOB(member.dateOfBirth)}
                           </span>
                         )}
                       </div>
@@ -1255,60 +1275,68 @@ function TeamDetailModal({ team, onClose }: { team: Team; onClose: () => void })
                 ))}
               </div>
             ) : (
-              <div className="text-center py-4 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                <span className="text-xs text-gray-400">Chưa có thành viên</span>
+              <div className="text-center py-8 bg-gray-50 rounded-2xl border border-dashed border-gray-200 flex flex-col items-center gap-2">
+                <Users className="text-gray-300" size={32} />
+                <span className="text-sm font-medium text-gray-500">Đội thi chưa có thành viên nào.</span>
               </div>
             )}
           </div>
 
           {/* Công nghệ */}
           <div>
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-              <Code size={12} /> Công nghệ
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+              <Code size={14} className="text-blue-500" /> Stack Công Nghệ
             </p>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-2">
               {team.tech.map((t, i) => (
-                <span key={i} className="px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg text-xs font-bold border border-blue-100">{t}</span>
+                <span key={i} className="px-3 py-1.5 bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 rounded-xl text-xs font-bold border border-blue-100 shadow-sm hover:shadow-md hover:scale-105 transition-all cursor-default">
+                  {t}
+                </span>
               ))}
+              {team.tech.length === 0 && <span className="text-sm text-gray-400 italic">Chưa cập nhật công nghệ</span>}
             </div>
           </div>
 
           {/* Dự án */}
           <div>
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-              <Shield size={12} /> Dự án
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+              <Shield size={14} className="text-indigo-500" /> Sản Phẩm Dự Án
             </p>
             {team.project ? (
-              <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-xl p-4 border border-orange-100 space-y-2">
-                <p className="font-bold text-gray-900">{team.project.name}</p>
-                <p className="text-sm text-gray-600 leading-relaxed">{team.project.description}</p>
-                <div className="flex flex-wrap gap-2 pt-1">
+              <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+                <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-orange-400 to-amber-500"></div>
+                <h4 className="font-extrabold text-lg text-gray-900 mb-2">{team.project.name}</h4>
+                <p className="text-sm text-gray-600 leading-relaxed mb-4">{team.project.description}</p>
+                <div className="flex flex-wrap gap-3">
                   {team.project.githubUrl && (
                     <a href={team.project.githubUrl} target="_blank" rel="noopener noreferrer"
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 text-white rounded-lg text-xs font-semibold hover:bg-gray-700 transition-colors">
-                      <Github size={13} /> Mã nguồn
+                      className="flex items-center gap-1.5 px-4 py-2 bg-gray-900 text-white rounded-xl text-xs font-bold hover:bg-gray-800 hover:-translate-y-0.5 shadow-md shadow-gray-900/20 transition-all">
+                      <Github size={14} /> Source Code
                     </a>
                   )}
                   {team.project.demoVideoUrl && (
                     <a href={team.project.demoVideoUrl} target="_blank" rel="noopener noreferrer"
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-semibold hover:bg-red-700 transition-colors">
-                      <Video size={13} /> Demo
+                      className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-red-500 to-rose-600 text-white rounded-xl text-xs font-bold hover:from-red-600 hover:to-rose-700 hover:-translate-y-0.5 shadow-md shadow-red-500/20 transition-all">
+                      <Video size={14} /> Demo Video
                     </a>
                   )}
                 </div>
               </div>
             ) : (
-              <div className="flex flex-col items-center py-6 bg-gray-50 rounded-xl border border-dashed border-gray-200 gap-2">
-                <FileText className="text-gray-300" size={28} />
-                <span className="text-sm text-gray-400">Chưa nộp sản phẩm dự án</span>
+              <div className="flex flex-col items-center py-8 bg-gray-50 rounded-2xl border border-dashed border-gray-200 gap-3">
+                <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
+                  <FileText className="text-gray-400" size={24} />
+                </div>
+                <span className="text-sm font-medium text-gray-500">Đội thi chưa nộp sản phẩm dự án.</span>
               </div>
             )}
           </div>
         </div>
 
-        <div className="p-4 border-t border-gray-100">
-          <button onClick={onClose} className="w-full py-2.5 bg-orange-50 hover:bg-orange-100 text-orange-700 rounded-xl font-semibold text-sm transition-colors border border-orange-200">
-            Đóng
+        {/* Footer actions */}
+        <div className="p-6 bg-gray-50 border-t border-gray-100">
+          <button onClick={onClose} className="w-full py-3.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white rounded-xl font-bold text-base shadow-lg shadow-orange-500/30 hover:shadow-orange-500/50 hover:-translate-y-0.5 transition-all">
+            Tuyệt vời, Đóng lại
           </button>
         </div>
       </div>

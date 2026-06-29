@@ -138,6 +138,9 @@ try {
     if (preg_match('#^/api/avatars/([^/]+)$#', $path, $m) && $method === 'GET') {
         $userController->serveAvatar($m[1]); exit(0);
     }
+    if (preg_match('#^/api/images/([^/]+)$#', $path, $m) && $method === 'GET') {
+        $hackathonController->serveImage($m[1]); exit(0);
+    }
 
     if ($path === '/api/auth/create-account' && $method === 'POST') {
         $authController->createAccount(); exit(0);
@@ -223,6 +226,12 @@ try {
     if (preg_match('#^/api/hackathons/(\d+)/register$#', $path, $m) && $method === 'POST') {
         $hackathonController->registerTeam((int)$m[1]); exit(0);
     }
+    if (preg_match('#^/api/hackathons/(\d+)/teams$#', $path, $m) && $method === 'GET') {
+        $hackathonController->getPublicRegisteredTeams((int)$m[1]); exit(0);
+    }
+    if (preg_match('#^/api/hackathons/(\d+)/participants$#', $path, $m) && $method === 'GET') {
+        $hackathonController->getPublicParticipants((int)$m[1]); exit(0);
+    }
     if ($path === '/api/hackathons' && $method === 'POST') {
         $hackathonController->createHackathon(); exit(0);
     }
@@ -236,6 +245,9 @@ try {
     // ------------------------------------------------------------------
     // HACKATHON ADMIN ROUTES
     // ------------------------------------------------------------------
+    if ($path === '/api/admin/hackathons/upload-image' && $method === 'POST') {
+        $hackathonController->uploadImage(); exit(0);
+    }
     if ($path === '/api/admin/hackathons' && $method === 'POST') {
         $hackathonController->createHackathon(); exit(0);
     }
