@@ -151,12 +151,9 @@ class ScoreService {
         }
     }
 
-    /**
-     * Get all criteria from db.
-     */
     public function getCriteria(): array {
         $conn = $this->em->getConnection();
-        $criteria = $conn->executeQuery("SELECT id, name, max_score, weight FROM criteria")->fetchAllAssociative();
+        $criteria = $conn->executeQuery("SELECT id, name, max_score, weight, contest_id FROM criteria")->fetchAllAssociative();
         
         if (empty($criteria)) {
             $defaults = [
@@ -170,9 +167,17 @@ class ScoreService {
                     [$item['name'], $item['weight'], $item['max_score']]
                 );
             }
-            $criteria = $conn->executeQuery("SELECT id, name, max_score, weight FROM criteria")->fetchAllAssociative();
+            $criteria = $conn->executeQuery("SELECT id, name, max_score, weight, contest_id FROM criteria")->fetchAllAssociative();
         }
         
-        return $criteria;
+        return array_map(function($c) {
+            return [
+                'id' => (int)$c['id'],
+                'name' => $c['name'],
+                'max_score' => (int)$c['max_score'],
+                'weight' => (float)$c['weight'],
+                'contest_id' => $c['contest_id'] ? (int)$c['contest_id'] : null
+            ];
+        }, $criteria);
     }
 }

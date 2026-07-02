@@ -114,7 +114,12 @@ class HackathonService {
             'criteria'             => trim($data['criteria']    ?? ''),
         ]);
 
-        return (int)$conn->lastInsertId();
+        $newId = (int)$conn->lastInsertId();
+        
+        // Đồng bộ tiêu chí vào bảng criteria
+        $this->syncCriteria($newId, trim($data['criteria'] ?? ''));
+
+        return $newId;
     }
 
     public function updateHackathon(int $id, array $data): void {
@@ -157,6 +162,33 @@ class HackathonService {
             'criteria'             => trim($data['criteria']    ?? ''),
             'id'                   => $id,
         ]);
+
+        // Đồng bộ tiêu chí vào bảng criteria
+        $this->syncCriteria($id, trim($data['criteria'] ?? ''));
+    }
+
+    private function syncCriteria(int $contestId, string $criteriaJson): void {
+        $conn = $this->em->getConnection();
+        $data = json_decode($criteriaJson, true);
+        if (!$data || !isset($data['items']) || !is_array($data['items'])) return;
+        
+        $existing = $conn->executeQuery("SELECT id, name FROM criteria WHERE contest_id = ?", [$contestId])->fetchAllAssociative();
+        $existingMap = [];
+        foreach ($existing as $row) {
+            $existingMap[$row['name']] = $row['id'];
+        }
+        
+        foreach ($data['items'] as $item) {
+            $name = trim($item['name'] ?? '');
+            $weight = (float)($item['weight'] ?? 0) / 100; // convert percentage to decimal
+            if ($name === '' || $weight <= 0) continue;
+            
+            if (isset($existingMap[$name])) {
+                $conn->executeStatement("UPDATE criteria SET weight = ?, max_score = ? WHERE id = ?", [$weight, 10, $existingMap[$name]]);
+            } else {
+                $conn->executeStatement("INSERT INTO criteria (name, weight, max_score, contest_id) VALUES (?, ?, ?, ?)", [$name, $weight, 10, $contestId]);
+            }
+        }
     }
 
     public function deleteHackathon(int $id): string {
@@ -235,6 +267,19 @@ class HackathonService {
             ORDER BY cr.registered_at DESC
         ", ['contestId' => $contestId])->fetchAllAssociative();
         return $teams;
+    }
+
+    public function getSubmissions(int $contestId): array {
+        $conn = $this->em->getConnection();
+        $submissions = $conn->executeQuery("
+            SELECT s.id, s.project_name, s.description, s.github_url, s.demo_video_url, s.file_url, s.submitted_at,
+                   t.id as team_id, t.team_name, t.category
+            FROM submissions s
+            INNER JOIN teams t ON s.team_id = t.id
+            WHERE s.contest_id = :contestId
+            ORDER BY s.submitted_at DESC
+        ", ['contestId' => $contestId])->fetchAllAssociative();
+        return $submissions;
     }
 
     public function getContestParticipants(int $contestId): array {

@@ -216,6 +216,18 @@ class HackathonController {
         }
     }
 
+    /** GET /api/hackathons/{id}/submissions (Public) */
+    public function getPublicSubmissions(int $id): void {
+        try {
+            $submissions = $this->hackathonService->getSubmissions($id);
+            http_response_code(200);
+            echo json_encode(['status' => 'success', 'data' => $submissions], JSON_UNESCAPED_UNICODE);
+        } catch (\Exception $e) {
+            http_response_code(400);
+            echo json_encode(['status' => 'error', 'message' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        }
+    }
+
     /** GET /api/hackathons/{id}/participants (Public) */
     public function getPublicParticipants(int $id): void {
         try {

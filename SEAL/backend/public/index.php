@@ -229,6 +229,9 @@ try {
     if (preg_match('#^/api/hackathons/(\d+)/teams$#', $path, $m) && $method === 'GET') {
         $hackathonController->getPublicRegisteredTeams((int)$m[1]); exit(0);
     }
+    if (preg_match('#^/api/hackathons/(\d+)/submissions$#', $path, $m) && $method === 'GET') {
+        $hackathonController->getPublicSubmissions((int)$m[1]); exit(0);
+    }
     if (preg_match('#^/api/hackathons/(\d+)/participants$#', $path, $m) && $method === 'GET') {
         $hackathonController->getPublicParticipants((int)$m[1]); exit(0);
     }

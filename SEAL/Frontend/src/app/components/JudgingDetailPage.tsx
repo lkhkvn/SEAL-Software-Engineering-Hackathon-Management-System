@@ -19,6 +19,7 @@ interface Criteria {
   name: string;
   max_score: number;
   weight: number;
+  contest_id?: number | null;
 }
 
 interface ScoreInput {
@@ -64,7 +65,15 @@ export function JudgingDetailPage() {
         }
 
         setTeam(foundTeam);
-        setCriteria(result.data.criteria || []);
+        
+        const allCriteria: Criteria[] = result.data.criteria || [];
+        const contestCriteria = allCriteria.filter(c => c.contest_id === foundTeam.contestId);
+        
+        if (contestCriteria.length > 0) {
+            setCriteria(contestCriteria);
+        } else {
+            setCriteria(allCriteria.filter(c => !c.contest_id));
+        }
       } catch (err: any) {
         setError(err.message || 'Lỗi kết nối máy chủ');
       } finally {
@@ -214,7 +223,7 @@ export function JudgingDetailPage() {
                     <div>
                         <h4 className="text-lg font-bold text-gray-800">{crit.name}</h4>
                         <div className="flex gap-4 mt-2">
-                            <span className="text-sm bg-gray-100 text-gray-600 px-2 py-1 rounded">Trọng số: {crit.weight}</span>
+                            <span className="text-sm bg-gray-100 text-gray-600 px-2 py-1 rounded">Trọng số: {Number(crit.weight) * 100}%</span>
                             <span className="text-sm bg-blue-50 text-blue-600 px-2 py-1 rounded">Điểm tối đa: {crit.max_score}</span>
                         </div>
                     </div>

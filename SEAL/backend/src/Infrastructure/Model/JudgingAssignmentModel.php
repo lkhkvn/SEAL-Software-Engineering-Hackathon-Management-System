@@ -25,6 +25,9 @@ class JudgingAssignmentModel
     #[ORM\JoinColumn(name: 'team_id', referencedColumnName: 'id', onDelete: 'CASCADE')]
     public TeamModel $team;
 
+    #[ORM\Column(name: 'status', type: 'string', length: 20, options: ['default' => 'PENDING'])]
+    public string $status = 'PENDING';
+
     #[ORM\Column(name: 'assigned_at', type: 'datetime')]
     public DateTime $assignedAt;
 

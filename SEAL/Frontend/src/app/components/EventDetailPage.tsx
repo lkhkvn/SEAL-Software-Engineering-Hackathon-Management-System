@@ -35,6 +35,7 @@ export function EventDetailPage() {
   const [isTeamRegistered, setIsTeamRegistered] = useState(false);
   const [registeredTeams, setRegisteredTeams] = useState<any[]>([]);
   const [participants, setParticipants] = useState<any[]>([]);
+  const [submissions, setSubmissions] = useState<any[]>([]);
 
   // Trạng thái đếm ngược (realtime)
   const [timeLeft, setTimeLeft] = useState('');
@@ -248,6 +249,19 @@ export function EventDetailPage() {
           }
         } catch (tErr) {
           console.error("Lỗi tải danh sách đội thi:", tErr);
+        }
+
+        // Fetch danh sách dự án (submissions)
+        try {
+          const subsRes = await fetch(`http://localhost:8000/index.php/api/hackathons/${id}/submissions`);
+          if (subsRes.ok) {
+            const subsResult = await subsRes.json();
+            if (subsResult.status === 'success') {
+              setSubmissions(subsResult.data || []);
+            }
+          }
+        } catch (sErr) {
+          console.error("Lỗi tải danh sách dự án:", sErr);
         }
 
         // Fetch danh sách người tham gia
@@ -787,72 +801,48 @@ export function EventDetailPage() {
                         <BookOpen className="text-blue-600" size={28} />
                         Dự Án Tham Gia
                       </h2>
-                      <span className="bg-blue-100 text-blue-800 text-sm font-bold px-3 py-1 rounded-full">3 dự án</span>
+                      <span className="bg-blue-100 text-blue-800 text-sm font-bold px-3 py-1 rounded-full">{submissions.length} dự án</span>
                     </div>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {/* Fake Project 1 */}
-                      <div className="border border-gray-200 rounded-xl overflow-hidden hover:shadow-lg transition-all group bg-white">
-                        <div className="h-40 bg-gray-200 relative overflow-hidden">
-                          <img src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=2070&auto=format&fit=crop" alt="Project Cover" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                          <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm px-2 py-1 rounded text-xs font-bold text-gray-700 shadow-sm">AI & ML</div>
-                        </div>
-                        <div className="p-5">
-                          <h3 className="text-lg font-bold text-gray-900 mb-2 truncate">Hệ thống Y tế AI (MediCare)</h3>
-                          <p className="text-sm text-gray-600 line-clamp-2 mb-4">Giải pháp ứng dụng trí tuệ nhân tạo để chẩn đoán bệnh lý thông qua hình ảnh X-quang với độ chính xác trên 95%.</p>
-                          <div className="flex items-center justify-between pt-4 border-t border-gray-100">
-                            <div className="flex items-center gap-2">
-                              <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold">TM</div>
-                              <span className="text-sm font-medium text-gray-700">Team Alpha</span>
+                      {submissions.length > 0 ? (
+                        submissions.map((sub: any) => (
+                          <div key={sub.id} className="border border-gray-200 rounded-xl overflow-hidden hover:shadow-lg transition-all group bg-white">
+                            <div className="h-40 bg-gray-200 relative overflow-hidden flex items-center justify-center">
+                              {/* Using a placeholder if demo video is not visual, or just a colored background */}
+                              <div className="w-full h-full bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center">
+                                <BookOpen className="text-blue-300 w-16 h-16" />
+                              </div>
+                              <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm px-2 py-1 rounded text-xs font-bold text-gray-700 shadow-sm">{sub.category || 'Dự án'}</div>
                             </div>
-                            <button className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center gap-1">
-                              Xem chi tiết <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Fake Project 2 */}
-                      <div className="border border-gray-200 rounded-xl overflow-hidden hover:shadow-lg transition-all group bg-white">
-                        <div className="h-40 bg-gray-200 relative overflow-hidden">
-                          <img src="https://images.unsplash.com/photo-1460925895917-afdab827c52f?q=80&w=2015&auto=format&fit=crop" alt="Project Cover" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                          <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm px-2 py-1 rounded text-xs font-bold text-gray-700 shadow-sm">Blockchain</div>
-                        </div>
-                        <div className="p-5">
-                          <h3 className="text-lg font-bold text-gray-900 mb-2 truncate">EduChain - Bằng cấp điện tử</h3>
-                          <p className="text-sm text-gray-600 line-clamp-2 mb-4">Nền tảng lưu trữ và xác thực văn bằng đại học sử dụng công nghệ Blockchain, chống làm giả tuyệt đối.</p>
-                          <div className="flex items-center justify-between pt-4 border-t border-gray-100">
-                            <div className="flex items-center gap-2">
-                              <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs font-bold">BT</div>
-                              <span className="text-sm font-medium text-gray-700">Block Titans</span>
+                            <div className="p-5">
+                              <h3 className="text-lg font-bold text-gray-900 mb-2 truncate" title={sub.project_name}>{sub.project_name}</h3>
+                              <p className="text-sm text-gray-600 line-clamp-2 mb-4" title={sub.description}>{sub.description || 'Chưa có mô tả chi tiết cho dự án này.'}</p>
+                              <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold uppercase">
+                                    {sub.team_name ? sub.team_name.substring(0, 2) : 'TM'}
+                                  </div>
+                                  <span className="text-sm font-medium text-gray-700 truncate max-w-[120px]" title={sub.team_name}>{sub.team_name}</span>
+                                </div>
+                                {sub.github_url && (
+                                  <a href={sub.github_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center gap-1">
+                                    Source Code <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                                  </a>
+                                )}
+                              </div>
                             </div>
-                            <button className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center gap-1">
-                              Xem chi tiết <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-                            </button>
                           </div>
-                        </div>
-                      </div>
-
-                      {/* Fake Project 3 */}
-                      <div className="border border-gray-200 rounded-xl overflow-hidden hover:shadow-lg transition-all group bg-white">
-                        <div className="h-40 bg-gray-200 relative overflow-hidden">
-                          <img src="https://images.unsplash.com/photo-1522071820081-009f0129c71c?q=80&w=2070&auto=format&fit=crop" alt="Project Cover" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                          <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm px-2 py-1 rounded text-xs font-bold text-gray-700 shadow-sm">EdTech</div>
-                        </div>
-                        <div className="p-5">
-                          <h3 className="text-lg font-bold text-gray-900 mb-2 truncate">LearnSync - Học tập kết nối</h3>
-                          <p className="text-sm text-gray-600 line-clamp-2 mb-4">Ứng dụng ghép cặp gia sư và học sinh dựa trên thói quen học tập và định hướng nghề nghiệp tương lai.</p>
-                          <div className="flex items-center justify-between pt-4 border-t border-gray-100">
-                            <div className="flex items-center gap-2">
-                              <div className="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center text-xs font-bold">IN</div>
-                              <span className="text-sm font-medium text-gray-700">Innovators</span>
-                            </div>
-                            <button className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center gap-1">
-                              Xem chi tiết <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-                            </button>
+                        ))
+                      ) : (
+                        <div className="col-span-full py-12 text-center">
+                          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 text-gray-400 mb-4">
+                            <BookOpen size={32} />
                           </div>
+                          <h3 className="text-lg font-medium text-gray-900 mb-1">Chưa có dự án nào</h3>
+                          <p className="text-gray-500">Cuộc thi này chưa có dự án nào được nộp.</p>
                         </div>
-                      </div>
+                      )}
                     </div>
                  </div>
                )}

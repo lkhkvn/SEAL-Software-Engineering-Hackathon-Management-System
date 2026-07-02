@@ -20,20 +20,51 @@ export function EventsPage() {
         const result = await res.json();
         
         if (result.status === 'success' && result.data) {
-          const mappedEvents = result.data.map((item: any) => ({
-            id: item.id,
-            name: item.name,
-            startDate: item.startDate,
-            endDate: item.endDate,
-            location: item.location,
-            teams: item.registered_teams_count || 0,
-            maxTeams: item.maxTeams || 50,
-            prize: item.prize || '15.000 $',
-            status: item.status,
-            category: item.category,
-            image: item.image || item.image_url,
-            description: item.description || 'Chưa có mô tả'
-          }));
+          const mappedEvents = result.data.map((item: any) => {
+            const startStr = item.start_date || item.startDate;
+            const endStr = item.end_date || item.endDate;
+            const now = new Date();
+            
+            // Tính toán trạng thái dựa trên timeline thực tế
+            let computedStatus = item.status;
+            if (startStr && endStr) {
+                const start = new Date(startStr);
+                const end = new Date(endStr);
+                if (now < start) computedStatus = 'UPCOMING';
+                else if (now > end) computedStatus = 'COMPLETED';
+                else computedStatus = 'ACTIVE';
+            }
+
+            // Tính tổng tiền thưởng từ prize_details
+            let computedPrize = item.prize || '15.000 $';
+            const details = item.prize_details || item.prizeDetails;
+            if (details) {
+                const cleanStr = details.replace(/[,\.]/g, '');
+                const numbers = cleanStr.match(/\d+/g);
+                if (numbers) {
+                    let sum = 0;
+                    numbers.forEach((n: string) => sum += parseInt(n, 10));
+                    if (sum > 0) {
+                        computedPrize = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(sum);
+                    }
+                }
+            }
+
+            return {
+              id: item.id,
+              name: item.name,
+              startDate: startStr,
+              endDate: endStr,
+              location: item.location,
+              teams: item.registered_teams_count || 0,
+              maxTeams: item.max_teams || item.maxTeams || 50,
+              prize: computedPrize,
+              status: computedStatus,
+              category: item.category,
+              image: item.image || item.image_url,
+              description: item.description || 'Chưa có mô tả'
+            };
+          });
           
           setEvents(mappedEvents);
         }
@@ -172,6 +203,7 @@ export function EventsPage() {
             const badge = getStatusBadge(event.status);
             const daysLeft = calculateDaysLeft(event.endDate);
             const coverImage = (event.image && (event.image.startsWith('http') || event.image.startsWith('/'))) ? event.image : getMockCover(event.id);
+            const logoImage = (event.logo_url && (event.logo_url.startsWith('http') || event.logo_url.startsWith('/'))) ? event.logo_url : getMockLogo(event.id);
 
             return (
               <motion.div
@@ -204,7 +236,7 @@ export function EventsPage() {
                     <div className="absolute -top-10 left-6">
                       <div className="w-20 h-20 rounded-full border-[5px] border-white overflow-hidden bg-white shadow-sm">
                         <img 
-                          src={getMockLogo(event.id)} 
+                          src={logoImage} 
                           alt="Org Avatar"
                           className="w-full h-full object-cover"
                         />
