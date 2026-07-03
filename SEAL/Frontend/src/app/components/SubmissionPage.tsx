@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Upload, Link as LinkIcon, FileText, Loader2, Save, PlayCircle, CheckCircle, Calendar, AlertCircle, FileUp } from 'lucide-react';
+import { Upload, X, CheckCircle, AlertCircle, Play, Github, FileText, LayoutDashboard, Camera, Users, Link as LinkIcon, Loader2, Save, PlayCircle, Calendar, FileUp } from 'lucide-react';
 
 export function SubmissionPage() {
   const [saving, setSaving] = useState(false);
@@ -56,9 +56,18 @@ export function SubmissionPage() {
     fetchSubmission();
   }, [formData.contestId]);
 
+  const [projectAvatar, setProjectAvatar] = useState<File | null>(null);
+  const [teamLogo, setTeamLogo] = useState<File | null>(null);
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      setProjectFile(e.target.files[0]);
+      if (e.target.name === 'projectFile') {
+        setProjectFile(e.target.files[0]);
+      } else if (e.target.name === 'projectAvatar') {
+        setProjectAvatar(e.target.files[0]);
+      } else if (e.target.name === 'teamLogo') {
+        setTeamLogo(e.target.files[0]);
+      }
     }
   };
 
@@ -121,6 +130,12 @@ export function SubmissionPage() {
       });
       if (projectFile) {
         submitData.append('projectFile', projectFile);
+      }
+      if (projectAvatar) {
+        submitData.append('projectAvatar', projectAvatar);
+      }
+      if (teamLogo) {
+        submitData.append('teamLogo', teamLogo);
       }
 
       const response = await fetch('http://localhost:8000/index.php/api/teams/my-team/submit', {
@@ -237,6 +252,56 @@ export function SubmissionPage() {
                 placeholder="Dự án của chúng tôi giải quyết vấn đề..." 
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none" 
               />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
+                  <Camera size={16} className="text-gray-400" />
+                  Ảnh đại diện dự án (Thumbnail)
+                </label>
+                <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md hover:border-blue-500 transition-colors bg-gray-50">
+                  <div className="space-y-1 text-center">
+                    <Camera className="mx-auto h-8 w-8 text-gray-400" />
+                    <div className="flex text-sm text-gray-600 justify-center">
+                      <label className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500 px-2 py-1">
+                        <span>Tải ảnh lên</span>
+                        <input name="projectAvatar" type="file" className="sr-only" onChange={handleFileChange} accept="image/*" />
+                      </label>
+                    </div>
+                    <p className="text-xs text-gray-500">PNG, JPG, GIF (Max 5MB)</p>
+                    {projectAvatar && (
+                      <p className="text-sm text-green-600 font-medium mt-2 break-all">
+                        Đã chọn: {projectAvatar.name}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
+                  <Users size={16} className="text-gray-400" />
+                  Logo đội thi
+                </label>
+                <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md hover:border-blue-500 transition-colors bg-gray-50">
+                  <div className="space-y-1 text-center">
+                    <Users className="mx-auto h-8 w-8 text-gray-400" />
+                    <div className="flex text-sm text-gray-600 justify-center">
+                      <label className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500 px-2 py-1">
+                        <span>Tải logo lên</span>
+                        <input name="teamLogo" type="file" className="sr-only" onChange={handleFileChange} accept="image/*" />
+                      </label>
+                    </div>
+                    <p className="text-xs text-gray-500">PNG, JPG (Khuyên dùng ảnh vuông)</p>
+                    {teamLogo && (
+                      <p className="text-sm text-green-600 font-medium mt-2 break-all">
+                        Đã chọn: {teamLogo.name}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

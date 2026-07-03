@@ -11,12 +11,21 @@ class LeaderboardService {
         $this->em = $em;
     }
 
-    public function getLeaderboard(): array {
+    public function getLeaderboard(int $contestId = 0): array {
         $conn = $this->em->getConnection();
 
         $criteria = $conn->executeQuery("SELECT id, name, max_score, weight FROM criteria")->fetchAllAssociative();
 
-        $teams = $conn->executeQuery("SELECT id, team_name as name, category FROM teams")->fetchAllAssociative();
+        if ($contestId > 0) {
+            $teams = $conn->executeQuery("
+                SELECT t.id, t.team_name as name, t.category 
+                FROM teams t
+                INNER JOIN contest_registrations cr ON cr.team_id = t.id
+                WHERE cr.contest_id = :contestId
+            ", ['contestId' => $contestId])->fetchAllAssociative();
+        } else {
+            $teams = $conn->executeQuery("SELECT id, team_name as name, category FROM teams")->fetchAllAssociative();
+        }
 
         $leaderboard = array_map(function($team) use ($conn, $criteria) {
             $teamId = (int)$team['id'];

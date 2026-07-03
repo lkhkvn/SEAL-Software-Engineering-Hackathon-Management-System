@@ -45,4 +45,32 @@ class HackathonModel
 
     #[ORM\Column(type: 'text', nullable: true)]
     public ?string $rules = null;
+
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
+    public ?string $prize = null;
+
+    #[ORM\Column(name: 'prize_details', type: 'text', nullable: true)]
+    public ?string $prizeDetails = null;
+
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
+    public ?string $image = null;
+
+    #[ORM\Column(name: 'logo_url', type: 'string', length: 255, nullable: true)]
+    public ?string $logoUrl = null;
+
+    #[ORM\Column(type: 'text', nullable: true)]
+    public ?string $schedule = null;
+
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
+    public ?string $organizer = null;
+
+    #[ORM\Column(type: 'text', nullable: true)]
+    public ?string $criteria = null;
+
+    #[ORM\Column(name: 'created_at', type: 'datetime', options: ['default' => 'CURRENT_TIMESTAMP'])]
+    public \DateTime $createdAt;
+
+    public function __construct() {
+        $this->createdAt = new \DateTime();
+    }
 }

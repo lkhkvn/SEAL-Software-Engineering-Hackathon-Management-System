@@ -1,7 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Trophy, Medal, Award, TrendingUp, Users, Code, Loader2, Download } from 'lucide-react';
 
-export function LeaderboardPage() {
+interface LeaderboardProps {
+  contestId?: string;
+}
+
+export function LeaderboardPage({ contestId }: LeaderboardProps) {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -10,7 +14,10 @@ export function LeaderboardPage() {
   useEffect(() => {
     const fetchLeaderboard = async () => {
       try {
-        const response = await fetch('http://localhost:8000/index.php/api/leaderboard');
+        const url = contestId 
+          ? `http://localhost:8000/index.php/api/leaderboard?contestId=${contestId}`
+          : 'http://localhost:8000/index.php/api/leaderboard';
+        const response = await fetch(url);
         const result = await response.json();
         if (!response.ok || result.status === 'error') {
           throw new Error(result.message || 'Không thể tải bảng xếp hạng.');
@@ -102,15 +109,17 @@ export function LeaderboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-purple-700 text-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          <h1 className="text-4xl font-bold mb-4">Bảng xếp hạng</h1>
-          <p className="text-blue-100 text-lg">
-            Theo dõi thành tích, điểm số chi tiết các tiêu chí và xếp hạng của các đội thi
-          </p>
+    <div className={contestId ? "" : "min-h-screen bg-gray-50"}>
+      {!contestId && (
+        <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-purple-700 text-white">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+            <h1 className="text-4xl font-bold mb-4">Bảng xếp hạng</h1>
+            <p className="text-blue-100 text-lg">
+              Theo dõi thành tích, điểm số chi tiết các tiêu chí và xếp hạng của các đội thi
+            </p>
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         

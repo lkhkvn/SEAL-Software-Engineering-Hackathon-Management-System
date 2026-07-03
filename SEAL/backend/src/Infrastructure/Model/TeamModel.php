@@ -41,6 +41,9 @@ class TeamModel
     #[ORM\Column(type: 'string', length: 20, options: ['default' => 'APPROVED'])]
     public string $status = 'APPROVED';
 
+    #[ORM\Column(name: 'logo_url', type: 'string', length: 255, nullable: true)]
+    public ?string $logoUrl = null;
+
     public function __construct()
     {
         $this->members = new ArrayCollection();

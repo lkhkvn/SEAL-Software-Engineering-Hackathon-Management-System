@@ -21,6 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // AUTOLOAD & BOOTSTRAP
 // ============================================================================
 use App\Services\AuthService;
+use App\Services\ContentService;
 use App\Services\TeamService;
 use App\Services\HackathonService;
 use App\Services\LeaderboardService;
@@ -31,6 +32,7 @@ use App\Infrastructure\Persistence\DoctrineTeamRepository;
 use App\Infrastructure\Persistence\DoctrineUserRepository;
 use App\Infrastructure\Persistence\DoctrineChallengeRepository;
 use App\Presentation\AuthController;
+use App\Presentation\ContentController;
 use App\Presentation\AdminUserController;
 use App\Presentation\TeamController;
 use App\Presentation\HackathonController;
@@ -102,6 +104,9 @@ try {
     $mentorTicketService   = new MentorTicketService($mentorTicketRepository);
     $mentorController      = new MentorController($mentorTicketService, $authService);
 
+    $contentService        = new ContentService($entityManager);
+    $contentController     = new ContentController($contentService);
+
     // ============================================================================
     // ROUTER
     // ============================================================================
@@ -141,9 +146,25 @@ try {
     if (preg_match('#^/api/images/([^/]+)$#', $path, $m) && $method === 'GET') {
         $hackathonController->serveImage($m[1]); exit(0);
     }
+    if (preg_match('#^/api/projects/avatar/([^/]+)$#', $path, $m) && $method === 'GET') {
+        $teamController->serveProjectAvatar($m[1]); exit(0);
+    }
+    if (preg_match('#^/api/teams/logo/([^/]+)$#', $path, $m) && $method === 'GET') {
+        $teamController->serveTeamLogo($m[1]); exit(0);
+    }
 
     if ($path === '/api/auth/create-account' && $method === 'POST') {
         $authController->createAccount(); exit(0);
+    }
+    
+    // ------------------------------------------------------------------
+    // CONTENT ROUTES
+    // ------------------------------------------------------------------
+    if ($path === '/api/organizations' && $method === 'GET') {
+        $contentController->getOrganizations(); exit(0);
+    }
+    if ($path === '/api/blogs' && $method === 'GET') {
+        $contentController->getBlogs(); exit(0);
     }
 
     // ------------------------------------------------------------------

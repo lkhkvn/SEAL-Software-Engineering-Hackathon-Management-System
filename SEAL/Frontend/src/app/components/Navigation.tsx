@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Trophy, Calendar, Users, Settings, Home, Award, LogIn, LogOut, Upload, CheckSquare, HelpCircle } from 'lucide-react';
+import { Trophy, Calendar, Users, Settings, Home, Award, LogIn, LogOut, Upload, CheckSquare, HelpCircle, Building2, BookOpen } from 'lucide-react';
 import { NotificationBell } from './NotificationBell';
 interface NavigationProps {
   currentUser: any;
@@ -17,8 +17,8 @@ export function Navigation({ currentUser, onLogout }: NavigationProps) {
   const navItems = [
     { path: '/', icon: Home, label: 'Trang chủ' },
     { path: '/events', icon: Calendar, label: 'Sự kiện' },
-    { path: '/teams', icon: Users, label: 'Đội thi' },
-    { path: '/leaderboard', icon: Award, label: 'Bảng xếp hạng' },
+    { path: '/organizations', icon: Building2, label: 'Tổ chức' },
+    { path: '/blog', icon: BookOpen, label: 'Blog' },
     ...(isParticipant ? [{ path: '/submit', icon: Upload, label: 'Nộp dự án' }] : []),
     ...(isUserJudge ? [{ path: '/judging', icon: CheckSquare, label: 'Chấm điểm' }] : []),
     ...(isUserMentor ? [{ path: '/mentor', icon: HelpCircle, label: 'Mentor' }] : []),

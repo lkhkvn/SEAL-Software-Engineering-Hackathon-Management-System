@@ -21,11 +21,12 @@ import {
   BookOpen,
   Lock
 } from 'lucide-react';
+import { LeaderboardPage } from './LeaderboardPage';
 
 export function EventDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState('participants');
   const [eventData, setEventData] = useState<any>(null);
   const [milestones, setMilestones] = useState<any[]>([]);
   const [schedules, setSchedules] = useState<any[]>([]);
@@ -36,6 +37,8 @@ export function EventDetailPage() {
   const [registeredTeams, setRegisteredTeams] = useState<any[]>([]);
   const [participants, setParticipants] = useState<any[]>([]);
   const [submissions, setSubmissions] = useState<any[]>([]);
+  const [selectedParticipant, setSelectedParticipant] = useState<any>(null);
+  const [selectedTeam, setSelectedTeam] = useState<any>(null);
 
   // Trạng thái đếm ngược (realtime)
   const [timeLeft, setTimeLeft] = useState('');
@@ -470,6 +473,7 @@ export function EventDetailPage() {
     { id: 'prizes', label: 'Giải Thưởng', icon: Trophy },
     { id: 'challenge', label: 'Dự Án', icon: BookOpen },
     { id: 'participants', label: 'Người Tham Gia', icon: Users },
+    { id: 'leaderboard', label: 'Bảng Xếp Hạng', icon: Award },
   ];
 
   return (
@@ -810,9 +814,13 @@ export function EventDetailPage() {
                           <div key={sub.id} className="border border-gray-200 rounded-xl overflow-hidden hover:shadow-lg transition-all group bg-white">
                             <div className="h-40 bg-gray-200 relative overflow-hidden flex items-center justify-center">
                               {/* Using a placeholder if demo video is not visual, or just a colored background */}
-                              <div className="w-full h-full bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center">
-                                <BookOpen className="text-blue-300 w-16 h-16" />
-                              </div>
+                              {sub.project_avatar_url ? (
+                                <img src={`http://localhost:8000/index.php${sub.project_avatar_url}`} alt={sub.project_name} className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="w-full h-full bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center">
+                                  <BookOpen className="text-blue-300 w-16 h-16" />
+                                </div>
+                              )}
                               <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm px-2 py-1 rounded text-xs font-bold text-gray-700 shadow-sm">{sub.category || 'Dự án'}</div>
                             </div>
                             <div className="p-5">
@@ -820,9 +828,13 @@ export function EventDetailPage() {
                               <p className="text-sm text-gray-600 line-clamp-2 mb-4" title={sub.description}>{sub.description || 'Chưa có mô tả chi tiết cho dự án này.'}</p>
                               <div className="flex items-center justify-between pt-4 border-t border-gray-100">
                                 <div className="flex items-center gap-2">
-                                  <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold uppercase">
-                                    {sub.team_name ? sub.team_name.substring(0, 2) : 'TM'}
-                                  </div>
+                                  {sub.logo_url ? (
+                                    <img src={`http://localhost:8000/index.php${sub.logo_url}`} alt={sub.team_name} className="w-8 h-8 rounded-full object-cover border border-gray-200" />
+                                  ) : (
+                                    <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold uppercase">
+                                      {sub.team_name ? sub.team_name.substring(0, 2) : 'TM'}
+                                    </div>
+                                  )}
                                   <span className="text-sm font-medium text-gray-700 truncate max-w-[120px]" title={sub.team_name}>{sub.team_name}</span>
                                 </div>
                                 {sub.github_url && (
@@ -866,7 +878,12 @@ export function EventDetailPage() {
                                <td className="px-6 py-3">
                                  <div className="flex items-center gap-3">
                                    <img src={p.avatar_url} alt={p.name} className="w-8 h-8 rounded-full object-cover" />
-                                   <span className="font-medium text-gray-900 hover:underline cursor-pointer">{p.name}</span>
+                                   <span 
+                                     className="font-medium text-gray-900 hover:underline cursor-pointer"
+                                     onClick={() => setSelectedParticipant(p)}
+                                   >
+                                     {p.name}
+                                   </span>
                                  </div>
                                </td>
                                <td className="px-6 py-3">
@@ -886,7 +903,7 @@ export function EventDetailPage() {
                                </td>
                                <td className="px-6 py-3">
                                  {p.project ? (
-                                   <span className="font-medium text-gray-900 hover:underline cursor-pointer">{p.project}</span>
+                                   <span className="font-medium text-gray-900">{p.project}</span>
                                  ) : (
                                    <span className="inline-block border border-gray-200 text-[#a3a3a3] text-[10px] font-bold px-2 py-0.5 rounded-sm uppercase tracking-wide bg-transparent">
                                      NO PROJECT
@@ -907,8 +924,14 @@ export function EventDetailPage() {
                    </div>
                  </div>
                )}
+               {/* LEADERBOARD TAB */}
+               {activeTab === 'leaderboard' && (
+                 <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+                    <LeaderboardPage contestId={id} />
+                 </div>
+               )}
 
-               {activeTab !== 'overview' && activeTab !== 'schedule' && activeTab !== 'rules' && activeTab !== 'prizes' && activeTab !== 'challenge' && activeTab !== 'participants' && (
+               {activeTab !== 'overview' && activeTab !== 'schedule' && activeTab !== 'rules' && activeTab !== 'prizes' && activeTab !== 'challenge' && activeTab !== 'participants' && activeTab !== 'leaderboard' && (
                  <div className="bg-white p-8 rounded-xl border border-gray-100 shadow-sm text-center py-20">
                     <p className="text-gray-500 text-lg">Nội dung chi tiết cho tab này đang được cập nhật.</p>
                  </div>
@@ -1144,6 +1167,131 @@ export function EventDetailPage() {
                 </form>
               </div>
             )}
+          </div>
+        </div>
+      )}
+      {/* Modal Chi tiết người tham gia */}
+      {selectedParticipant && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl overflow-hidden border border-gray-100 p-6 relative text-center">
+            <button 
+              onClick={() => setSelectedParticipant(null)}
+              className="absolute top-4 right-4 p-1 rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors cursor-pointer"
+            >
+              <X size={20} />
+            </button>
+            <div className="w-24 h-24 mx-auto bg-gray-100 rounded-full mb-4 flex items-center justify-center overflow-hidden border-4 border-blue-50">
+               <img src={selectedParticipant.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedParticipant.name)}`} alt={selectedParticipant.name} className="w-full h-full object-cover" />
+            </div>
+            <h3 className="text-2xl font-bold text-gray-900 mb-1">{selectedParticipant.name}</h3>
+            {selectedParticipant.email && <p className="text-gray-500 text-sm mb-4">{selectedParticipant.email}</p>}
+            
+            <div className="bg-blue-50 rounded-xl p-4 mt-4 text-left border border-blue-100">
+              <div className="mb-4">
+                <span className="block text-xs text-blue-800 font-bold uppercase tracking-wider mb-1">Dự án tham gia</span>
+                <span className="text-gray-900 font-semibold">{selectedParticipant.project || 'Chưa có dự án'}</span>
+                {selectedParticipant.project && (() => {
+                  const team = registeredTeams.find((t: any) => t.name === selectedParticipant.project);
+                  if (team) {
+                    return (
+                      <button 
+                        onClick={() => {
+                          setSelectedParticipant(null);
+                          setSelectedTeam(team);
+                        }}
+                        className="mt-2 text-xs bg-blue-600 text-white font-semibold py-1.5 px-3 rounded-lg hover:bg-blue-700 transition-colors"
+                      >
+                        Xem chi tiết đội thi
+                      </button>
+                    );
+                  }
+                  return null;
+                })()}
+              </div>
+              <div>
+                <span className="block text-xs text-blue-800 font-bold uppercase tracking-wider mb-1">Kỹ năng (Skills)</span>
+                {selectedParticipant.skills && selectedParticipant.skills.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5 mt-1">
+                    {selectedParticipant.skills.map((skill: string, idx: number) => (
+                      <span key={idx} className="bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-sm uppercase tracking-wide">
+                        {skill}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="text-gray-500 text-sm italic font-medium">Chưa cập nhật kỹ năng</span>
+                )}
+              </div>
+            </div>
+            
+            <button onClick={() => setSelectedParticipant(null)} className="w-full mt-6 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-lg font-semibold text-sm transition-colors cursor-pointer">
+              Đóng
+            </button>
+          </div>
+        </div>
+      )}
+      
+      {/* Modal Chi tiết Đội thi */}
+      {selectedTeam && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden border border-gray-100 p-6 relative">
+            <button 
+              onClick={() => setSelectedTeam(null)}
+              className="absolute top-4 right-4 p-1 rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors cursor-pointer"
+            >
+              <X size={20} />
+            </button>
+            
+            <div className="flex items-center gap-4 mb-6 border-b border-gray-100 pb-4">
+               <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center text-2xl font-bold shadow-sm uppercase">
+                 {selectedTeam.name ? selectedTeam.name.substring(0, 2) : 'TM'}
+               </div>
+               <div>
+                 <h3 className="text-2xl font-bold text-gray-900">{selectedTeam.name}</h3>
+                 <span className="inline-block mt-1 px-2.5 py-0.5 bg-blue-50 text-blue-700 text-xs font-semibold rounded-full border border-blue-100">
+                   {selectedTeam.category || 'Chưa xác định lĩnh vực'}
+                 </span>
+               </div>
+            </div>
+            
+            <div className="space-y-4">
+               <div className="bg-gray-50 p-4 rounded-xl">
+                 <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Thông tin chung</h4>
+                 <div className="grid grid-cols-2 gap-4 text-sm">
+                   <div>
+                     <span className="block text-gray-500 mb-1">Trưởng nhóm</span>
+                     <span className="font-semibold text-gray-900 flex items-center gap-1.5">
+                       <UserCheck size={14} className="text-blue-600" /> 
+                       {selectedTeam.leader_name || selectedTeam.leaderName || 'Không có thông tin'}
+                     </span>
+                   </div>
+                   <div>
+                     <span className="block text-gray-500 mb-1">Số lượng thành viên</span>
+                     <span className="font-semibold text-gray-900 flex items-center gap-1.5">
+                       <Users size={14} className="text-blue-600" />
+                       {selectedTeam.memberCount || selectedTeam.members_count || selectedTeam.member_count || (Array.isArray(selectedTeam.members) ? selectedTeam.members.length : 1)}
+                     </span>
+                   </div>
+                 </div>
+               </div>
+               
+               {selectedTeam.skills && selectedTeam.skills.length > 0 && (
+                 <div>
+                   <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Công nghệ sử dụng</h4>
+                   <div className="flex flex-wrap gap-1.5">
+                     {(Array.isArray(selectedTeam.skills) ? selectedTeam.skills : selectedTeam.skills.split(',')).map((skill: string, idx: number) => (
+                       <span key={idx} className="bg-gray-100 text-gray-700 text-xs font-semibold px-2.5 py-1 rounded-md border border-gray-200">
+                         {skill.trim()}
+                       </span>
+                     ))}
+                   </div>
+                 </div>
+               )}
+            </div>
+            
+            <button onClick={() => setSelectedTeam(null)} className="w-full mt-6 py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-lg font-semibold text-sm transition-colors cursor-pointer">
+              Đóng
+            </button>
           </div>
         </div>
       )}

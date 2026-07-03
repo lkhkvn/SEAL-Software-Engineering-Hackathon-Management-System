@@ -259,7 +259,8 @@ class HackathonService {
         $conn = $this->em->getConnection();
         $teams = $conn->executeQuery("
             SELECT t.id, t.team_name as name, t.category as description, t.leader_id, cr.registered_at, cr.status,
-                   u.name as leader_name, u.email as leader_email
+                   u.name as leader_name, u.email as leader_email,
+                   (SELECT COUNT(*) FROM team_members tm WHERE tm.team_id = t.id) as member_count
             FROM teams t
             INNER JOIN contest_registrations cr ON cr.team_id = t.id
             LEFT JOIN users u ON u.id = t.leader_id
@@ -272,8 +273,8 @@ class HackathonService {
     public function getSubmissions(int $contestId): array {
         $conn = $this->em->getConnection();
         $submissions = $conn->executeQuery("
-            SELECT s.id, s.project_name, s.description, s.github_url, s.demo_video_url, s.file_url, s.submitted_at,
-                   t.id as team_id, t.team_name, t.category
+            SELECT s.id, s.project_name, s.description, s.github_url, s.demo_video_url, s.file_url, s.submitted_at, s.project_avatar_url,
+                   t.id as team_id, t.team_name, t.category, t.logo_url
             FROM submissions s
             INNER JOIN teams t ON s.team_id = t.id
             WHERE s.contest_id = :contestId

@@ -810,6 +810,38 @@ class TeamController {
                 $fileUrl = $uploadResult['url'];
             }
 
+            // Xử lý upload projectAvatar
+            $projectAvatarUrl = null;
+            if (isset($_FILES['projectAvatar']) && $_FILES['projectAvatar']['error'] === UPLOAD_ERR_OK) {
+                $avatarDir = __DIR__ . '/../../storage/uploads/projects/';
+                if (!is_dir($avatarDir)) {
+                    mkdir($avatarDir, 0755, true);
+                }
+                $ext = strtolower(pathinfo($_FILES['projectAvatar']['name'], PATHINFO_EXTENSION));
+                if (in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp'])) {
+                    $uniqueName = 'project_' . $contestId . '_' . $currentUser->teamId . '_' . time() . '.' . $ext;
+                    if (move_uploaded_file($_FILES['projectAvatar']['tmp_name'], $avatarDir . $uniqueName)) {
+                        $projectAvatarUrl = '/api/projects/avatar/' . $uniqueName;
+                    }
+                }
+            }
+
+            // Xử lý upload teamLogo
+            $teamLogoUrl = null;
+            if (isset($_FILES['teamLogo']) && $_FILES['teamLogo']['error'] === UPLOAD_ERR_OK) {
+                $logoDir = __DIR__ . '/../../storage/uploads/teams/';
+                if (!is_dir($logoDir)) {
+                    mkdir($logoDir, 0755, true);
+                }
+                $ext = strtolower(pathinfo($_FILES['teamLogo']['name'], PATHINFO_EXTENSION));
+                if (in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp'])) {
+                    $uniqueName = 'team_' . $currentUser->teamId . '_' . time() . '.' . $ext;
+                    if (move_uploaded_file($_FILES['teamLogo']['tmp_name'], $logoDir . $uniqueName)) {
+                        $teamLogoUrl = '/api/teams/logo/' . $uniqueName;
+                    }
+                }
+            }
+
             // Check if submission already exists for this specific contest
             $existingSub = $conn->executeQuery("SELECT id, file_url FROM submissions WHERE team_id = :teamId AND contest_id = :contestId", [
                 'teamId' => $currentUser->teamId,
@@ -828,37 +860,51 @@ class TeamController {
                 if ($fileUrl) {
                     $updateSql .= ", file_url = :fileUrl";
                     $updateParams['fileUrl'] = $fileUrl;
-
-                    // Delete old file if exists
-                    if (!empty($existingSub['file_url'])) {
-                        $oldUrl = $existingSub['file_url'];
-                        $oldFilePath = '';
-                        if (str_starts_with($oldUrl, '/uploads/')) {
-                            $oldFilePath = __DIR__ . '/../../public' . $oldUrl;
-                        } else if (str_starts_with($oldUrl, '/api/submissions/file/')) {
-                            $oldFilePath = __DIR__ . '/../../storage/uploads/submissions/' . str_replace('/api/submissions/file/', '', $oldUrl);
-                        }
-                        if ($oldFilePath && file_exists($oldFilePath)) {
-                            unlink($oldFilePath);
-                        }
-                    }
+                }
+                if ($projectAvatarUrl) {
+                    $updateSql .= ", project_avatar_url = :projectAvatarUrl";
+                    $updateParams['projectAvatarUrl'] = $projectAvatarUrl;
                 }
                 $updateSql .= " WHERE id = :id";
                 $conn->executeStatement($updateSql, $updateParams);
+
+                if ($teamLogoUrl) {
+                    $conn->executeStatement("UPDATE teams SET logo_url = :logoUrl WHERE id = :teamId", [
+                        'logoUrl' => $teamLogoUrl,
+                        'teamId' => $currentUser->teamId
+                    ]);
+                }
             } else {
                 // Insert
-                $conn->executeStatement("
-                    INSERT INTO submissions (team_id, contest_id, project_name, description, github_url, demo_video_url, file_url, submitted_at)
-                    VALUES (:teamId, :contestId, :projectName, :description, :githubUrl, :demoVideoUrl, :fileUrl, NOW())
-                ", [
+                $insertCols = "team_id, contest_id, project_name, description, github_url, demo_video_url, submitted_at";
+                $insertVals = ":teamId, :contestId, :projectName, :description, :githubUrl, :demoVideoUrl, NOW()";
+                $insertParams = [
                     'teamId' => $currentUser->teamId,
                     'contestId' => $contestId,
                     'projectName' => $projectName,
                     'description' => $description,
                     'githubUrl' => $githubUrl,
-                    'demoVideoUrl' => $demoVideoUrl,
-                    'fileUrl' => $fileUrl
-                ]);
+                    'demoVideoUrl' => $demoVideoUrl
+                ];
+                if ($fileUrl) {
+                    $insertCols .= ", file_url";
+                    $insertVals .= ", :fileUrl";
+                    $insertParams['fileUrl'] = $fileUrl;
+                }
+                if ($projectAvatarUrl) {
+                    $insertCols .= ", project_avatar_url";
+                    $insertVals .= ", :projectAvatarUrl";
+                    $insertParams['projectAvatarUrl'] = $projectAvatarUrl;
+                }
+
+                $conn->executeStatement("INSERT INTO submissions ($insertCols) VALUES ($insertVals)", $insertParams);
+
+                if ($teamLogoUrl) {
+                    $conn->executeStatement("UPDATE teams SET logo_url = :logoUrl WHERE id = :teamId", [
+                        'logoUrl' => $teamLogoUrl,
+                        'teamId' => $currentUser->teamId
+                    ]);
+                }
             }
 
             http_response_code(200);
@@ -1252,6 +1298,36 @@ class TeamController {
         } catch (\Exception $e) {
             http_response_code(400);
             echo "Lỗi: " . $e->getMessage();
+        }
+    }
+
+    /** GET /api/projects/avatar/{filename} - Phục vụ ảnh đại diện dự án */
+    public function serveProjectAvatar(string $filename): void {
+        $filePath = __DIR__ . '/../../storage/uploads/projects/' . basename($filename);
+        if (file_exists($filePath)) {
+            $finfo = new \finfo(FILEINFO_MIME_TYPE);
+            $mimeType = $finfo->file($filePath);
+            header('Content-Type: ' . $mimeType);
+            header('Cache-Control: public, max-age=86400');
+            readfile($filePath);
+        } else {
+            http_response_code(404);
+            echo "File not found";
+        }
+    }
+
+    /** GET /api/teams/logo/{filename} - Phục vụ logo đội thi */
+    public function serveTeamLogo(string $filename): void {
+        $filePath = __DIR__ . '/../../storage/uploads/teams/' . basename($filename);
+        if (file_exists($filePath)) {
+            $finfo = new \finfo(FILEINFO_MIME_TYPE);
+            $mimeType = $finfo->file($filePath);
+            header('Content-Type: ' . $mimeType);
+            header('Cache-Control: public, max-age=86400');
+            readfile($filePath);
+        } else {
+            http_response_code(404);
+            echo "File not found";
         }
     }
 }
