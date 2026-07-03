@@ -41,6 +41,9 @@ class TeamModel
     #[ORM\Column(type: 'string', length: 20, options: ['default' => 'APPROVED'])]
     public string $status = 'APPROVED';
 
+    #[ORM\Column(name: 'max_members', type: 'integer', options: ['default' => 5])]
+    public int $maxMembers = 5;
+
     public function __construct()
     {
         $this->members = new ArrayCollection();

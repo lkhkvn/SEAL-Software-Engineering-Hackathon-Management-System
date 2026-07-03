@@ -110,11 +110,6 @@ class TeamController {
             $teamId = (int)$conn->lastInsertId();
 
             $conn->executeStatement("
-                INSERT INTO team_members (team_id, user_id, role_in_team)
-                VALUES (:teamId, :userId, 'LEAD')
-            ", ['teamId' => $teamId, 'userId' => $currentUser->id]);
-
-            $conn->executeStatement("
                 UPDATE users SET team_id = :teamId, skills = :skills WHERE id = :userId
             ", ['teamId' => $teamId, 'skills' => $skillsStr ?: null, 'userId' => $currentUser->id]);
 
@@ -262,7 +257,7 @@ class TeamController {
             // Tìm đội theo join_code
             $team = $conn->executeQuery("
                 SELECT t.id, t.team_name, t.max_members,
-                    (SELECT COUNT(*) FROM team_members tm WHERE tm.team_id = t.id) as member_count
+                    (SELECT COUNT(*) FROM users u WHERE u.team_id = t.id) as member_count
                 FROM teams t WHERE t.join_code = :joinCode
             ", ['joinCode' => $joinCode])->fetchAssociative();
 
@@ -278,22 +273,11 @@ class TeamController {
                 return;
             }
 
-            // Kiểm tra user đã trong team_members chưa
-            $alreadyMember = $conn->executeQuery("
-                SELECT id FROM team_members WHERE team_id = :teamId AND user_id = :userId
-            ", ['teamId' => $team['id'], 'userId' => $currentUser->id])->fetchOne();
-
-            if ($alreadyMember) {
+            if ($currentUser->teamId === (int)$team['id']) {
                 http_response_code(409);
                 echo json_encode(["status" => "error", "message" => "Bạn đã là thành viên của đội này rồi!"], JSON_UNESCAPED_UNICODE);
                 return;
             }
-
-            // Thêm vào team_members
-            $conn->executeStatement("
-                INSERT INTO team_members (team_id, user_id, role_in_team)
-                VALUES (:teamId, :userId, 'MEMBER')
-            ", ['teamId' => $team['id'], 'userId' => $currentUser->id]);
 
             // Cập nhật users.team_id
             $conn->executeStatement("
@@ -372,10 +356,9 @@ class TeamController {
             }
 
             $members = $conn->executeQuery(
-                "SELECT u.id, u.name, u.email, u.skills, u.avatar_url, u.date_of_birth, tm.role_in_team as role
-                 FROM team_members tm
-                 JOIN users u ON tm.user_id = u.id
-                 WHERE tm.team_id = :teamId",
+                "SELECT id, name, email, skills, avatar_url, date_of_birth
+                 FROM users
+                 WHERE team_id = :teamId",
                 ['teamId' => $teamId]
             )->fetchAllAssociative();
 
@@ -390,13 +373,13 @@ class TeamController {
                 ];
             }
 
-            $membersClean = array_map(function($m) {
+            $membersClean = array_map(function($m) use ($team) {
                 return [
                     'id' => (int)$m['id'],
                     'name' => $m['name'],
                     'email' => $m['email'] ?? null,
                     'skills' => $m['skills'] ?? null,
-                    'role' => $m['role'] ?? 'MEMBER',
+                    'role' => ((int)$team['leaderId'] === (int)$m['id']) ? 'LEAD' : 'MEMBER',
                     'avatarUrl' => $m['avatar_url'] ?? null,
                     'dateOfBirth' => $m['date_of_birth'] ?? null
                 ];
@@ -457,7 +440,7 @@ class TeamController {
             // Find team
             $team = $conn->executeQuery("
                 SELECT t.id, t.team_name, t.max_members, t.leader_id,
-                    (SELECT COUNT(*) FROM team_members tm WHERE tm.team_id = t.id) as member_count
+                    (SELECT COUNT(*) FROM users u WHERE u.team_id = t.id) as member_count
                 FROM teams t WHERE t.join_code = :joinCode
             ", ['joinCode' => $joinCode])->fetchAssociative();
 
@@ -581,7 +564,7 @@ class TeamController {
             $request = $conn->executeQuery("
                 SELECT r.id, r.team_id, r.user_id, r.status,
                        t.leader_id, t.max_members,
-                       (SELECT COUNT(*) FROM team_members tm WHERE tm.team_id = t.id) as member_count
+                       (SELECT COUNT(*) FROM users u WHERE u.team_id = t.id) as member_count
                 FROM team_join_requests r
                 INNER JOIN teams t ON t.id = r.team_id
                 WHERE r.id = :id
@@ -641,13 +624,7 @@ class TeamController {
                     WHERE user_id = :userId AND id != :id AND status = 'PENDING'
                 ", ['userId' => $request['user_id'], 'id' => $requestId]);
 
-                // 3. Add to team_members
-                $conn->executeStatement("
-                    INSERT INTO team_members (team_id, user_id, role_in_team, joined_at)
-                    VALUES (:teamId, :userId, 'MEMBER', NOW())
-                ", ['teamId' => $request['team_id'], 'userId' => $request['user_id']]);
-
-                // 4. Update users.team_id
+                // 3. Update users.team_id
                 $conn->executeStatement("
                     UPDATE users SET team_id = :teamId WHERE id = :userId
                 ", ['teamId' => $request['team_id'], 'userId' => $request['user_id']]);
@@ -964,17 +941,14 @@ class TeamController {
                 return;
             }
             // Check max members
-            $memberCount = $conn->executeQuery("SELECT COUNT(*) FROM team_members tm WHERE tm.team_id = :teamId", ['teamId' => $teamId])->fetchOne();
+            $memberCount = $conn->executeQuery("SELECT COUNT(*) FROM users u WHERE u.team_id = :teamId", ['teamId' => $teamId])->fetchOne();
             if ($memberCount >= $team['max_members']) {
                 http_response_code(400);
                 echo json_encode(["status" => "error", "message" => "Đội đã đạt số lượng thành viên tối đa!"], JSON_UNESCAPED_UNICODE);
                 return;
             }
             // Add member
-            $conn->beginTransaction();
-            $conn->executeStatement("INSERT INTO team_members (team_id, user_id, role_in_team) VALUES (:teamId, :userId, 'MEMBER')", ['teamId' => $teamId, 'userId' => $userId]);
             $conn->executeStatement("UPDATE users SET team_id = :teamId WHERE id = :userId", ['teamId' => $teamId, 'userId' => $userId]);
-            $conn->commit();
             http_response_code(201);
             echo json_encode(["status" => "success", "message" => "Thêm thành viên thành công!"] , JSON_UNESCAPED_UNICODE);
         } catch (\Exception $e) {
@@ -1008,19 +982,14 @@ class TeamController {
                 return;
             }
             // Ensure the user is actually a member of the team
-            $memberExists = $conn->executeQuery("SELECT id FROM team_members WHERE team_id = :teamId AND user_id = :userId", ['teamId' => $teamId, 'userId' => $userId])->fetchOne();
+            $memberExists = $conn->executeQuery("SELECT id FROM users WHERE team_id = :teamId AND id = :userId", ['teamId' => $teamId, 'userId' => $userId])->fetchOne();
             if (!$memberExists) {
                 http_response_code(400);
                 echo json_encode(["status" => "error", "message" => "Thành viên không thuộc đội này!"], JSON_UNESCAPED_UNICODE);
                 return;
             }
-            $conn->beginTransaction();
-            // Delete from team_members
-            $conn->executeStatement("DELETE FROM team_members WHERE team_id = :teamId AND user_id = :userId", ['teamId' => $teamId, 'userId' => $userId]);
             // Reset user's team_id
             $conn->executeStatement("UPDATE users SET team_id = NULL WHERE id = :userId", ['userId' => $userId]);
-            // If the removed member was the leader, optionally transfer leadership to null (or keep unchanged, here we keep unchanged)
-            $conn->commit();
             http_response_code(200);
             echo json_encode(["status" => "success", "message" => "Xóa thành viên thành công!"], JSON_UNESCAPED_UNICODE);
         } catch (\Exception $e) {
@@ -1053,7 +1022,6 @@ class TeamController {
             $conn->beginTransaction();
             // Remove members and reset their team_id
             $conn->executeStatement("UPDATE users SET team_id = NULL WHERE team_id = :teamId", ['teamId' => $teamId]);
-            $conn->executeStatement("DELETE FROM team_members WHERE team_id = :teamId", ['teamId' => $teamId]);
             // Delete pending join requests
             $conn->executeStatement("DELETE FROM team_join_requests WHERE team_id = :teamId", ['teamId' => $teamId]);
             // Finally delete the team
@@ -1124,20 +1092,14 @@ class TeamController {
                 return;
             }
             // Verify new leader is a member of the team
-            $memberCheck = $conn->executeQuery("SELECT id FROM team_members WHERE team_id = :teamId AND user_id = :userId", ['teamId' => $teamId, 'userId' => $newLeaderId])->fetchOne();
+            $memberCheck = $conn->executeQuery("SELECT id FROM users WHERE team_id = :teamId AND id = :userId", ['teamId' => $teamId, 'userId' => $newLeaderId])->fetchOne();
             if (!$memberCheck) {
                 http_response_code(400);
                 echo json_encode(["status" => "error", "message" => "Người dùng không phải là thành viên của đội!"], JSON_UNESCAPED_UNICODE);
                 return;
             }
-            $conn->beginTransaction();
-            // Update role of previous leader to MEMBER
-            $conn->executeStatement("UPDATE team_members SET role_in_team = 'MEMBER' WHERE team_id = :teamId AND user_id = :oldLeaderId", ['teamId' => $teamId, 'oldLeaderId' => $team['leader_id']]);
-            // Update new leader role
-            $conn->executeStatement("UPDATE team_members SET role_in_team = 'LEAD' WHERE team_id = :teamId AND user_id = :newLeaderId", ['teamId' => $teamId, 'newLeaderId' => $newLeaderId]);
             // Update teams table
             $conn->executeStatement("UPDATE teams SET leader_id = :newLeaderId WHERE id = :teamId", ['newLeaderId' => $newLeaderId, 'teamId' => $teamId]);
-            $conn->commit();
             http_response_code(200);
             echo json_encode(["status" => "success", "message" => "Đổi trưởng nhóm thành công!"] , JSON_UNESCAPED_UNICODE);
         } catch (\Exception $e) {
