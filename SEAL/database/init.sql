@@ -604,3 +604,7 @@ CREATE TABLE `admin_activity_logs` (
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
 -- Dump completed on 2026-06-23  5:21:11
+
+-- Custom Patches to align with Backend code models
+ALTER TABLE `contests` ADD COLUMN `logo_url` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL;
+ALTER TABLE `users` ADD COLUMN `avatar_url` varchar(255) DEFAULT NULL, ADD COLUMN `date_of_birth` varchar(10) DEFAULT NULL;
