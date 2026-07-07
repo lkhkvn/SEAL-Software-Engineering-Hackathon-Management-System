@@ -1,4 +1,4 @@
-﻿version: "3.8"
+version: "3.8"
 
 services:
   # 1. Cáº¥u hĂ¬nh Container Backend (PHP + Apache)
@@ -25,7 +25,7 @@ services:
     container_name: mysql_clean_db
     restart: unless-stopped
     ports:
-      - "3307:3306" # Má»Ÿ cá»•ng Ä‘á»ƒ báº¡n cĂ³ thá»ƒ dĂ¹ng cĂ¡c app nhÆ° Navicat/DBeaver káº¿t ná»‘i tá»« mĂ¡y tháº­t
+      - "3308:3306" # Má»Ÿ cá»•ng Ä‘á»ƒ báº¡n cĂ³ thá»ƒ dĂ¹ng cĂ¡c app nhÆ° Navicat/DBeaver káº¿t ná»‘i tá»« mĂ¡y tháº­t
     environment:
       MYSQL_DATABASE: CleanDb
       MYSQL_ROOT_PASSWORD: root_secret_password

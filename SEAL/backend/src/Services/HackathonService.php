@@ -172,7 +172,7 @@ class HackathonService {
         $data = json_decode($criteriaJson, true);
         if (!$data || !isset($data['items']) || !is_array($data['items'])) return;
         
-        $existing = $conn->executeQuery("SELECT id, name FROM criteria WHERE contest_id = ?", [$contestId])->fetchAllAssociative();
+        $existing = $conn->executeQuery("SELECT id, name FROM criteria")->fetchAllAssociative();
         $existingMap = [];
         foreach ($existing as $row) {
             $existingMap[$row['name']] = $row['id'];
@@ -186,7 +186,7 @@ class HackathonService {
             if (isset($existingMap[$name])) {
                 $conn->executeStatement("UPDATE criteria SET weight = ?, max_score = ? WHERE id = ?", [$weight, 10, $existingMap[$name]]);
             } else {
-                $conn->executeStatement("INSERT INTO criteria (name, weight, max_score, contest_id) VALUES (?, ?, ?, ?)", [$name, $weight, 10, $contestId]);
+                $conn->executeStatement("INSERT INTO criteria (name, weight, max_score) VALUES (?, ?, ?)", [$name, $weight, 10]);
             }
         }
     }
@@ -286,11 +286,12 @@ class HackathonService {
     public function getContestParticipants(int $contestId): array {
         $conn = $this->em->getConnection();
         $participants = $conn->executeQuery("
-            SELECT u.id, u.name, u.avatar_url, u.skills, t.team_name as project
+            SELECT DISTINCT u.id, u.name, u.avatar_url, u.skills, t.team_name as project
             FROM users u
             INNER JOIN teams t ON u.team_id = t.id
-            INNER JOIN contest_registrations cr ON cr.team_id = t.id
-            WHERE cr.contest_id = :contestId
+            LEFT JOIN contest_registrations cr ON cr.team_id = t.id AND cr.contest_id = :contestId
+            LEFT JOIN submissions s ON s.team_id = t.id AND s.contest_id = :contestId
+            WHERE cr.contest_id = :contestId OR s.contest_id = :contestId
             ORDER BY u.name ASC
         ", ['contestId' => $contestId])->fetchAllAssociative();
 

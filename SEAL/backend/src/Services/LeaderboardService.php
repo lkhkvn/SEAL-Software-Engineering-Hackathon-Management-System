@@ -18,10 +18,11 @@ class LeaderboardService {
 
         if ($contestId > 0) {
             $teams = $conn->executeQuery("
-                SELECT t.id, t.team_name as name, t.category 
+                SELECT DISTINCT t.id, t.team_name as name, t.category 
                 FROM teams t
-                INNER JOIN contest_registrations cr ON cr.team_id = t.id
-                WHERE cr.contest_id = :contestId
+                LEFT JOIN contest_registrations cr ON cr.team_id = t.id AND cr.contest_id = :contestId
+                LEFT JOIN submissions s ON s.team_id = t.id AND s.contest_id = :contestId
+                WHERE cr.contest_id IS NOT NULL OR s.contest_id IS NOT NULL
             ", ['contestId' => $contestId])->fetchAllAssociative();
         } else {
             $teams = $conn->executeQuery("SELECT id, team_name as name, category FROM teams")->fetchAllAssociative();

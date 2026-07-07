@@ -199,6 +199,21 @@ try {
     if (preg_match('#^/api/teams/(\d+)$#', $path, $m) && $method === 'PUT') {
         $teamController->updateTeam((int)$m[1]); exit(0);
     }
+    if (preg_match('#^/api/teams/(\d+)$#', $path, $m) && $method === 'DELETE') {
+        $teamController->deleteTeam((int)$m[1]); exit(0);
+    }
+    if (preg_match('#^/api/teams/(\d+)/members$#', $path, $m) && $method === 'POST') {
+        $teamController->addMember((int)$m[1]); exit(0);
+    }
+    if (preg_match('#^/api/teams/(\d+)/leave$#', $path, $m) && $method === 'POST') {
+        $teamController->leaveTeam((int)$m[1]); exit(0);
+    }
+    if (preg_match('#^/api/teams/(\d+)/members/(\d+)$#', $path, $m) && $method === 'DELETE') {
+        $teamController->removeMember((int)$m[1], (int)$m[2]); exit(0);
+    }
+    if (preg_match('#^/api/teams/(\d+)/leader$#', $path, $m) && $method === 'PUT') {
+        $teamController->changeLeader((int)$m[1]); exit(0);
+    }
     if ($path === '/api/teams/join' && $method === 'POST') {
         $teamController->joinTeam(); exit(0);
     }

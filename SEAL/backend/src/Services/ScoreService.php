@@ -19,7 +19,7 @@ class ScoreService {
         $conn = $this->em->getConnection();
         
         $sql = "
-            SELECT 
+            SELECT DISTINCT
                 t.id as teamId, 
                 t.team_name as teamName, 
                 t.category,
@@ -28,10 +28,11 @@ class ScoreService {
                 s.github_url as githubUrl,
                 s.demo_video_url as demoVideoUrl,
                 s.file_url as fileUrl,
-                cr.contest_id as contestId
+                COALESCE(cr.contest_id, s.contest_id) as contestId
             FROM teams t
-            INNER JOIN contest_registrations cr ON cr.team_id = t.id
-            LEFT JOIN submissions s ON s.team_id = t.id AND s.contest_id = cr.contest_id
+            LEFT JOIN contest_registrations cr ON cr.team_id = t.id
+            LEFT JOIN submissions s ON s.team_id = t.id
+            WHERE cr.contest_id IS NOT NULL OR s.contest_id IS NOT NULL
         ";
         
         $teams = $conn->executeQuery($sql)->fetchAllAssociative();
@@ -153,7 +154,7 @@ class ScoreService {
 
     public function getCriteria(): array {
         $conn = $this->em->getConnection();
-        $criteria = $conn->executeQuery("SELECT id, name, max_score, weight, contest_id FROM criteria")->fetchAllAssociative();
+        $criteria = $conn->executeQuery("SELECT id, name, max_score, weight FROM criteria")->fetchAllAssociative();
         
         if (empty($criteria)) {
             $defaults = [
@@ -167,7 +168,7 @@ class ScoreService {
                     [$item['name'], $item['weight'], $item['max_score']]
                 );
             }
-            $criteria = $conn->executeQuery("SELECT id, name, max_score, weight, contest_id FROM criteria")->fetchAllAssociative();
+            $criteria = $conn->executeQuery("SELECT id, name, max_score, weight FROM criteria")->fetchAllAssociative();
         }
         
         return array_map(function($c) {
@@ -175,8 +176,7 @@ class ScoreService {
                 'id' => (int)$c['id'],
                 'name' => $c['name'],
                 'max_score' => (int)$c['max_score'],
-                'weight' => (float)$c['weight'],
-                'contest_id' => $c['contest_id'] ? (int)$c['contest_id'] : null
+                'weight' => (float)$c['weight']
             ];
         }, $criteria);
     }

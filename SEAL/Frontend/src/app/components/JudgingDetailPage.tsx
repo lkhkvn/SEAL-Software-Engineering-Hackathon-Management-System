@@ -67,8 +67,30 @@ export function JudgingDetailPage() {
         setTeam(foundTeam);
         
         const allCriteria: Criteria[] = result.data.criteria || [];
-        const contestCriteria = allCriteria.filter(c => c.contest_id === foundTeam.contestId);
         
+        // Fetch specific contest criteria
+        try {
+            const contestRes = await fetch(`http://localhost:8000/index.php/api/hackathons/${hackathonId}`);
+            const contestResult = await contestRes.json();
+            
+            if (contestRes.ok && contestResult.status === 'success' && contestResult.data?.criteria) {
+                const parsedCriteria = JSON.parse(contestResult.data.criteria);
+                if (parsedCriteria.items && parsedCriteria.items.length > 0) {
+                    const customNames = parsedCriteria.items.map((i: any) => i.name.trim().toLowerCase());
+                    const filteredCriteria = allCriteria.filter(c => customNames.includes(c.name.trim().toLowerCase()));
+                    
+                    if (filteredCriteria.length > 0) {
+                        setCriteria(filteredCriteria);
+                        return; // Found custom criteria, no need to fallback
+                    }
+                }
+            }
+        } catch (e) {
+            console.error("Lỗi lấy thông tin hackathon:", e);
+        }
+
+        // Fallback to old behavior
+        const contestCriteria = allCriteria.filter(c => c.contest_id === foundTeam.contestId);
         if (contestCriteria.length > 0) {
             setCriteria(contestCriteria);
         } else {
