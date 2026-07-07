@@ -1927,7 +1927,8 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
           {[
             { id: 'overview', icon: BarChart3, label: 'Tổng quan' },
             { id: 'events', icon: Calendar, label: 'Quản lý Hackathon' },
-            { id: 'permissions', icon: Shield, label: 'Phân quyền' }
+            { id: 'permissions', icon: Shield, label: 'Phân quyền' },
+            { id: 'logs', icon: FileText, label: 'Nhật ký hoạt động' }
           ].map(tab => {
             const Icon = tab.icon;
             return (
@@ -1959,6 +1960,7 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
               {activeTab === 'overview' && 'Tổng quan hệ thống'}
               {activeTab === 'events' && 'Quản lý Hackathon'}
               {activeTab === 'permissions' && 'Phân quyền thành viên'}
+              {activeTab === 'logs' && 'Nhật ký hoạt động'}
             </h1>
           </div>
           {activeTab === 'events' && (
@@ -1974,7 +1976,7 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
         </header>
 
         <div className="md:hidden flex gap-2 px-4 py-3 bg-white border-b border-gray-200 overflow-x-auto hide-scrollbar flex-shrink-0 shadow-sm">
-          {['overview', 'events', 'permissions'].map(tab => (
+          {['overview', 'events', 'permissions', 'logs'].map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -1987,6 +1989,7 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
               {tab === 'overview'     && 'Tổng quan'}
               {tab === 'events'       && 'Hackathon'}
               {tab === 'permissions'  && 'Phân quyền'}
+              {tab === 'logs'         && 'Nhật ký'}
             </button>
           ))}
         </div>
