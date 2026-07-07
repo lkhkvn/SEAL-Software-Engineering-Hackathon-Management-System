@@ -11,6 +11,7 @@ import {
   Search,
   Shield,
   CheckCircle2,
+  CheckSquare,
   AlertCircle,
   Loader2,
   Pencil,
@@ -27,7 +28,6 @@ import {
   Send,
   Lock,
   Unlock,
-  PlayCircle,
   UploadCloud
 } from 'lucide-react';
 import {
@@ -38,10 +38,13 @@ import {
   YAxis,
   Tooltip as ChartTooltip,
   Legend,
+  Line,
+  CartesianGrid,
   Cell,
   PieChart,
   Pie
 } from 'recharts';
+import { JudgingPage } from './JudgingPage';
 
 interface AdminPageProps {
   currentUser: any;
@@ -1915,19 +1918,22 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
       )}
 
       {/* ══════════════════ SIDEBAR ══════════════════ */}
-      <aside className="w-64 bg-white border-r border-gray-200 flex flex-col flex-shrink-0 hidden md:flex shadow-sm z-10">
-        <div className="p-6 border-b border-gray-100 flex-shrink-0">
-          <h2 className="text-lg font-bold text-gray-900 tracking-tight flex items-center gap-2">
-            <SettingsIcon size={20} className="text-blue-600" />
+      <aside className="w-[280px] bg-white/80 backdrop-blur-xl border-r border-gray-200/80 flex flex-col flex-shrink-0 hidden md:flex shadow-[4px_0_24px_rgba(0,0,0,0.02)] z-10">
+        <div className="p-7 border-b border-gray-100/80 flex-shrink-0 bg-gradient-to-b from-gray-50/50 to-transparent">
+          <h2 className="text-xl font-black text-gray-900 tracking-tight flex items-center gap-2.5">
+            <div className="bg-gradient-to-br from-blue-600 to-indigo-600 p-1.5 rounded-lg shadow-md">
+              <SettingsIcon size={20} className="text-white" />
+            </div>
             Quản trị hệ thống
           </h2>
-          <p className="text-xs text-gray-500 mt-1.5 font-medium">Dashboard điều hành SEAL</p>
+          <p className="text-xs text-gray-500 mt-2 font-medium tracking-wide">Dashboard điều hành SEAL</p>
         </div>
         <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
           {[
             { id: 'overview', icon: BarChart3, label: 'Tổng quan' },
             { id: 'events', icon: Calendar, label: 'Quản lý Hackathon' },
             { id: 'permissions', icon: Shield, label: 'Phân quyền' },
+            { id: 'judging', icon: CheckSquare, label: 'Chấm điểm' },
             { id: 'logs', icon: FileText, label: 'Nhật ký hoạt động' }
           ].map(tab => {
             const Icon = tab.icon;
@@ -1936,14 +1942,34 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
                 key={tab.id}
                 id={`admin-tab-${tab.id}`}
                 onClick={() => setActiveTab(tab.id)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all text-sm cursor-pointer ${
+                className={`w-full flex items-center gap-3.5 px-5 py-3.5 rounded-xl font-bold transition-all duration-300 text-sm cursor-pointer group relative overflow-hidden ${
                   activeTab === tab.id
-                    ? 'bg-blue-600 text-white shadow-md shadow-blue-200 translate-x-1'
-                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                    ? 'text-blue-700'
+                    : 'text-gray-500 hover:text-gray-900'
                 }`}
               >
-                <Icon size={18} className={activeTab === tab.id ? 'text-white' : 'text-gray-400'} />
-                {tab.label}
+                {/* Active Background with Glass Effect */}
+                {activeTab === tab.id && (
+                  <div className="absolute inset-0 bg-gradient-to-r from-blue-50 to-indigo-50/30 border border-blue-100 rounded-xl" />
+                )}
+                
+                {/* Hover Background */}
+                {activeTab !== tab.id && (
+                  <div className="absolute inset-0 bg-gray-50/80 opacity-0 group-hover:opacity-100 rounded-xl transition-opacity" />
+                )}
+                
+                {/* Active Indicator Line */}
+                {activeTab === tab.id && (
+                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-blue-600 rounded-r-full" />
+                )}
+
+                <div className="relative flex items-center gap-3.5 w-full">
+                  <Icon 
+                    size={18} 
+                    className={`transition-colors ${activeTab === tab.id ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-500'}`} 
+                  />
+                  {tab.label}
+                </div>
               </button>
             );
           })}
@@ -1954,29 +1980,31 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
       <main className="flex-1 flex flex-col h-full overflow-hidden bg-gray-50">
         
         {/* Top Header of Main Area */}
-        <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between shadow-sm flex-shrink-0 z-10">
+        <header className="bg-white/80 backdrop-blur-md border-b border-gray-200/80 px-8 py-5 flex items-center justify-between shadow-sm flex-shrink-0 z-10">
           <div>
-            <h1 className="text-xl font-bold text-gray-900 tracking-tight">
+            <h1 className="text-2xl font-black text-gray-900 tracking-tight">
               {activeTab === 'overview' && 'Tổng quan hệ thống'}
               {activeTab === 'events' && 'Quản lý Hackathon'}
               {activeTab === 'permissions' && 'Phân quyền thành viên'}
+              {activeTab === 'judging' && 'Chấm điểm'}
               {activeTab === 'logs' && 'Nhật ký hoạt động'}
             </h1>
+            <p className="text-sm text-gray-500 mt-1 font-medium">Quản lý và điều hành các hoạt động trên hệ thống</p>
           </div>
           {activeTab === 'events' && (
             <button
               id="btn-create-contest"
               onClick={openCreate}
-              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all shadow-md font-semibold text-sm cursor-pointer"
+              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all shadow-[0_4px_12px_rgba(37,99,235,0.2)] hover:shadow-[0_6px_16px_rgba(37,99,235,0.3)] font-bold text-sm cursor-pointer active:scale-95"
             >
               <Plus size={18} />
-              Tạo Hackathon
+              Tạo Hackathon mới
             </button>
           )}
         </header>
 
         <div className="md:hidden flex gap-2 px-4 py-3 bg-white border-b border-gray-200 overflow-x-auto hide-scrollbar flex-shrink-0 shadow-sm">
-          {['overview', 'events', 'permissions', 'logs'].map(tab => (
+          {['overview', 'events', 'permissions', 'judging', 'logs'].map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -1989,6 +2017,7 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
               {tab === 'overview'     && 'Tổng quan'}
               {tab === 'events'       && 'Hackathon'}
               {tab === 'permissions'  && 'Phân quyền'}
+              {tab === 'judging'      && 'Chấm điểm'}
               {tab === 'logs'         && 'Nhật ký'}
             </button>
           ))}
@@ -2484,6 +2513,13 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
           </div>
         )}
 
+
+        {/* ── Tab: Chấm điểm ── */}
+        {activeTab === 'judging' && (
+          <div className="w-full h-full -mx-4 sm:-mx-6 lg:-mx-8 -my-4 sm:-my-6 lg:-my-8 bg-gray-50/50">
+            <JudgingPage />
+          </div>
+        )}
 
         {/* ── Tab: Nhật ký hoạt động ── */}
         {activeTab === 'logs' && (

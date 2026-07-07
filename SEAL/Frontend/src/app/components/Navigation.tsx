@@ -20,7 +20,7 @@ export function Navigation({ currentUser, onLogout }: NavigationProps) {
     { path: '/organizations', icon: Building2, label: 'Tổ chức' },
     { path: '/blog', icon: BookOpen, label: 'Blog' },
     ...(isParticipant ? [{ path: '/submit', icon: Upload, label: 'Nộp dự án' }] : []),
-    ...(isUserJudge ? [{ path: '/judging', icon: CheckSquare, label: 'Chấm điểm' }] : []),
+    ...(isUserJudge && !isUserAdmin ? [{ path: '/judging', icon: CheckSquare, label: 'Chấm điểm' }] : []),
     ...(isUserMentor ? [{ path: '/mentor', icon: HelpCircle, label: 'Mentor' }] : []),
     ...(isUserAdmin ? [{ path: '/admin', icon: Settings, label: 'Quản lý' }] : []),
   ];

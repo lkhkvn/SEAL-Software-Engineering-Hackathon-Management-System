@@ -140,35 +140,38 @@ export function JudgingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50/50">
-      <div className="bg-white border-b border-gray-200">
+    <div className="min-h-screen bg-gray-50/30">
+      <div className="bg-white/80 backdrop-blur-xl border-b border-gray-200/80 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
             <h1 className="text-3xl font-bold text-gray-900 hidden sm:block">Chấm điểm Sự kiện</h1>
             <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto flex-1 justify-end">
               <div className="relative max-w-md w-full">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                 <input
                   type="text"
                   placeholder="Tìm kiếm..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 bg-gray-100 border-none rounded-lg focus:outline-none focus:ring-2 focus:ring-[#5027d9]"
+                  className="w-full pl-11 pr-4 py-2.5 bg-gray-100/80 hover:bg-gray-100 border border-transparent focus:border-blue-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 transition-all font-medium text-sm"
                 />
               </div>
 
               <div className="relative">
-                <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                <Filter className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
                 <select
                   value={filterStatus}
                   onChange={(e) => setFilterStatus(e.target.value)}
-                  className="pl-10 pr-8 py-2 bg-gray-100 border-none rounded-lg focus:outline-none focus:ring-2 focus:ring-[#5027d9] appearance-none cursor-pointer text-gray-700 font-medium"
+                  className="pl-11 pr-10 py-2.5 bg-gray-100/80 hover:bg-gray-100 border border-transparent focus:border-blue-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 appearance-none cursor-pointer text-gray-700 font-medium text-sm transition-all"
                 >
                   <option value="all">Tất cả trạng thái</option>
                   <option value="ACTIVE">Sự đăng ký</option>
                   <option value="UPCOMING">Ý tưởng</option>
                   <option value="COMPLETED">Hoàn thành</option>
                 </select>
+                <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
+                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                </div>
               </div>
             </div>
           </div>
@@ -218,26 +221,30 @@ export function JudgingPage() {
               >
                 <Link
                   to={`/judging/hackathon/${event.id}`}
-                  className="group flex flex-col h-full bg-white rounded-[24px] overflow-hidden shadow-sm hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all duration-300 border border-gray-100"
+                  className="group flex flex-col h-full bg-white rounded-2xl overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:shadow-[0_20px_40px_-12px_rgba(0,0,0,0.12)] hover:-translate-y-1 transition-all duration-300 border border-gray-100 hover:border-blue-100 relative"
                 >
+                  {/* Hover Gradient Overlay */}
+                  <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/5 opacity-0 group-hover:opacity-100 transition-opacity z-0 pointer-events-none" />
+                  
                   {/* Cover Image Section (Top half) */}
-                  <div className="relative h-[200px] w-full bg-gray-100">
+                  <div className="relative h-[200px] w-full bg-gray-100 overflow-hidden z-10">
                     <img 
                       src={coverImage}
                       alt={event.name}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                      className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-700 ease-out"
                     />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-60" />
                     {/* Badge */}
-                    <div className={`absolute top-4 left-4 px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm ${badge.bgColor} ${badge.textColor}`}>
+                    <div className={`absolute top-4 left-4 px-3 py-1.5 rounded-lg text-xs font-bold shadow-md backdrop-blur-md ${badge.bgColor} ${badge.textColor}`}>
                       {badge.text}
                     </div>
                   </div>
 
                   {/* Body Section */}
-                  <div className="relative p-6 flex flex-col flex-1 pt-12">
+                  <div className="relative p-6 flex flex-col flex-1 pt-12 z-10 bg-white">
                     {/* Avatar Overlapping */}
                     <div className="absolute -top-10 left-6">
-                      <div className="w-20 h-20 rounded-full border-[5px] border-white overflow-hidden bg-white shadow-sm">
+                      <div className="w-20 h-20 rounded-2xl border-4 border-white overflow-hidden bg-white shadow-md transform -rotate-3 group-hover:rotate-0 transition-transform duration-300">
                         <img 
                           src={logoImage} 
                           alt="Org Avatar"
@@ -247,7 +254,7 @@ export function JudgingPage() {
                     </div>
 
                     {/* Stats Top Right */}
-                    <div className="absolute top-4 right-6 flex items-center gap-4 text-gray-500 text-sm font-medium">
+                    <div className="absolute top-4 right-6 flex items-center gap-4 text-gray-500 text-sm font-semibold">
                       <div className="flex items-center gap-1.5 text-[#5027d9]">
                         <Users size={16} /> {event.teams}
                       </div>
