@@ -14,6 +14,7 @@ class MentorTicketMapper
             status: $model->status,
             mentorId: $model->mentorId,
             createdAt: $model->createdAt,
+            response: $model->response,
             id: $model->id
         );
     }
@@ -26,6 +27,7 @@ class MentorTicketMapper
         $model->topic = $domain->topic;
         $model->status = $domain->status;
         $model->mentorId = $domain->mentorId;
+        $model->response = $domain->response;
         if ($domain->createdAt) {
             $model->createdAt = $domain->createdAt;
         }

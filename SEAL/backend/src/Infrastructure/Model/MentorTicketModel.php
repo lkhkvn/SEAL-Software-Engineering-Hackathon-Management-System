@@ -24,6 +24,9 @@ class MentorTicketModel
     #[ORM\Column(type: 'string', length: 20, options: ['default' => 'OPEN'])]
     public string $status = 'OPEN'; // OPEN, ASSIGNED, RESOLVED
 
+    #[ORM\Column(type: 'text', nullable: true)]
+    public ?string $response = null;
+
     #[ORM\Column(name: 'created_at', type: 'datetime_immutable')]
     public \DateTimeImmutable $createdAt;
     

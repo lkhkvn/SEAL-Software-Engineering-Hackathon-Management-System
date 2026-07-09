@@ -40,14 +40,11 @@ class TeamModel
 
     #[ORM\Column(type: 'string', length: 20, options: ['default' => 'APPROVED'])]
     public string $status = 'APPROVED';
-
-<<<<<<< HEAD
     #[ORM\Column(name: 'logo_url', type: 'string', length: 255, nullable: true)]
     public ?string $logoUrl = null;
-=======
+
     #[ORM\Column(name: 'max_members', type: 'integer', options: ['default' => 5])]
     public int $maxMembers = 5;
->>>>>>> 1b3cd974da359ce534d2f68a224edee3921cd7b2
 
     public function __construct()
     {

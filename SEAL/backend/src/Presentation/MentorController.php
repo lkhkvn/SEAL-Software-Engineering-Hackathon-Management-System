@@ -115,8 +115,11 @@ class MentorController
             $this->jsonResponse(['status' => 'error', 'message' => 'Không có quyền truy cập'], 403);
         }
 
+        $input = json_decode(file_get_contents('php://input'), true) ?? [];
+        $response = $input['response'] ?? null;
+
         try {
-            $this->mentorService->resolveTicket($id, $user->id);
+            $this->mentorService->resolveTicket($id, $user->id, $response);
             $this->jsonResponse(['status' => 'success', 'message' => 'Đã giải quyết yêu cầu']);
         } catch (\Exception $e) {
             $this->jsonResponse(['status' => 'error', 'message' => $e->getMessage()], 400);

@@ -18,6 +18,7 @@ import { SubmissionPage } from './components/SubmissionPage';
 import { MentorDashboardPage } from './components/MentorDashboardPage';
 import { OrganizationsPage } from './components/OrganizationsPage';
 import { BlogPage } from './components/BlogPage';
+import { FloatingHelpButton } from './components/FloatingHelpButton';
 
 // Component Layout chung bọc thanh điều hướng Navigation
 function MainLayout({ currentUser, onLogout }: { currentUser: any, onLogout: () => void }) {
@@ -25,6 +26,7 @@ function MainLayout({ currentUser, onLogout }: { currentUser: any, onLogout: () 
     <>
       <Navigation currentUser={currentUser} onLogout={onLogout} />
       <Outlet /> {/* Khu vực hiển thị nội dung của các trang con */}
+      <FloatingHelpButton currentUser={currentUser} />
     </>
   );
 }
