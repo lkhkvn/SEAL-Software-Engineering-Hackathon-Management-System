@@ -50,4 +50,10 @@ class UserModel
 
     #[ORM\Column(name: 'cv_theme', type: 'string', length: 30, options: ['default' => 'ocean'])]
     public string $cvTheme = 'ocean';
+
+    #[ORM\Column(name: 'avatar_url', type: 'string', length: 255, nullable: true)]
+    public ?string $avatarUrl = null;
+
+    #[ORM\Column(name: 'date_of_birth', type: 'string', length: 10, nullable: true)]
+    public ?string $dateOfBirth = null;
 }

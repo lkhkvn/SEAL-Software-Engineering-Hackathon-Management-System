@@ -46,7 +46,7 @@ class MentorTicketService
         $this->repository->save($updatedTicket);
     }
 
-    public function resolveTicket(int $ticketId, int $mentorId): void
+    public function resolveTicket(int $ticketId, int $mentorId, ?string $response = null): void
     {
         $ticket = $this->repository->findById($ticketId);
         if (!$ticket) {
@@ -56,6 +56,9 @@ class MentorTicketService
             throw new \Exception("Bạn không phải người được giao xử lý yêu cầu này");
         }
         $updatedTicket = $ticket->withStatus('RESOLVED');
+        if ($response !== null) {
+            $updatedTicket = $updatedTicket->withResponse($response);
+        }
         $this->repository->save($updatedTicket);
     }
 }

@@ -6,6 +6,7 @@ use App\Services\AuthService;
 use App\DTO\JoinTeamRequestDTO;
 use App\Domain\Entity\User;
 use Doctrine\ORM\EntityManagerInterface;
+use Pusher\Pusher;
 use Exception;
 
 class TeamController {
@@ -81,8 +82,9 @@ class TeamController {
             $joinCode = null;
             $attempt = 0;
             do {
-                $prefix = strtoupper(substr(str_replace(' ', '', $teamName), 0, 2));
-                if (strlen($prefix) < 2) {
+                $cleanName = str_replace(' ', '', $teamName);
+                $prefix = mb_strtoupper(mb_substr($cleanName, 0, 2, 'UTF-8'), 'UTF-8');
+                if (mb_strlen($prefix, 'UTF-8') < 2) {
                     $prefix = 'TM';
                 }
                 $joinCode = $prefix . rand(1000, 9999);
@@ -107,11 +109,6 @@ class TeamController {
                 'leaderId' => $currentUser->id,
             ]);
             $teamId = (int)$conn->lastInsertId();
-
-            $conn->executeStatement("
-                INSERT INTO team_members (team_id, user_id, role_in_team)
-                VALUES (:teamId, :userId, 'LEAD')
-            ", ['teamId' => $teamId, 'userId' => $currentUser->id]);
 
             $conn->executeStatement("
                 UPDATE users SET team_id = :teamId, skills = :skills WHERE id = :userId
@@ -234,6 +231,76 @@ class TeamController {
         }
     }
 
+    public function uploadTeamImages(): void {
+        try {
+            $currentUser = $this->requireCurrentUser();
+            if (!$currentUser->teamId) {
+                http_response_code(403);
+                echo json_encode(["status" => "error", "message" => "Bạn chưa tham gia đội nào."], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            
+            $conn = $this->em->getConnection();
+            $team = $conn->executeQuery("SELECT leader_id FROM teams WHERE id = ?", [$currentUser->teamId])->fetchAssociative();
+            if (!$team || (int)$team['leader_id'] !== $currentUser->id) {
+                http_response_code(403);
+                echo json_encode(["status" => "error", "message" => "Chỉ đội trưởng mới có quyền thay đổi ảnh!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            // Ensure columns exist safely
+            try { $conn->executeStatement("ALTER TABLE teams ADD COLUMN avatar_url VARCHAR(255) DEFAULT NULL"); } catch (\Exception $e) {}
+            try { $conn->executeStatement("ALTER TABLE teams ADD COLUMN background_url VARCHAR(255) DEFAULT NULL"); } catch (\Exception $e) {}
+
+            $avatarDir = __DIR__ . '/../../storage/uploads/teams/';
+            if (!is_dir($avatarDir)) @mkdir($avatarDir, 0755, true);
+
+            $updates = [];
+            $params = ['id' => $currentUser->teamId];
+
+            if (isset($_FILES['avatar']) && $_FILES['avatar']['error'] === UPLOAD_ERR_OK) {
+                $ext = strtolower(pathinfo($_FILES['avatar']['name'], PATHINFO_EXTENSION));
+                $filename = 'team_avatar_' . $currentUser->teamId . '_' . time() . '.' . $ext;
+                if (move_uploaded_file($_FILES['avatar']['tmp_name'], $avatarDir . $filename)) {
+                    $updates[] = "avatar_url = :avatarUrl";
+                    $params['avatarUrl'] = '/api/teams/images/' . $filename;
+                }
+            }
+            if (isset($_FILES['background']) && $_FILES['background']['error'] === UPLOAD_ERR_OK) {
+                $ext = strtolower(pathinfo($_FILES['background']['name'], PATHINFO_EXTENSION));
+                $filename = 'team_bg_' . $currentUser->teamId . '_' . time() . '.' . $ext;
+                if (move_uploaded_file($_FILES['background']['tmp_name'], $avatarDir . $filename)) {
+                    $updates[] = "background_url = :bgUrl";
+                    $params['bgUrl'] = '/api/teams/images/' . $filename;
+                }
+            }
+
+            if (!empty($updates)) {
+                $sql = "UPDATE teams SET " . implode(", ", $updates) . " WHERE id = :id";
+                $conn->executeStatement($sql, $params);
+                echo json_encode(["status" => "success", "message" => "Đã cập nhật ảnh thành công."], JSON_UNESCAPED_UNICODE);
+            } else {
+                http_response_code(400);
+                echo json_encode(["status" => "error", "message" => "Không có file nào được tải lên."], JSON_UNESCAPED_UNICODE);
+            }
+        } catch (\Exception $e) {
+            http_response_code(400);
+            echo json_encode(["status" => "error", "message" => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        }
+    }
+
+    public function serveTeamImage(string $filename): void {
+        $filePath = __DIR__ . '/../../storage/uploads/teams/' . $filename;
+        if (file_exists($filePath)) {
+            $mime = mime_content_type($filePath);
+            header("Content-Type: $mime");
+            readfile($filePath);
+        } else {
+            http_response_code(404);
+            echo "Not found";
+        }
+    }
+
     public function joinTeam(): void {
         try {
             $headers = getallheaders();
@@ -261,7 +328,7 @@ class TeamController {
             // Tìm đội theo join_code
             $team = $conn->executeQuery("
                 SELECT t.id, t.team_name, t.max_members,
-                    (SELECT COUNT(*) FROM team_members tm WHERE tm.team_id = t.id) as member_count
+                    (SELECT COUNT(*) FROM users u WHERE u.team_id = t.id) as member_count
                 FROM teams t WHERE t.join_code = :joinCode
             ", ['joinCode' => $joinCode])->fetchAssociative();
 
@@ -277,22 +344,11 @@ class TeamController {
                 return;
             }
 
-            // Kiểm tra user đã trong team_members chưa
-            $alreadyMember = $conn->executeQuery("
-                SELECT id FROM team_members WHERE team_id = :teamId AND user_id = :userId
-            ", ['teamId' => $team['id'], 'userId' => $currentUser->id])->fetchOne();
-
-            if ($alreadyMember) {
+            if ($currentUser->teamId === (int)$team['id']) {
                 http_response_code(409);
                 echo json_encode(["status" => "error", "message" => "Bạn đã là thành viên của đội này rồi!"], JSON_UNESCAPED_UNICODE);
                 return;
             }
-
-            // Thêm vào team_members
-            $conn->executeStatement("
-                INSERT INTO team_members (team_id, user_id, role_in_team)
-                VALUES (:teamId, :userId, 'MEMBER')
-            ", ['teamId' => $team['id'], 'userId' => $currentUser->id]);
 
             // Cập nhật users.team_id
             $conn->executeStatement("
@@ -371,10 +427,9 @@ class TeamController {
             }
 
             $members = $conn->executeQuery(
-                "SELECT u.id, u.name, u.email, u.skills, u.avatar_url, u.date_of_birth, tm.role_in_team as role
-                 FROM team_members tm
-                 JOIN users u ON tm.user_id = u.id
-                 WHERE tm.team_id = :teamId",
+                "SELECT id, name, email, skills, avatar_url, date_of_birth
+                 FROM users
+                 WHERE team_id = :teamId",
                 ['teamId' => $teamId]
             )->fetchAllAssociative();
 
@@ -389,13 +444,13 @@ class TeamController {
                 ];
             }
 
-            $membersClean = array_map(function($m) {
+            $membersClean = array_map(function($m) use ($team) {
                 return [
                     'id' => (int)$m['id'],
                     'name' => $m['name'],
                     'email' => $m['email'] ?? null,
                     'skills' => $m['skills'] ?? null,
-                    'role' => $m['role'] ?? 'MEMBER',
+                    'role' => ((int)$team['leaderId'] === (int)$m['id']) ? 'LEAD' : 'MEMBER',
                     'avatarUrl' => $m['avatar_url'] ?? null,
                     'dateOfBirth' => $m['date_of_birth'] ?? null
                 ];
@@ -456,7 +511,7 @@ class TeamController {
             // Find team
             $team = $conn->executeQuery("
                 SELECT t.id, t.team_name, t.max_members, t.leader_id,
-                    (SELECT COUNT(*) FROM team_members tm WHERE tm.team_id = t.id) as member_count
+                    (SELECT COUNT(*) FROM users u WHERE u.team_id = t.id) as member_count
                 FROM teams t WHERE t.join_code = :joinCode
             ", ['joinCode' => $joinCode])->fetchAssociative();
 
@@ -580,7 +635,7 @@ class TeamController {
             $request = $conn->executeQuery("
                 SELECT r.id, r.team_id, r.user_id, r.status,
                        t.leader_id, t.max_members,
-                       (SELECT COUNT(*) FROM team_members tm WHERE tm.team_id = t.id) as member_count
+                       (SELECT COUNT(*) FROM users u WHERE u.team_id = t.id) as member_count
                 FROM team_join_requests r
                 INNER JOIN teams t ON t.id = r.team_id
                 WHERE r.id = :id
@@ -640,13 +695,7 @@ class TeamController {
                     WHERE user_id = :userId AND id != :id AND status = 'PENDING'
                 ", ['userId' => $request['user_id'], 'id' => $requestId]);
 
-                // 3. Add to team_members
-                $conn->executeStatement("
-                    INSERT INTO team_members (team_id, user_id, role_in_team, joined_at)
-                    VALUES (:teamId, :userId, 'MEMBER', NOW())
-                ", ['teamId' => $request['team_id'], 'userId' => $request['user_id']]);
-
-                // 4. Update users.team_id
+                // 3. Update users.team_id
                 $conn->executeStatement("
                     UPDATE users SET team_id = :teamId WHERE id = :userId
                 ", ['teamId' => $request['team_id'], 'userId' => $request['user_id']]);
@@ -809,6 +858,38 @@ class TeamController {
                 $fileUrl = $uploadResult['url'];
             }
 
+            // Xử lý upload projectAvatar
+            $projectAvatarUrl = null;
+            if (isset($_FILES['projectAvatar']) && $_FILES['projectAvatar']['error'] === UPLOAD_ERR_OK) {
+                $avatarDir = __DIR__ . '/../../storage/uploads/projects/';
+                if (!is_dir($avatarDir)) {
+                    mkdir($avatarDir, 0755, true);
+                }
+                $ext = strtolower(pathinfo($_FILES['projectAvatar']['name'], PATHINFO_EXTENSION));
+                if (in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp'])) {
+                    $uniqueName = 'project_' . $contestId . '_' . $currentUser->teamId . '_' . time() . '.' . $ext;
+                    if (move_uploaded_file($_FILES['projectAvatar']['tmp_name'], $avatarDir . $uniqueName)) {
+                        $projectAvatarUrl = '/api/projects/avatar/' . $uniqueName;
+                    }
+                }
+            }
+
+            // Xử lý upload teamLogo
+            $teamLogoUrl = null;
+            if (isset($_FILES['teamLogo']) && $_FILES['teamLogo']['error'] === UPLOAD_ERR_OK) {
+                $logoDir = __DIR__ . '/../../storage/uploads/teams/';
+                if (!is_dir($logoDir)) {
+                    mkdir($logoDir, 0755, true);
+                }
+                $ext = strtolower(pathinfo($_FILES['teamLogo']['name'], PATHINFO_EXTENSION));
+                if (in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp'])) {
+                    $uniqueName = 'team_' . $currentUser->teamId . '_' . time() . '.' . $ext;
+                    if (move_uploaded_file($_FILES['teamLogo']['tmp_name'], $logoDir . $uniqueName)) {
+                        $teamLogoUrl = '/api/teams/logo/' . $uniqueName;
+                    }
+                }
+            }
+
             // Check if submission already exists for this specific contest
             $existingSub = $conn->executeQuery("SELECT id, file_url FROM submissions WHERE team_id = :teamId AND contest_id = :contestId", [
                 'teamId' => $currentUser->teamId,
@@ -827,37 +908,51 @@ class TeamController {
                 if ($fileUrl) {
                     $updateSql .= ", file_url = :fileUrl";
                     $updateParams['fileUrl'] = $fileUrl;
-
-                    // Delete old file if exists
-                    if (!empty($existingSub['file_url'])) {
-                        $oldUrl = $existingSub['file_url'];
-                        $oldFilePath = '';
-                        if (str_starts_with($oldUrl, '/uploads/')) {
-                            $oldFilePath = __DIR__ . '/../../public' . $oldUrl;
-                        } else if (str_starts_with($oldUrl, '/api/submissions/file/')) {
-                            $oldFilePath = __DIR__ . '/../../storage/uploads/submissions/' . str_replace('/api/submissions/file/', '', $oldUrl);
-                        }
-                        if ($oldFilePath && file_exists($oldFilePath)) {
-                            unlink($oldFilePath);
-                        }
-                    }
+                }
+                if ($projectAvatarUrl) {
+                    $updateSql .= ", project_avatar_url = :projectAvatarUrl";
+                    $updateParams['projectAvatarUrl'] = $projectAvatarUrl;
                 }
                 $updateSql .= " WHERE id = :id";
                 $conn->executeStatement($updateSql, $updateParams);
+
+                if ($teamLogoUrl) {
+                    $conn->executeStatement("UPDATE teams SET logo_url = :logoUrl WHERE id = :teamId", [
+                        'logoUrl' => $teamLogoUrl,
+                        'teamId' => $currentUser->teamId
+                    ]);
+                }
             } else {
                 // Insert
-                $conn->executeStatement("
-                    INSERT INTO submissions (team_id, contest_id, project_name, description, github_url, demo_video_url, file_url, submitted_at)
-                    VALUES (:teamId, :contestId, :projectName, :description, :githubUrl, :demoVideoUrl, :fileUrl, NOW())
-                ", [
+                $insertCols = "team_id, contest_id, project_name, description, github_url, demo_video_url, submitted_at";
+                $insertVals = ":teamId, :contestId, :projectName, :description, :githubUrl, :demoVideoUrl, NOW()";
+                $insertParams = [
                     'teamId' => $currentUser->teamId,
                     'contestId' => $contestId,
                     'projectName' => $projectName,
                     'description' => $description,
                     'githubUrl' => $githubUrl,
-                    'demoVideoUrl' => $demoVideoUrl,
-                    'fileUrl' => $fileUrl
-                ]);
+                    'demoVideoUrl' => $demoVideoUrl
+                ];
+                if ($fileUrl) {
+                    $insertCols .= ", file_url";
+                    $insertVals .= ", :fileUrl";
+                    $insertParams['fileUrl'] = $fileUrl;
+                }
+                if ($projectAvatarUrl) {
+                    $insertCols .= ", project_avatar_url";
+                    $insertVals .= ", :projectAvatarUrl";
+                    $insertParams['projectAvatarUrl'] = $projectAvatarUrl;
+                }
+
+                $conn->executeStatement("INSERT INTO submissions ($insertCols) VALUES ($insertVals)", $insertParams);
+
+                if ($teamLogoUrl) {
+                    $conn->executeStatement("UPDATE teams SET logo_url = :logoUrl WHERE id = :teamId", [
+                        'logoUrl' => $teamLogoUrl,
+                        'teamId' => $currentUser->teamId
+                    ]);
+                }
             }
 
             http_response_code(200);
@@ -963,17 +1058,14 @@ class TeamController {
                 return;
             }
             // Check max members
-            $memberCount = $conn->executeQuery("SELECT COUNT(*) FROM team_members tm WHERE tm.team_id = :teamId", ['teamId' => $teamId])->fetchOne();
+            $memberCount = $conn->executeQuery("SELECT COUNT(*) FROM users u WHERE u.team_id = :teamId", ['teamId' => $teamId])->fetchOne();
             if ($memberCount >= $team['max_members']) {
                 http_response_code(400);
                 echo json_encode(["status" => "error", "message" => "Đội đã đạt số lượng thành viên tối đa!"], JSON_UNESCAPED_UNICODE);
                 return;
             }
             // Add member
-            $conn->beginTransaction();
-            $conn->executeStatement("INSERT INTO team_members (team_id, user_id, role_in_team) VALUES (:teamId, :userId, 'MEMBER')", ['teamId' => $teamId, 'userId' => $userId]);
             $conn->executeStatement("UPDATE users SET team_id = :teamId WHERE id = :userId", ['teamId' => $teamId, 'userId' => $userId]);
-            $conn->commit();
             http_response_code(201);
             echo json_encode(["status" => "success", "message" => "Thêm thành viên thành công!"] , JSON_UNESCAPED_UNICODE);
         } catch (\Exception $e) {
@@ -1007,19 +1099,14 @@ class TeamController {
                 return;
             }
             // Ensure the user is actually a member of the team
-            $memberExists = $conn->executeQuery("SELECT id FROM team_members WHERE team_id = :teamId AND user_id = :userId", ['teamId' => $teamId, 'userId' => $userId])->fetchOne();
+            $memberExists = $conn->executeQuery("SELECT id FROM users WHERE team_id = :teamId AND id = :userId", ['teamId' => $teamId, 'userId' => $userId])->fetchOne();
             if (!$memberExists) {
                 http_response_code(400);
                 echo json_encode(["status" => "error", "message" => "Thành viên không thuộc đội này!"], JSON_UNESCAPED_UNICODE);
                 return;
             }
-            $conn->beginTransaction();
-            // Delete from team_members
-            $conn->executeStatement("DELETE FROM team_members WHERE team_id = :teamId AND user_id = :userId", ['teamId' => $teamId, 'userId' => $userId]);
             // Reset user's team_id
             $conn->executeStatement("UPDATE users SET team_id = NULL WHERE id = :userId", ['userId' => $userId]);
-            // If the removed member was the leader, optionally transfer leadership to null (or keep unchanged, here we keep unchanged)
-            $conn->commit();
             http_response_code(200);
             echo json_encode(["status" => "success", "message" => "Xóa thành viên thành công!"], JSON_UNESCAPED_UNICODE);
         } catch (\Exception $e) {
@@ -1052,7 +1139,6 @@ class TeamController {
             $conn->beginTransaction();
             // Remove members and reset their team_id
             $conn->executeStatement("UPDATE users SET team_id = NULL WHERE team_id = :teamId", ['teamId' => $teamId]);
-            $conn->executeStatement("DELETE FROM team_members WHERE team_id = :teamId", ['teamId' => $teamId]);
             // Delete pending join requests
             $conn->executeStatement("DELETE FROM team_join_requests WHERE team_id = :teamId", ['teamId' => $teamId]);
             // Finally delete the team
@@ -1123,20 +1209,14 @@ class TeamController {
                 return;
             }
             // Verify new leader is a member of the team
-            $memberCheck = $conn->executeQuery("SELECT id FROM team_members WHERE team_id = :teamId AND user_id = :userId", ['teamId' => $teamId, 'userId' => $newLeaderId])->fetchOne();
+            $memberCheck = $conn->executeQuery("SELECT id FROM users WHERE team_id = :teamId AND id = :userId", ['teamId' => $teamId, 'userId' => $newLeaderId])->fetchOne();
             if (!$memberCheck) {
                 http_response_code(400);
                 echo json_encode(["status" => "error", "message" => "Người dùng không phải là thành viên của đội!"], JSON_UNESCAPED_UNICODE);
                 return;
             }
-            $conn->beginTransaction();
-            // Update role of previous leader to MEMBER
-            $conn->executeStatement("UPDATE team_members SET role_in_team = 'MEMBER' WHERE team_id = :teamId AND user_id = :oldLeaderId", ['teamId' => $teamId, 'oldLeaderId' => $team['leader_id']]);
-            // Update new leader role
-            $conn->executeStatement("UPDATE team_members SET role_in_team = 'LEAD' WHERE team_id = :teamId AND user_id = :newLeaderId", ['teamId' => $teamId, 'newLeaderId' => $newLeaderId]);
             // Update teams table
             $conn->executeStatement("UPDATE teams SET leader_id = :newLeaderId WHERE id = :teamId", ['newLeaderId' => $newLeaderId, 'teamId' => $teamId]);
-            $conn->commit();
             http_response_code(200);
             echo json_encode(["status" => "success", "message" => "Đổi trưởng nhóm thành công!"] , JSON_UNESCAPED_UNICODE);
         } catch (\Exception $e) {
@@ -1171,7 +1251,7 @@ class TeamController {
                 SELECT c.id, c.name, c.start_date, c.end_date, cr.registered_at 
                 FROM contests c
                 INNER JOIN contest_registrations cr ON cr.contest_id = c.id
-                WHERE cr.team_id = :teamId
+                WHERE cr.team_id = :teamId AND cr.status = 'APPROVED'
             ", ['teamId' => $currentUser->teamId])->fetchAllAssociative();
 
             http_response_code(200);
@@ -1251,6 +1331,136 @@ class TeamController {
         } catch (\Exception $e) {
             http_response_code(400);
             echo "Lỗi: " . $e->getMessage();
+        }
+    }
+
+    /** GET /api/projects/avatar/{filename} - Phục vụ ảnh đại diện dự án */
+    public function serveProjectAvatar(string $filename): void {
+        $filePath = __DIR__ . '/../../storage/uploads/projects/' . basename($filename);
+        if (file_exists($filePath)) {
+            $finfo = new \finfo(FILEINFO_MIME_TYPE);
+            $mimeType = $finfo->file($filePath);
+            header('Content-Type: ' . $mimeType);
+            header('Cache-Control: public, max-age=86400');
+            readfile($filePath);
+        } else {
+            http_response_code(404);
+            echo "File not found";
+        }
+    }
+
+    /** GET /api/teams/logo/{filename} - Phục vụ logo đội thi */
+    public function serveTeamLogo(string $filename): void {
+        $filePath = __DIR__ . '/../../storage/uploads/teams/' . basename($filename);
+        if (file_exists($filePath)) {
+            $finfo = new \finfo(FILEINFO_MIME_TYPE);
+            $mimeType = $finfo->file($filePath);
+            header('Content-Type: ' . $mimeType);
+            header('Cache-Control: public, max-age=86400');
+            readfile($filePath);
+        } else {
+            http_response_code(404);
+            echo "File not found";
+        }
+    }
+    public function getMessages(int $teamId): void {
+        try {
+            $currentUser = $this->requireCurrentUser();
+            if ($currentUser->role !== 'ADMIN' && $currentUser->teamId !== $teamId) {
+                http_response_code(403);
+                echo json_encode(["status" => "error", "message" => "Bạn không có quyền truy cập đoạn chat của đội này!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            $conn = $this->em->getConnection();
+            $messages = $conn->executeQuery("
+                SELECT c.id, c.message, c.created_at, u.id as user_id, u.name as user_name, u.avatar_url
+                FROM chat_messages c
+                JOIN users u ON c.user_id = u.id
+                WHERE c.team_id = :teamId
+                ORDER BY c.created_at ASC
+            ", ['teamId' => $teamId])->fetchAllAssociative();
+
+            echo json_encode([
+                "status" => "success",
+                "data" => $messages
+            ], JSON_UNESCAPED_UNICODE);
+        } catch (\Throwable $e) {
+            http_response_code(401);
+            echo json_encode(["status" => "error", "message" => $e->getMessage(), "trace" => $e->getTraceAsString()], JSON_UNESCAPED_UNICODE);
+        }
+    }
+
+    public function postMessage(int $teamId): void {
+        try {
+            $currentUser = $this->requireCurrentUser();
+            if ($currentUser->role !== 'ADMIN' && $currentUser->teamId !== $teamId) {
+                http_response_code(403);
+                echo json_encode(["status" => "error", "message" => "Bạn không có quyền gửi tin nhắn vào đội này!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            $input = json_decode(file_get_contents('php://input'), true);
+            $message = trim($input['message'] ?? '');
+
+            if (empty($message)) {
+                http_response_code(400);
+                echo json_encode(["status" => "error", "message" => "Tin nhắn không được để trống!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            $conn = $this->em->getConnection();
+            $createdAt = date('Y-m-d H:i:s');
+            
+            $conn->executeStatement("
+                INSERT INTO chat_messages (team_id, user_id, message, created_at)
+                VALUES (:teamId, :userId, :message, :createdAt)
+            ", [
+                'teamId' => $teamId,
+                'userId' => $currentUser->id,
+                'message' => $message,
+                'createdAt' => $createdAt
+            ]);
+
+            $messageId = $conn->lastInsertId();
+
+            // Lấy thông tin user để broadcast
+            $user = $conn->executeQuery("SELECT name, avatar_url FROM users WHERE id = :id", ['id' => $currentUser->id])->fetchAssociative();
+
+            $messageData = [
+                'id' => $messageId,
+                'message' => $message,
+                'created_at' => $createdAt,
+                'user_id' => $currentUser->id,
+                'user_name' => $user['name'] ?? 'Unknown',
+                'avatar_url' => $user['avatar_url'] ?? null
+            ];
+
+            // Gửi qua Pusher
+            try {
+                $pusher = new Pusher(
+                    'b0a454556dfbf62363e1',
+                    'dd49d0342ab3c8cc7844',
+                    '1825553',
+                    [
+                        'cluster' => 'ap1',
+                        'useTLS' => true
+                    ]
+                );
+                $pusher->trigger("team-chat-" . $teamId, 'new-message', $messageData);
+            } catch (Exception $e) {
+                error_log('[Pusher Error in TeamChat] ' . $e->getMessage());
+            }
+
+            echo json_encode([
+                "status" => "success",
+                "message" => "Gửi tin nhắn thành công",
+                "data" => $messageData
+            ], JSON_UNESCAPED_UNICODE);
+
+        } catch (\Throwable $e) {
+            http_response_code(401);
+            echo json_encode(["status" => "error", "message" => $e->getMessage(), "trace" => $e->getTraceAsString()], JSON_UNESCAPED_UNICODE);
         }
     }
 }

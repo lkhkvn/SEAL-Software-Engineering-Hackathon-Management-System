@@ -21,11 +21,12 @@ import {
   BookOpen,
   Lock
 } from 'lucide-react';
+import { LeaderboardPage } from './LeaderboardPage';
 
 export function EventDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState('participants');
   const [eventData, setEventData] = useState<any>(null);
   const [milestones, setMilestones] = useState<any[]>([]);
   const [schedules, setSchedules] = useState<any[]>([]);
@@ -33,6 +34,11 @@ export function EventDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [challenge, setChallenge] = useState<any>(null);
   const [isTeamRegistered, setIsTeamRegistered] = useState(false);
+  const [registeredTeams, setRegisteredTeams] = useState<any[]>([]);
+  const [participants, setParticipants] = useState<any[]>([]);
+  const [submissions, setSubmissions] = useState<any[]>([]);
+  const [selectedParticipant, setSelectedParticipant] = useState<any>(null);
+  const [selectedTeam, setSelectedTeam] = useState<any>(null);
 
   // Trạng thái đếm ngược (realtime)
   const [timeLeft, setTimeLeft] = useState('');
@@ -159,6 +165,7 @@ export function EventDetailPage() {
   };
 
   const handleCloseRegisterModal = () => {
+    const wasSuccessful = !!successTeam;
     setShowRegisterModal(false);
     setRegisterTeamName('');
     setRegisterJoinCode('');
@@ -166,6 +173,11 @@ export function EventDetailPage() {
     setSuccessTeam(null);
     setMyTeam(null);
     setRegisterType('create');
+    
+    // Nếu đăng ký thành công, reload lại trang để cập nhật danh sách đội thi
+    if (wasSuccessful) {
+      window.location.reload();
+    }
   };
 
   useEffect(() => {
@@ -229,6 +241,41 @@ export function EventDetailPage() {
                 }
             }
           } catch(e) {}
+        }
+
+        // Fetch danh sách các đội tham gia
+        try {
+          const teamsRes = await fetch(`http://localhost:8000/index.php/api/hackathons/${id}/teams`);
+          const teamsResult = await teamsRes.json();
+          if (teamsRes.ok && teamsResult.status === 'success') {
+            setRegisteredTeams(teamsResult.data || []);
+          }
+        } catch (tErr) {
+          console.error("Lỗi tải danh sách đội thi:", tErr);
+        }
+
+        // Fetch danh sách dự án (submissions)
+        try {
+          const subsRes = await fetch(`http://localhost:8000/index.php/api/hackathons/${id}/submissions`);
+          if (subsRes.ok) {
+            const subsResult = await subsRes.json();
+            if (subsResult.status === 'success') {
+              setSubmissions(subsResult.data || []);
+            }
+          }
+        } catch (sErr) {
+          console.error("Lỗi tải danh sách dự án:", sErr);
+        }
+
+        // Fetch danh sách người tham gia
+        try {
+          const partRes = await fetch(`http://localhost:8000/index.php/api/hackathons/${id}/participants`);
+          const partResult = await partRes.json();
+          if (partRes.ok && partResult.status === 'success') {
+            setParticipants(partResult.data || []);
+          }
+        } catch (pErr) {
+          console.error("Lỗi tải danh sách người tham gia:", pErr);
         }
 
       } catch (e: any) {
@@ -420,516 +467,494 @@ export function EventDetailPage() {
   };
 
   const tabs = [
-    { id: 'overview', label: 'Tổng quan', icon: Info },
-    { id: 'schedule', label: 'Lịch trình', icon: Clock },
-    { id: 'prizes', label: 'Giải thưởng', icon: Trophy },
-    { id: 'rules', label: 'Thể lệ', icon: FileText },
-    { id: 'challenge', label: 'Đề bài', icon: BookOpen },
+    { id: 'overview', label: 'Tổng Quan', icon: Info },
+    { id: 'schedule', label: 'Dòng Thời Gian', icon: Clock },
+    { id: 'rules', label: 'Quy Tắc', icon: FileText },
+    { id: 'prizes', label: 'Giải Thưởng', icon: Trophy },
+    { id: 'challenge', label: 'Dự Án', icon: BookOpen },
+    { id: 'participants', label: 'Người Tham Gia', icon: Users },
+    { id: 'leaderboard', label: 'Bảng Xếp Hạng', icon: Award },
   ];
 
+  const getMockCover = (id: number) => {
+    const covers = [
+      'https://images.unsplash.com/photo-1555066931-4365d14bab8c?auto=format&fit=crop&q=80&w=800&h=400',
+      'https://images.unsplash.com/photo-1516116216624-53e697fedbea?auto=format&fit=crop&q=80&w=800&h=400',
+      'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=800&h=400',
+      'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&q=80&w=800&h=400'
+    ];
+    return covers[id % covers.length];
+  };
+
+  const getMockLogo = (id: number) => {
+    const logos = [
+      'https://ui-avatars.com/api/?name=PO&background=0D8ABC&color=fff&size=128',
+      'https://ui-avatars.com/api/?name=CS&background=D32F2F&color=fff&size=128',
+      'https://ui-avatars.com/api/?name=HA&background=303F9F&color=fff&size=128',
+      'https://ui-avatars.com/api/?name=TK&background=388E3C&color=fff&size=128'
+    ];
+    return logos[id % logos.length];
+  };
+
+  const currentCover = (eventData.cover_url || event.image) && ((eventData.cover_url || event.image).startsWith('http') || (eventData.cover_url || event.image).startsWith('/'))
+    ? (eventData.cover_url || event.image)
+    : getMockCover(event.id);
+    
+  const currentLogo = eventData.logo_url && (eventData.logo_url.startsWith('http') || eventData.logo_url.startsWith('/'))
+    ? eventData.logo_url
+    : getMockLogo(event.id);
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div
-        className="relative h-64 flex items-center justify-center text-white bg-cover bg-center transition-all duration-500"
-        style={
-          event.image.startsWith('http') || event.image.startsWith('/')
-            ? { backgroundImage: `url(${event.image})` }
-            : { background: event.image }
-        }
-      >
-        <div className="absolute inset-0 bg-black/30"></div>
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
-          <Link
-            to="/events"
-            className="inline-flex items-center gap-2 text-white/90 hover:text-white mb-4 transition-colors"
-          >
-            <ArrowLeft size={20} />
-            <span>Quay lại danh sách</span>
-          </Link>
-          <h1 className="text-4xl font-bold mb-2">{event.name}</h1>
-          <p className="text-xl text-white/90">{event.description}</p>
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      {/* 1. Full-width Cover Image */}
+      <div className="w-full h-64 lg:h-80 bg-cover bg-center" style={{ backgroundImage: `url(${currentCover})` }}></div>
+
+      {/* 2. Sticky Tab Bar */}
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm relative">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          
+          {/* Logo overlapping the cover and tab bar */}
+          <div className="absolute -top-16 left-4 sm:left-6 lg:left-8 w-32 h-32 rounded-full border-4 border-white overflow-hidden bg-white shadow-md z-50 flex items-center justify-center">
+            <img src={currentLogo} alt="Logo" className="w-full h-full object-cover" />
+          </div>
+
+          <div className="flex overflow-x-auto hide-scrollbar pl-40">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center gap-2 px-6 py-4 font-medium transition-colors whitespace-nowrap ${
+                    activeTab === tab.id
+                      ? 'text-blue-600 border-b-2 border-blue-600'
+                      : 'text-gray-500 hover:text-gray-900'
+                  }`}
+                >
+                  <Icon size={18} />
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2">
-            <div className="bg-white rounded-xl border border-gray-200 mb-6">
-              <div className="border-b border-gray-200">
-                <div className="flex">
-                  {tabs.map((tab) => {
-                    const Icon = tab.icon;
-                    return (
-                      <button
-                        key={tab.id}
-                        onClick={() => setActiveTab(tab.id)}
-                        className={`flex-1 flex items-center justify-center gap-2 px-6 py-4 font-medium transition-colors ${
-                          activeTab === tab.id
-                            ? 'text-blue-600 border-b-2 border-blue-600'
-                            : 'text-gray-600 hover:text-gray-900'
-                        }`}
-                      >
-                        <Icon size={18} />
-                        <span className="hidden sm:inline">{tab.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+      {/* 3. Main Content Area */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full flex-1 mt-4">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          
+          {/* Left Sidebar */}
+          <div className="lg:col-span-4 space-y-6">
+            <div>
+               <h1 className="text-4xl font-bold text-blue-900 mb-3">{event.name}</h1>
+               <p className="text-gray-700 font-medium mb-6">{event.description}</p>
+               
+               {/* Registration Button */}
+               {isTeamRegistered && event.status === 'Đang diễn ra' ? (
+                 <button onClick={() => navigate(`/submit`)} className="block w-full py-3 mb-3 bg-green-600 text-white rounded-lg font-bold hover:bg-green-700 transition-colors shadow-md">Nộp Dự Án</button>
+               ) : isRegistrationClosed ? (
+                 <button disabled className="block w-full py-3 mb-3 bg-gray-300 text-gray-500 rounded-lg font-bold cursor-not-allowed">Đã hết hạn đăng ký</button>
+               ) : (
+                 <button onClick={handleOpenRegisterModal} className="block w-full py-3 mb-3 bg-orange-500 text-white rounded-lg font-bold hover:bg-orange-600 transition-colors shadow-lg shadow-orange-500/30 flex items-center justify-center gap-2">
+                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                   THAM GIA HACKATHON
+                 </button>
+               )}
 
-              <div className="p-6">
-                {activeTab === 'overview' && (
-                  <div className="space-y-6">
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-900 mb-3">Thông tin chung</h3>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="flex items-start gap-3">
-                          <Calendar className="text-blue-600 mt-1" size={20} />
-                          <div>
-                            <div className="text-sm text-gray-500">Thời gian</div>
-                            <div className="font-medium text-gray-900">{event.date}</div>
-                          </div>
-                        </div>
-                        <div className="flex items-start gap-3">
-                          <MapPin className="text-blue-600 mt-1" size={20} />
-                          <div>
-                            <div className="text-sm text-gray-500">Địa điểm</div>
-                            <div className="font-medium text-gray-900">{event.location}</div>
-                          </div>
-                        </div>
-                        <div className="flex items-start gap-3">
-                          <Users className="text-blue-600 mt-1" size={20} />
-                          <div>
-                            <div className="text-sm text-gray-500">Số đội tham gia</div>
-                            <div className="font-medium text-gray-900">
-                              {event.teams}/{event.maxTeams} đội
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex items-start gap-3">
-                          <Trophy className="text-blue-600 mt-1" size={20} />
-                          <div>
-                            <div className="text-sm text-gray-500">Tổng giải thưởng</div>
-                            <div className="font-medium text-gray-900">{event.prize}</div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+               <button className="block w-full py-3 mb-3 bg-[#4F39F6] text-white rounded-lg font-bold hover:bg-blue-800 transition-colors flex items-center justify-center gap-2">
+                 <Info size={18} /> REGULAMENTO OFFICIAL
+               </button>
+               <button className="block w-full py-3 mb-6 bg-[#4F39F6] text-white rounded-lg font-bold hover:bg-blue-800 transition-colors flex items-center justify-center gap-2">
+                 <FileText size={18} /> HƯỚNG DẪN THAM GIA
+               </button>
+               
+               <div className="mt-8 border-t border-gray-100 pt-6">
+                 <h3 className="font-bold text-gray-900 mb-4 text-lg">Dòng thời gian</h3>
+                 <div className="space-y-5 text-sm">
+                   <div>
+                     <div className="text-gray-900 font-semibold mb-1">Đăng ký</div>
+                     <div className="text-gray-600">
+                       {eventData.start_date ? new Date(eventData.start_date).toLocaleString('vi-VN', {day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'}) : '12 tháng 6 năm 2026 - 10:00'}
+                     </div>
+                   </div>
+                   <div>
+                     <div className="text-gray-900 font-semibold mb-1">Danh sách hy vọng</div>
+                     <div className="text-gray-600">
+                       {eventData.end_date ? new Date(eventData.end_date).toLocaleString('vi-VN', {day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'}) : '13 tháng 7 năm 2026 - 10:00'}
+                     </div>
+                   </div>
+                 </div>
+               </div>
+            </div>
+          </div>
 
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-900 mb-3">Tiêu chí đánh giá</h3>
-                      <div className="space-y-3">
-                        {event.criteria.map((criterion, index) => (
-                          <div key={index} className="flex items-start gap-3">
-                            <CheckCircle className="text-green-600 mt-1" size={20} />
-                            <div className="flex-1">
-                              <div className="flex items-center justify-between mb-1">
-                                <span className="font-medium text-gray-900">{criterion.name}</span>
-                                <span className="text-sm font-semibold text-blue-600">
-                                  {criterion.weight}
-                                </span>
-                              </div>
-                              <p className="text-sm text-gray-600">{criterion.description}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {activeTab === 'schedule' && (
-                  <div className="space-y-6">
-                    <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl mb-6 flex items-center justify-between">
-                      <div>
-                        <h3 className="font-bold text-blue-800 flex items-center gap-2 mb-1">
-                          <Clock size={20} />
-                          Tiến độ Thời gian thực (Realtime)
-                        </h3>
-                        <p className="text-sm text-blue-700">Tự động cập nhật từng giây</p>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-xs text-blue-600 font-semibold uppercase tracking-wider mb-1">Thời gian hiện tại</div>
-                        <div className="font-mono font-bold text-lg text-blue-800 bg-white px-3 py-1 rounded-md border border-blue-100 shadow-sm">
-                          {currentTime.toLocaleString('vi-VN')}
+          {/* Right Main Content */}
+          <div className="lg:col-span-8">
+            <div className="bg-transparent p-0">
+               
+               {/* OVERVIEW TAB */}
+               {activeTab === 'overview' && (
+                 <div className="space-y-6 text-gray-800 bg-white p-8 rounded-xl border border-gray-100 shadow-sm">
+                    <h2 className="text-2xl font-bold text-blue-900 mb-6">Chào mừng đến với {event.name}</h2>
+                    <p className="mb-4">Đây là nền tảng chính thức nơi toàn bộ sự kiện sẽ diễn ra.</p>
+                    <p className="mb-8 font-semibold">Bắt đầu từ đây: tab này tổng hợp tất cả những thông tin bạn cần biết. Hãy theo dõi kỹ các hướng dẫn để có trải nghiệm tham gia tốt nhất.</p>
+                    
+                    {/* Fake Video Block */}
+                    <div className="w-full bg-gray-900 rounded-xl overflow-hidden shadow-md flex flex-col justify-end p-6 relative min-h-[300px]">
+                      <div className="absolute inset-0 bg-cover bg-center opacity-50" style={{backgroundImage: "url('https://images.unsplash.com/photo-1517048676732-d65bc937f952?q=80&w=2070&auto=format&fit=crop')"}}></div>
+                      <div className="relative z-10 flex items-center gap-4">
+                        <div className="w-12 h-12 bg-gray-800 rounded-full flex items-center justify-center text-white font-bold">gu</div>
+                        <div className="text-white">
+                          <div className="font-bold text-xl">Bắt đầu từ đây: Chào mừng và hướng dẫn đăng ký</div>
+                          <div className="text-gray-300">Ban tổ chức {event.name}</div>
                         </div>
                       </div>
                     </div>
 
-                    <div className="relative border-l-2 border-gray-200 ml-4 space-y-10 pb-4 mt-8">
-                      {/* Giai đoạn 1: Đăng ký */}
+                    <h3 className="text-2xl font-bold mt-10 mb-4 text-blue-900">Quy tắc (Regras)</h3>
+                    <p className="mb-4 text-gray-700">Bạn có thể tham gia vào quy định của {event.name}: bạn có thể đăng ký, bạn có thể tham gia, và dễ dàng theo sát những việc cần làm. Vui lòng đọc kỹ trước khi đăng ký, vì đây là nơi giải đáp hầu hết các thắc mắc của bạn.</p>
+                    <p className="text-gray-400 mb-8">Trường hợp này có nhiều vấn đề khác nhau trong trang này. Quy định chính thức, phổ biến hoặc Quy định cụ thể.</p>
+                    
+                    <h3 className="text-2xl font-bold mt-8 mb-4 text-blue-900">Đối tượng tham gia (Quem pode participar)</h3>
+                    <p className="mb-4 text-gray-700">Không yêu cầu kinh nghiệm chuyên sâu. Nếu bạn đang có niềm đam mê thiết lập cổng thông tin và xây dựng trải nghiệm thực tế, đây là chương trình dành cho bạn.</p>
+                    
+                    <h4 className="font-bold text-lg mt-6 mb-3 text-gray-900">Bạn có thể tham gia nếu:</h4>
+                    <ul className="list-disc pl-6 space-y-2 text-gray-700">
+                      <li>Bạn trên 18 tuổi và thông tin sẽ được lưu trữ bảo mật.</li>
+                      <li>Bạn là sinh viên đang theo học tại các trường đại học/viện nghiên cứu (vượt qua các học kỳ khó khăn).</li>
+                      <li>Bạn là sinh viên (18+) các ngành công nghệ, đang tìm kiếm cơ hội thực tập, với thẻ sinh viên còn hiệu lực.</li>
+                      <li>Bạn là chuyên gia công nghệ, người đã tốt nghiệp (MBA hoặc tương đương), mong muốn thử thách bản thân.</li>
+                    </ul>
+                 </div>
+               )}
+
+               {/* TIMELINE TAB */}
+               {activeTab === 'schedule' && (
+                 <div className="space-y-6 text-gray-800 bg-white p-8 rounded-xl border border-gray-100 shadow-sm">
+                    <h2 className="text-xl font-bold text-gray-900 mb-8 pb-4">Dòng thời gian</h2>
+                    
+                    <div className="relative border-l border-gray-200 ml-3 space-y-10 py-4">
                       {(() => {
-                        const startReg = eventData.created_at ? new Date(eventData.created_at) : new Date(eventData.start_date || Date.now());
-                        if (!eventData.created_at && eventData.start_date) {
-                          startReg.setDate(startReg.getDate() - 14); // Fallback mở đăng ký trước 14 ngày
+                        if (!eventData) return null;
+                        const items = [];
+                        let customItems: any[] = [];
+                        let scheduleMeta: any = {};
+                        
+                        if (eventData.schedule) {
+                          try {
+                            const parsed = JSON.parse(eventData.schedule);
+                            if (Array.isArray(parsed)) {
+                              customItems = parsed;
+                            } else if (parsed && typeof parsed === 'object') {
+                              customItems = parsed.items || [];
+                              scheduleMeta = parsed;
+                            }
+                          } catch(e) {}
                         }
                         
-                        let endReg = eventData.registration_deadline ? new Date(eventData.registration_deadline) : new Date(eventData.start_date);
-                        endReg.setHours(23, 59, 59, 999);
+                        const regStart = scheduleMeta.registrationStart || eventData.registration_start;
+                        const regEnd = scheduleMeta.registrationEnd || eventData.registration_end || eventData.registration_deadline;
+                        const startDate = eventData.start_date;
+                        const endDate = eventData.end_date;
+                        const subDeadline = scheduleMeta.submissionDeadline || eventData.submission_deadline;
                         
-                        const isUpcoming = currentTime < startReg;
-                        const isPast = currentTime > endReg;
-                        const isActive = currentTime >= startReg && currentTime <= endReg;
-
-                        let phaseTimeLeft = '';
-                        if (isActive) {
-                          const diff = endReg.getTime() - currentTime.getTime();
-                          const d = Math.floor(diff / (1000 * 60 * 60 * 24));
-                          const h = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-                          const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-                          const s = Math.floor((diff % (1000 * 60)) / 1000);
-                          const fZero = (n: number) => n < 10 ? `0${n}` : n;
-                          phaseTimeLeft = `Còn ${d} ngày ${fZero(h)}:${fZero(m)}:${fZero(s)}`;
+                        if (regStart) {
+                          items.push({ time: regStart, title: 'Mở đăng ký' });
                         }
-
-                        let progress = 0;
-                        if (isPast) progress = 100;
-                        else if (isActive) {
-                          const total = endReg.getTime() - startReg.getTime();
-                          const passed = currentTime.getTime() - startReg.getTime();
-                          progress = total > 0 ? Math.min(100, Math.max(0, (passed / total) * 100)) : 0;
+                        if (regEnd) {
+                          items.push({ time: regEnd, title: 'Hạn chót đăng ký' });
                         }
-
-                        return (
-                          <div className="relative pl-8">
-                            <div className={`absolute -left-[11px] top-1 w-5 h-5 rounded-full border-4 border-white shadow-sm ${isPast ? 'bg-gray-400' : isActive ? 'bg-green-500 animate-pulse' : 'bg-blue-400'}`}></div>
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3">
-                              <h4 className={`text-xl font-bold ${isPast ? 'text-gray-500' : isActive ? 'text-green-600' : 'text-blue-600'}`}>
-                                1. Giai đoạn Đăng ký & Ghép đội
-                              </h4>
-                              {isActive && (
-                                <span className="mt-2 sm:mt-0 text-sm font-semibold text-green-700 bg-green-100 border border-green-200 px-4 py-1.5 rounded-full shadow-sm flex items-center gap-1.5 w-fit">
-                                  <Clock size={16} className="animate-spin-slow" style={{ animationDuration: '3s' }} /> 
-                                  {phaseTimeLeft}
-                                </span>
-                              )}
-                              {isPast && (
-                                <span className="mt-2 sm:mt-0 text-sm font-semibold text-gray-500 bg-gray-100 px-3 py-1 rounded-full w-fit">
-                                  Đã kết thúc
-                                </span>
-                              )}
-                            </div>
-                            <div className="text-sm text-gray-600 mb-4 bg-gray-50 p-3 rounded-lg border border-gray-100 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                              <div><span className="text-gray-400 mr-2">Mở đăng ký:</span> <strong className="text-gray-800">{startReg.toLocaleString('vi-VN')}</strong></div>
-                              <div><span className="text-gray-400 mr-2">Đóng đăng ký:</span> <strong className="text-gray-800">{endReg.toLocaleString('vi-VN')}</strong></div>
-                            </div>
-                            <div className="w-full bg-gray-100 rounded-full h-2.5 shadow-inner overflow-hidden">
-                              <div className={`h-full rounded-full transition-all duration-1000 ${isPast ? 'bg-gray-400' : 'bg-green-500 bg-[length:1rem_1rem] bg-[linear-gradient(45deg,rgba(255,255,255,.15)_25%,transparent_25%,transparent_50%,rgba(255,255,255,.15)_50%,rgba(255,255,255,.15)_75%,transparent_75%,transparent)] animate-[progress-bar-stripes_1s_linear_infinite]'}`} style={{ width: `${progress}%` }}></div>
-                            </div>
-                          </div>
-                        );
-                      })()}
-
-                      {/* Giai đoạn 1.5: Phát đề bài */}
-                      {(() => {
-                        const challengeTime = new Date(eventData.start_date || eventData.startDate);
-                        const isPast = currentTime >= challengeTime;
+                        if (startDate) {
+                          items.push({ time: startDate, title: 'Bắt đầu sự kiện' });
+                        }
+                        if (endDate) {
+                          items.push({ time: endDate, title: 'Kết thúc sự kiện' });
+                        }
+                        if (subDeadline) {
+                          items.push({ time: subDeadline, title: 'Hạn chót nộp bài' });
+                        }
                         
-                        return (
-                          <div className="relative pl-8">
-                            <div className={`absolute -left-[11px] top-1 w-5 h-5 rounded-full border-4 border-white shadow-sm ${isPast ? 'bg-purple-500' : 'bg-gray-300'}`}></div>
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3">
-                              <h4 className={`text-xl font-bold ${isPast ? 'text-purple-600' : 'text-gray-500'}`}>
-                                2. Phát Đề Bài (Mở khóa Challenge)
-                              </h4>
-                              <span className={`mt-2 sm:mt-0 text-sm font-semibold px-4 py-1.5 rounded-full w-fit shadow-sm ${isPast ? 'text-purple-700 bg-purple-100 border border-purple-200' : 'text-gray-600 bg-gray-100 border border-gray-200'}`}>
-                                {isPast ? 'Đã công bố' : 'Sắp diễn ra'}
-                              </span>
-                            </div>
-                            <div className="text-sm text-gray-600 mb-4 bg-gray-50 p-3 rounded-lg border border-gray-100">
-                              <div><span className="text-gray-400 mr-2">Dự kiến công bố lúc:</span> <strong className="text-gray-800">{challengeTime.toLocaleString('vi-VN')}</strong></div>
-                              <p className="text-xs text-gray-500 italic mt-1.5">Lưu ý: Thời gian thực tế có thể thay đổi một chút tùy theo quyết định của Ban tổ chức.</p>
-                            </div>
-                          </div>
-                        );
-                      })()}
-
-                      {/* Giai đoạn 2: Nộp bài */}
-                      {(() => {
-                        const startSub = new Date(eventData.start_date || eventData.startDate);
-                        let endSub = new Date(eventData.end_date || eventData.endDate);
-                        endSub.setHours(23, 59, 59, 999);
+                        if (customItems.length > 0) {
+                          customItems.forEach((item: any) => {
+                            if (item.time && item.name) {
+                              items.push({ time: item.time.replace('T', ' '), title: item.name });
+                            }
+                          });
+                        }
                         
-                        const isUpcoming = currentTime < startSub;
-                        const isPast = currentTime > endSub;
-                        const isActive = currentTime >= startSub && currentTime <= endSub;
+                        // Sort by time ascending
+                        items.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
 
-                        let phaseTimeLeft = '';
-                        if (isActive) {
-                          const diff = endSub.getTime() - currentTime.getTime();
-                          const d = Math.floor(diff / (1000 * 60 * 60 * 24));
-                          const h = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-                          const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-                          const s = Math.floor((diff % (1000 * 60)) / 1000);
-                          const fZero = (n: number) => n < 10 ? `0${n}` : n;
-                          phaseTimeLeft = `Còn ${d} ngày ${fZero(h)}:${fZero(m)}:${fZero(s)}`;
+                        if (items.length === 0) {
+                           return <div className="text-gray-500 italic pl-8">Chưa có thông tin lịch trình.</div>;
                         }
 
-                        let progress = 0;
-                        if (isPast) progress = 100;
-                        else if (isActive) {
-                          const total = endSub.getTime() - startSub.getTime();
-                          const passed = currentTime.getTime() - startSub.getTime();
-                          progress = total > 0 ? Math.min(100, Math.max(0, (passed / total) * 100)) : 0;
-                        }
-
-                        return (
-                          <div className="relative pl-8">
-                            <div className={`absolute -left-[11px] top-1 w-5 h-5 rounded-full border-4 border-white shadow-sm ${isPast ? 'bg-gray-400' : isActive ? 'bg-green-500 animate-pulse' : 'bg-blue-400'}`}></div>
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3">
-                              <h4 className={`text-xl font-bold ${isPast ? 'text-gray-500' : isActive ? 'text-green-600' : 'text-blue-600'}`}>
-                                3. Giai đoạn Coding & Nộp bài
-                              </h4>
-                              {isActive && (
-                                <span className="mt-2 sm:mt-0 text-sm font-semibold text-green-700 bg-green-100 border border-green-200 px-4 py-1.5 rounded-full shadow-sm flex items-center gap-1.5 w-fit">
-                                  <Clock size={16} className="animate-spin-slow" style={{ animationDuration: '3s' }} /> 
-                                  {phaseTimeLeft}
-                                </span>
-                              )}
-                              {isUpcoming && (
-                                <span className="mt-2 sm:mt-0 text-sm font-semibold text-blue-700 bg-blue-100 border border-blue-200 px-3 py-1 rounded-full w-fit">
-                                  Sắp diễn ra
-                                </span>
-                              )}
-                              {isPast && (
-                                <span className="mt-2 sm:mt-0 text-sm font-semibold text-gray-500 bg-gray-100 px-3 py-1 rounded-full w-fit">
-                                  Đã kết thúc
-                                </span>
-                              )}
-                            </div>
-                            <div className="text-sm text-gray-600 mb-4 bg-gray-50 p-3 rounded-lg border border-gray-100 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                              <div><span className="text-gray-400 mr-2">Bắt đầu:</span> <strong className="text-gray-800">{startSub.toLocaleString('vi-VN')}</strong></div>
-                              <div><span className="text-gray-400 mr-2">Kết thúc:</span> <strong className="text-gray-800">{endSub.toLocaleString('vi-VN')}</strong></div>
-                            </div>
-                            <div className="w-full bg-gray-100 rounded-full h-2.5 shadow-inner overflow-hidden">
-                              <div className={`h-full rounded-full transition-all duration-1000 ${isPast ? 'bg-gray-400' : isActive ? 'bg-green-500 bg-[length:1rem_1rem] bg-[linear-gradient(45deg,rgba(255,255,255,.15)_25%,transparent_25%,transparent_50%,rgba(255,255,255,.15)_50%,rgba(255,255,255,.15)_75%,transparent_75%,transparent)] animate-[progress-bar-stripes_1s_linear_infinite]' : 'bg-blue-400'}`} style={{ width: `${progress}%` }}></div>
-                            </div>
-                          </div>
-                        );
+                        return items.map((item, idx) => {
+                           const isPast = new Date(item.time).getTime() < new Date().getTime();
+                           return (
+                             <div key={idx} className="relative pl-8">
+                                <div className={`absolute -left-[7px] top-1 w-3.5 h-3.5 rounded-full border-2 ${isPast ? 'bg-[#ff7a45] border-[#ff7a45]' : 'bg-white border-gray-300'}`}></div>
+                                <div className="text-sm text-gray-400 mb-1">
+                                  {new Date(item.time).toLocaleString('vi-VN')}
+                                </div>
+                                <div className={`text-lg font-medium ${isPast ? 'text-gray-900' : 'text-gray-600'}`}>
+                                  {item.title}
+                                </div>
+                             </div>
+                           );
+                        });
                       })()}
                     </div>
-                  </div>
-                )}
+                 </div>
+               )}
 
-                {activeTab === 'prizes' && (
-                  <div className="space-y-4">
-                    {event.prizes.map((prize, index) => (
-                      <div
-                        key={index}
-                        className="flex items-center justify-between p-4 bg-gradient-to-r from-yellow-50 to-orange-50 rounded-lg border border-yellow-200"
-                      >
-                        <div className="flex items-center gap-4">
-                          <Award
-                            className={index === 0 ? 'text-yellow-500' : 'text-orange-500'}
-                            size={32}
-                          />
-                          <div>
-                            <div className="font-bold text-gray-900">{prize.rank}</div>
-                            <div className="text-sm text-gray-600">
-                              {prize.teams} đội
-                            </div>
-                          </div>
-                        </div>
-                        <div className="text-2xl font-bold text-gray-900">{prize.amount}</div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {activeTab === 'rules' && (
-                  <div className="space-y-6 text-left">
-                    {/* Thể lệ cuộc thi */}
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                        <FileText className="text-blue-600" size={20} />
-                        Quy định chung
-                      </h3>
-                      <div className="space-y-3">
-                        {event.rules.map((rule, index) => (
-                          <div key={index} className="flex items-start gap-3">
-                            <div className="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0 mt-0.5 shadow-sm">
-                              {index + 1}
-                            </div>
-                            <p className="text-gray-700 leading-relaxed">{rule}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Mốc thời gian quan trọng */}
-                    {milestones.length > 0 && (
-                      <div className="pt-6 border-t border-gray-200">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                          <Clock className="text-blue-600" size={20} />
-                          Mốc thời gian quan trọng (Timeline)
-                        </h3>
-                        <div className="space-y-4">
-                          {milestones.map((milestone: any, index: number) => (
-                            <div key={milestone.id || index} className="p-4 bg-blue-50/40 border border-blue-100 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm hover:shadow transition-shadow">
-                              <div>
-                                <h4 className="font-bold text-gray-950">{milestone.name}</h4>
-                                {milestone.description && (
-                                  <p className="text-sm text-gray-600 mt-1 leading-relaxed">{milestone.description}</p>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-1.5 text-blue-700 font-semibold text-xs bg-blue-50 px-3.5 py-2 rounded-full self-start sm:self-center border border-blue-100">
-                                <Clock size={14} />
-                                <span>
-                                  {milestone.dueDate ? new Date(milestone.dueDate).toLocaleString('vi-VN', {
-                                    day: '2-digit',
-                                    month: '2-digit',
-                                    year: 'numeric',
-                                    hour: '2-digit',
-                                    minute: '2-digit'
-                                  }) : 'Chưa cập nhật'}
-                                </span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {activeTab === 'challenge' && (
-                  <div className="space-y-6 text-left">
-                    {challenge && (challenge.title || challenge.available) ? (
-                      <div>
-                        <h3 className="text-xl font-bold text-gray-900 mb-4">{challenge.title}</h3>
-                        <div className="prose max-w-none text-gray-700 mb-6">
-                          {challenge.description?.split('\n').map((line: string, i: number) => (
-                            <p key={i} className="mb-2">{line}</p>
-                          ))}
-                        </div>
-                        
-                        {challenge.resources && (
-                          <div className="mb-6">
-                            <h4 className="font-semibold text-gray-900 mb-2">Tài nguyên & API:</h4>
-                            <div className="p-4 bg-gray-50 rounded-lg text-sm text-gray-700 whitespace-pre-wrap">
-                              {challenge.resources}
-                            </div>
-                          </div>
-                        )}
-
-                        {challenge.constraints && (
-                          <div className="mb-6">
-                            <h4 className="font-semibold text-gray-900 mb-2">Ràng buộc kỹ thuật:</h4>
-                            <div className="p-4 bg-red-50 text-red-800 rounded-lg text-sm whitespace-pre-wrap">
-                              {challenge.constraints}
-                            </div>
-                          </div>
-                        )}
-
-                        {challenge.file_url && (
-                          <div className="mt-8 pt-6 border-t border-gray-200">
-                            <h4 className="font-semibold text-gray-900 mb-3">Tệp đính kèm:</h4>
-                            <a
-                              href={`http://localhost:8000${challenge.file_url}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium rounded-lg transition-colors border border-blue-200"
-                            >
-                              <Download size={18} />
-                              Tải xuống {challenge.file_name || 'Đề bài'}
-                            </a>
-                          </div>
-                        )}
+               {/* RULES TAB */}
+               {activeTab === 'rules' && (
+                 <div className="space-y-6 text-gray-800 bg-white p-8 rounded-xl border border-gray-100 shadow-sm">
+                    <h2 className="text-2xl font-bold text-blue-900 mb-6">Quy tắc Tham gia (Regras)</h2>
+                    
+                    {eventData.rules ? (
+                      <div className="prose max-w-none text-gray-700 whitespace-pre-wrap">
+                        {eventData.rules}
                       </div>
                     ) : (
-                      <div className="py-12 text-center">
-                        <Lock size={48} className="mx-auto text-gray-300 mb-4" />
-                        <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                          {challenge?.message ? 'Không thể xem đề bài' : 'Đề bài chưa được công bố'}
-                        </h3>
-                        <p className="text-gray-500 max-w-md mx-auto">
-                          {challenge?.message || 'Đề bài sẽ được mở khóa khi cuộc thi chính thức bắt đầu.'}
-                        </p>
+                      <div className="space-y-6">
+                        <div>
+                          <h3 className="text-xl font-bold text-gray-900 mb-2">1. Quy định chung</h3>
+                          <p className="text-gray-700">Tất cả các đội thi phải tuân thủ nghiêm ngặt các quy định do Ban tổ chức (BTC) đề ra. Bất kỳ hành vi gian lận, sao chép code không ghi nguồn, hoặc sử dụng các sản phẩm đã hoàn thiện trước khi cuộc thi bắt đầu đều sẽ bị loại lập tức.</p>
+                        </div>
+
+                        <div>
+                          <h3 className="text-xl font-bold text-gray-900 mb-2">2. Đội thi và Thành viên</h3>
+                          <ul className="list-disc pl-6 space-y-2 text-gray-700">
+                            <li>Mỗi đội thi có tối thiểu 3 thành viên và tối đa 5 thành viên.</li>
+                            <li>Một người chỉ được phép tham gia vào duy nhất 01 đội thi trong khuôn khổ chương trình.</li>
+                            <li>Mọi sự thay đổi về nhân sự (thêm, bớt thành viên) phải được thông báo và nhận được sự chấp thuận từ BTC trước khi Vòng sơ loại kết thúc.</li>
+                          </ul>
+                        </div>
+
+                        <div>
+                          <h3 className="text-xl font-bold text-gray-900 mb-2">3. Quyền sở hữu trí tuệ</h3>
+                          <p className="text-gray-700">Toàn bộ mã nguồn, tài liệu, và sản phẩm được tạo ra trong quá trình diễn ra Hackathon đều thuộc quyền sở hữu của các thành viên trong đội. Tuy nhiên, BTC có quyền sử dụng hình ảnh, tên dự án và mô tả dự án cho các mục đích truyền thông phi lợi nhuận mà không cần xin phép trước.</p>
+                        </div>
+                        
+                        <div>
+                          <h3 className="text-xl font-bold text-gray-900 mb-2">4. Tiêu chí Đánh giá</h3>
+                          <p className="text-gray-700">Các dự án sẽ được Ban Giám khảo chấm điểm dựa trên các tiêu chí chính sau:</p>
+                          <ul className="list-disc pl-6 space-y-2 text-gray-700 mt-2">
+                            <li><strong>Tính sáng tạo (30%):</strong> Giải pháp độc đáo, chưa từng có trên thị trường hoặc có cách tiếp cận mới lạ.</li>
+                            <li><strong>Tính ứng dụng (30%):</strong> Giải pháp có khả năng giải quyết vấn đề thực tế, quy mô thị trường tiềm năng lớn.</li>
+                            <li><strong>Công nghệ (20%):</strong> Độ phức tạp kỹ thuật, kiến trúc hệ thống và độ hoàn thiện của sản phẩm (MVP).</li>
+                            <li><strong>Thuyết trình (20%):</strong> Kỹ năng giao tiếp, trình bày rõ ràng, trả lời câu hỏi phản biện từ Ban Giám khảo.</li>
+                          </ul>
+                        </div>
                       </div>
                     )}
-                  </div>
-                )}
-              </div>
+                 </div>
+               )}
+
+               {/* PRIZES TAB */}
+               {activeTab === 'prizes' && (
+                 <div className="space-y-6 text-gray-800 bg-white p-8 rounded-xl border border-gray-100 shadow-sm">
+                    <h2 className="text-2xl font-bold text-blue-900 mb-6 flex items-center gap-2">
+                      <Trophy className="text-yellow-500" size={28} />
+                      Cơ cấu Giải thưởng
+                    </h2>
+                    
+                    {eventData.prize ? (
+                      <div className="bg-yellow-50 border border-yellow-200 p-6 rounded-xl mb-8 flex flex-col items-center justify-center text-center">
+                        <span className="text-sm font-semibold text-yellow-800 uppercase tracking-wider mb-2">Tổng giá trị giải thưởng</span>
+                        <span className="text-4xl font-black text-yellow-600">{eventData.prize}</span>
+                      </div>
+                    ) : null}
+
+                    {eventData.prize_details ? (
+                      <div className="prose max-w-none text-gray-700 whitespace-pre-wrap">
+                        {eventData.prize_details}
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {/* Fake Prizes if no details */}
+                        <div className="bg-white border border-gray-200 rounded-xl p-6 relative overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                          <div className="absolute top-0 right-0 bg-yellow-400 text-yellow-900 text-xs font-bold px-3 py-1 rounded-bl-lg">Hạng 1</div>
+                          <Trophy className="text-yellow-400 mb-4" size={40} />
+                          <h3 className="text-xl font-bold text-gray-900 mb-2">Giải Nhất</h3>
+                          <p className="text-2xl font-black text-blue-600 mb-4">50.000.000đ</p>
+                          <ul className="text-sm text-gray-600 space-y-2 list-disc pl-4">
+                            <li>Tiền mặt và Giấy khen</li>
+                            <li>Gói AWS Credits $1,000</li>
+                            <li>Cơ hội phỏng vấn trực tiếp</li>
+                          </ul>
+                        </div>
+
+                        <div className="bg-white border border-gray-200 rounded-xl p-6 relative overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                          <div className="absolute top-0 right-0 bg-gray-300 text-gray-800 text-xs font-bold px-3 py-1 rounded-bl-lg">Hạng 2</div>
+                          <Award className="text-gray-400 mb-4" size={40} />
+                          <h3 className="text-xl font-bold text-gray-900 mb-2">Giải Nhì</h3>
+                          <p className="text-2xl font-black text-blue-600 mb-4">20.000.000đ</p>
+                          <ul className="text-sm text-gray-600 space-y-2 list-disc pl-4">
+                            <li>Tiền mặt và Giấy khen</li>
+                            <li>Gói AWS Credits $500</li>
+                          </ul>
+                        </div>
+
+                        <div className="bg-white border border-gray-200 rounded-xl p-6 relative overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                          <div className="absolute top-0 right-0 bg-orange-300 text-orange-900 text-xs font-bold px-3 py-1 rounded-bl-lg">Hạng 3</div>
+                          <Award className="text-orange-400 mb-4" size={40} />
+                          <h3 className="text-xl font-bold text-gray-900 mb-2">Giải Ba</h3>
+                          <p className="text-2xl font-black text-blue-600 mb-4">10.000.000đ</p>
+                          <ul className="text-sm text-gray-600 space-y-2 list-disc pl-4">
+                            <li>Tiền mặt và Giấy khen</li>
+                          </ul>
+                        </div>
+                      </div>
+                    )}
+                 </div>
+               )}
+
+               {/* PROJECTS TAB (DỰ ÁN) */}
+               {activeTab === 'challenge' && (
+                 <div className="space-y-8 text-gray-800 bg-white p-8 rounded-xl border border-gray-100 shadow-sm">
+                    <div className="flex items-center justify-between border-b border-gray-100 pb-4 mb-6">
+                      <h2 className="text-2xl font-bold text-blue-900 flex items-center gap-2">
+                        <BookOpen className="text-blue-600" size={28} />
+                        Dự Án Tham Gia
+                      </h2>
+                      <span className="bg-blue-100 text-blue-800 text-sm font-bold px-3 py-1 rounded-full">{submissions.length} dự án</span>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {submissions.length > 0 ? (
+                        submissions.map((sub: any) => (
+                          <div key={sub.id} className="border border-gray-200 rounded-xl overflow-hidden hover:shadow-lg transition-all group bg-white">
+                            <div className="h-40 bg-gray-200 relative overflow-hidden flex items-center justify-center">
+                              {/* Using a placeholder if demo video is not visual, or just a colored background */}
+                              {sub.project_avatar_url ? (
+                                <img src={`http://localhost:8000/index.php${sub.project_avatar_url}`} alt={sub.project_name} className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="w-full h-full bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center">
+                                  <BookOpen className="text-blue-300 w-16 h-16" />
+                                </div>
+                              )}
+                              <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm px-2 py-1 rounded text-xs font-bold text-gray-700 shadow-sm">{sub.category || 'Dự án'}</div>
+                            </div>
+                            <div className="p-5">
+                              <h3 className="text-lg font-bold text-gray-900 mb-2 truncate" title={sub.project_name}>{sub.project_name}</h3>
+                              <p className="text-sm text-gray-600 line-clamp-2 mb-4" title={sub.description}>{sub.description || 'Chưa có mô tả chi tiết cho dự án này.'}</p>
+                              <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+                                <div className="flex items-center gap-2">
+                                  {sub.logo_url ? (
+                                    <img src={`http://localhost:8000/index.php${sub.logo_url}`} alt={sub.team_name} className="w-8 h-8 rounded-full object-cover border border-gray-200" />
+                                  ) : (
+                                    <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold uppercase">
+                                      {sub.team_name ? sub.team_name.substring(0, 2) : 'TM'}
+                                    </div>
+                                  )}
+                                  <span className="text-sm font-medium text-gray-700 truncate max-w-[120px]" title={sub.team_name}>{sub.team_name}</span>
+                                </div>
+                                {sub.github_url && (
+                                  <a href={sub.github_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center gap-1">
+                                    Source Code <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                                  </a>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="col-span-full py-12 text-center">
+                          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 text-gray-400 mb-4">
+                            <BookOpen size={32} />
+                          </div>
+                          <h3 className="text-lg font-medium text-gray-900 mb-1">Chưa có dự án nào</h3>
+                          <p className="text-gray-500">Cuộc thi này chưa có dự án nào được nộp.</p>
+                        </div>
+                      )}
+                    </div>
+                 </div>
+               )}
+
+               {/* PARTICIPANTS TAB */}
+               {activeTab === 'participants' && (
+                 <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+                   <div className="overflow-x-auto">
+                     <table className="w-full text-left text-sm">
+                       <thead className="bg-white border-b border-gray-200 text-gray-500 font-medium">
+                         <tr>
+                           <th className="px-6 py-4 lowercase first-letter:uppercase">participant</th>
+                           <th className="px-6 py-4">Skills</th>
+                           <th className="px-6 py-4">Project</th>
+                         </tr>
+                       </thead>
+                       <tbody className="divide-y divide-gray-100">
+                         {participants.length > 0 ? (
+                           participants.map((p) => (
+                             <tr key={p.id} className="hover:bg-gray-50/50 transition-colors">
+                               <td className="px-6 py-3">
+                                 <div className="flex items-center gap-3">
+                                   <img src={p.avatar_url} alt={p.name} className="w-8 h-8 rounded-full object-cover" />
+                                   <span 
+                                     className="font-medium text-gray-900 hover:underline cursor-pointer"
+                                     onClick={() => setSelectedParticipant(p)}
+                                   >
+                                     {p.name}
+                                   </span>
+                                 </div>
+                               </td>
+                               <td className="px-6 py-3">
+                                 {p.skills && p.skills.length > 0 ? (
+                                   <div className="flex flex-wrap gap-1.5">
+                                     {p.skills.map((skill: string, idx: number) => (
+                                       <span key={idx} className="bg-[#4b22b2] text-white text-[10px] font-bold px-2 py-0.5 rounded-sm uppercase tracking-wide">
+                                         {skill}
+                                       </span>
+                                     ))}
+                                   </div>
+                                 ) : (
+                                   <span className="inline-block border border-gray-200 text-[#a3a3a3] text-[10px] font-bold px-2 py-0.5 rounded-sm uppercase tracking-wide bg-transparent">
+                                     NO SKILLS
+                                   </span>
+                                 )}
+                               </td>
+                               <td className="px-6 py-3">
+                                 {p.project ? (
+                                   <span className="font-medium text-gray-900">{p.project}</span>
+                                 ) : (
+                                   <span className="inline-block border border-gray-200 text-[#a3a3a3] text-[10px] font-bold px-2 py-0.5 rounded-sm uppercase tracking-wide bg-transparent">
+                                     NO PROJECT
+                                   </span>
+                                 )}
+                               </td>
+                             </tr>
+                           ))
+                         ) : (
+                           <tr>
+                             <td colSpan={3} className="px-6 py-8 text-center text-gray-500">
+                               Chưa có người tham gia nào.
+                             </td>
+                           </tr>
+                         )}
+                       </tbody>
+                     </table>
+                   </div>
+                 </div>
+               )}
+               {/* LEADERBOARD TAB */}
+               {activeTab === 'leaderboard' && (
+                 <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+                    <LeaderboardPage contestId={id} />
+                 </div>
+               )}
+
+               {activeTab !== 'overview' && activeTab !== 'schedule' && activeTab !== 'rules' && activeTab !== 'prizes' && activeTab !== 'challenge' && activeTab !== 'participants' && activeTab !== 'leaderboard' && (
+                 <div className="bg-white p-8 rounded-xl border border-gray-100 shadow-sm text-center py-20">
+                    <p className="text-gray-500 text-lg">Nội dung chi tiết cho tab này đang được cập nhật.</p>
+                 </div>
+               )}
             </div>
           </div>
 
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-xl border border-gray-200 p-6 sticky top-20">
-              <div className="mb-6">
-                <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium">
-                  {event.status}
-                </span>
-              </div>
-
-              <div className="space-y-4 mb-6">
-                <div>
-                  <div className="text-sm text-gray-500 mb-1">Ban tổ chức</div>
-                  <div className="font-medium text-gray-900">{event.organizer}</div>
-                </div>
-
-                <div>
-                  <div className="text-sm text-gray-500 mb-1">Hạn đăng ký</div>
-                  <div className="font-medium text-gray-900">{event.registrationDeadline}</div>
-                  {timeLeft && (
-                    <div className={`text-xs mt-1 font-bold ${isRegistrationClosed ? 'text-red-500' : 'text-blue-600'}`}>
-                      ⏳ {timeLeft}
-                    </div>
-                  )}
-                </div>
-
-                <div>
-                  <div className="text-sm text-gray-500 mb-2">Số lượng đội</div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <div className="flex-1 bg-gray-200 rounded-full h-2">
-                      <div
-                        className="bg-blue-600 h-2 rounded-full"
-                        style={{ width: `${(event.teams / event.maxTeams) * 100}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                  <div className="text-sm font-medium text-gray-900">
-                    {event.teams}/{event.maxTeams} đội đã đăng ký
-                  </div>
-                </div>
-              </div>
-
-              {isTeamRegistered && event.status === 'Đang diễn ra' ? (
-                <button
-                  onClick={() => navigate(`/submit`)}
-                  className="block w-full py-3 bg-green-600 text-white text-center rounded-lg font-semibold hover:bg-green-700 transition-colors cursor-pointer"
-                >
-                  Nộp Dự Án
-                </button>
-              ) : isRegistrationClosed ? (
-                <button
-                  disabled
-                  className="block w-full py-3 bg-gray-300 text-gray-500 text-center rounded-lg font-semibold cursor-not-allowed"
-                >
-                  Đã hết hạn đăng ký
-                </button>
-              ) : (
-                <button
-                  onClick={handleOpenRegisterModal}
-                  className="block w-full py-3 bg-blue-600 text-white text-center rounded-lg font-semibold hover:bg-blue-700 transition-colors cursor-pointer"
-                >
-                  Đăng ký ngay
-                </button>
-              )}
-
-              {currentUser && currentUser.role === 'ADMIN' && (
-                <button 
-                  onClick={() => navigate(`/admin`)}
-                  className="block w-full py-3 mt-3 bg-yellow-500 text-white text-center rounded-lg font-semibold hover:bg-yellow-600 transition-colors cursor-pointer border border-yellow-600"
-                >
-                  Chỉnh sửa sự kiện
-                </button>
-              )}
-
-              <button className="block w-full py-3 mt-3 bg-gray-100 text-gray-700 text-center rounded-lg font-semibold hover:bg-gray-200 transition-colors cursor-pointer">
-                Lưu sự kiện
-              </button>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -1158,6 +1183,131 @@ export function EventDetailPage() {
                 </form>
               </div>
             )}
+          </div>
+        </div>
+      )}
+      {/* Modal Chi tiết người tham gia */}
+      {selectedParticipant && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl overflow-hidden border border-gray-100 p-6 relative text-center">
+            <button 
+              onClick={() => setSelectedParticipant(null)}
+              className="absolute top-4 right-4 p-1 rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors cursor-pointer"
+            >
+              <X size={20} />
+            </button>
+            <div className="w-24 h-24 mx-auto bg-gray-100 rounded-full mb-4 flex items-center justify-center overflow-hidden border-4 border-blue-50">
+               <img src={selectedParticipant.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedParticipant.name)}`} alt={selectedParticipant.name} className="w-full h-full object-cover" />
+            </div>
+            <h3 className="text-2xl font-bold text-gray-900 mb-1">{selectedParticipant.name}</h3>
+            {selectedParticipant.email && <p className="text-gray-500 text-sm mb-4">{selectedParticipant.email}</p>}
+            
+            <div className="bg-blue-50 rounded-xl p-4 mt-4 text-left border border-blue-100">
+              <div className="mb-4">
+                <span className="block text-xs text-blue-800 font-bold uppercase tracking-wider mb-1">Dự án tham gia</span>
+                <span className="text-gray-900 font-semibold">{selectedParticipant.project || 'Chưa có dự án'}</span>
+                {selectedParticipant.project && (() => {
+                  const team = registeredTeams.find((t: any) => t.name === selectedParticipant.project);
+                  if (team) {
+                    return (
+                      <button 
+                        onClick={() => {
+                          setSelectedParticipant(null);
+                          setSelectedTeam(team);
+                        }}
+                        className="mt-2 text-xs bg-blue-600 text-white font-semibold py-1.5 px-3 rounded-lg hover:bg-blue-700 transition-colors"
+                      >
+                        Xem chi tiết đội thi
+                      </button>
+                    );
+                  }
+                  return null;
+                })()}
+              </div>
+              <div>
+                <span className="block text-xs text-blue-800 font-bold uppercase tracking-wider mb-1">Kỹ năng (Skills)</span>
+                {selectedParticipant.skills && selectedParticipant.skills.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5 mt-1">
+                    {selectedParticipant.skills.map((skill: string, idx: number) => (
+                      <span key={idx} className="bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-sm uppercase tracking-wide">
+                        {skill}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="text-gray-500 text-sm italic font-medium">Chưa cập nhật kỹ năng</span>
+                )}
+              </div>
+            </div>
+            
+            <button onClick={() => setSelectedParticipant(null)} className="w-full mt-6 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-lg font-semibold text-sm transition-colors cursor-pointer">
+              Đóng
+            </button>
+          </div>
+        </div>
+      )}
+      
+      {/* Modal Chi tiết Đội thi */}
+      {selectedTeam && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden border border-gray-100 p-6 relative">
+            <button 
+              onClick={() => setSelectedTeam(null)}
+              className="absolute top-4 right-4 p-1 rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors cursor-pointer"
+            >
+              <X size={20} />
+            </button>
+            
+            <div className="flex items-center gap-4 mb-6 border-b border-gray-100 pb-4">
+               <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center text-2xl font-bold shadow-sm uppercase">
+                 {selectedTeam.name ? selectedTeam.name.substring(0, 2) : 'TM'}
+               </div>
+               <div>
+                 <h3 className="text-2xl font-bold text-gray-900">{selectedTeam.name}</h3>
+                 <span className="inline-block mt-1 px-2.5 py-0.5 bg-blue-50 text-blue-700 text-xs font-semibold rounded-full border border-blue-100">
+                   {selectedTeam.category || 'Chưa xác định lĩnh vực'}
+                 </span>
+               </div>
+            </div>
+            
+            <div className="space-y-4">
+               <div className="bg-gray-50 p-4 rounded-xl">
+                 <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Thông tin chung</h4>
+                 <div className="grid grid-cols-2 gap-4 text-sm">
+                   <div>
+                     <span className="block text-gray-500 mb-1">Trưởng nhóm</span>
+                     <span className="font-semibold text-gray-900 flex items-center gap-1.5">
+                       <UserCheck size={14} className="text-blue-600" /> 
+                       {selectedTeam.leader_name || selectedTeam.leaderName || 'Không có thông tin'}
+                     </span>
+                   </div>
+                   <div>
+                     <span className="block text-gray-500 mb-1">Số lượng thành viên</span>
+                     <span className="font-semibold text-gray-900 flex items-center gap-1.5">
+                       <Users size={14} className="text-blue-600" />
+                       {selectedTeam.memberCount || selectedTeam.members_count || selectedTeam.member_count || (Array.isArray(selectedTeam.members) ? selectedTeam.members.length : 1)}
+                     </span>
+                   </div>
+                 </div>
+               </div>
+               
+               {selectedTeam.skills && selectedTeam.skills.length > 0 && (
+                 <div>
+                   <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Công nghệ sử dụng</h4>
+                   <div className="flex flex-wrap gap-1.5">
+                     {(Array.isArray(selectedTeam.skills) ? selectedTeam.skills : selectedTeam.skills.split(',')).map((skill: string, idx: number) => (
+                       <span key={idx} className="bg-gray-100 text-gray-700 text-xs font-semibold px-2.5 py-1 rounded-md border border-gray-200">
+                         {skill.trim()}
+                       </span>
+                     ))}
+                   </div>
+                 </div>
+               )}
+            </div>
+            
+            <button onClick={() => setSelectedTeam(null)} className="w-full mt-6 py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-lg font-semibold text-sm transition-colors cursor-pointer">
+              Đóng
+            </button>
           </div>
         </div>
       )}

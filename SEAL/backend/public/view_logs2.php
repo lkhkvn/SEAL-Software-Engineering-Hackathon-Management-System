@@ -1,0 +1,1 @@
+<?php require_once __DIR__ . '/../vendor/autoload.php'; $em = require __DIR__ . '/../cli-config.php'; $conn = $em->getConnection(); $data = $conn->executeQuery('SELECT * FROM admin_activity_logs')->fetchAllAssociative(); file_put_contents(__DIR__ . '/out.txt', print_r($data, true)); echo 'OK';

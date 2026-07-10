@@ -11,12 +11,22 @@ class LeaderboardService {
         $this->em = $em;
     }
 
-    public function getLeaderboard(): array {
+    public function getLeaderboard(int $contestId = 0): array {
         $conn = $this->em->getConnection();
 
         $criteria = $conn->executeQuery("SELECT id, name, max_score, weight FROM criteria")->fetchAllAssociative();
 
-        $teams = $conn->executeQuery("SELECT id, team_name as name, category FROM teams")->fetchAllAssociative();
+        if ($contestId > 0) {
+            $teams = $conn->executeQuery("
+                SELECT DISTINCT t.id, t.team_name as name, t.category 
+                FROM teams t
+                LEFT JOIN contest_registrations cr ON cr.team_id = t.id AND cr.contest_id = :contestId
+                LEFT JOIN submissions s ON s.team_id = t.id AND s.contest_id = :contestId
+                WHERE cr.contest_id IS NOT NULL OR s.contest_id IS NOT NULL
+            ", ['contestId' => $contestId])->fetchAllAssociative();
+        } else {
+            $teams = $conn->executeQuery("SELECT id, team_name as name, category FROM teams")->fetchAllAssociative();
+        }
 
         $leaderboard = array_map(function($team) use ($conn, $criteria) {
             $teamId = (int)$team['id'];
@@ -87,6 +97,7 @@ class LeaderboardService {
 
         $teamsQuery = "
             SELECT t.id, t.team_name as name, t.category, t.status, t.join_code as joinCode, t.max_members as maxMembers,
+                   t.avatar_url as avatarUrl, t.background_url as backgroundUrl,
                    u.name as leaderName,
                    (SELECT COUNT(*) FROM users m WHERE m.team_id = t.id) as members,
                    (
@@ -140,6 +151,8 @@ class LeaderboardService {
                 "status"     => $team['status'],
                 "joinCode"   => $team['joinCode'],
                 "leaderName" => $team['leaderName'],
+                "avatarUrl"  => $team['avatarUrl'] ?? null,
+                "backgroundUrl" => $team['backgroundUrl'] ?? null,
                 "score"      => (float)number_format((float)$totalScore, 1),
                 "tech"       => $techList,
                 "project"    => $team['projectName'] ? [

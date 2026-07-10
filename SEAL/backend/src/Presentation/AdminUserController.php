@@ -42,10 +42,16 @@ class AdminUserController {
     }
 
     public function getActivityLogs(): void {
-        $this->requireAdmin();
-        $logs = $this->activityLogService->getAllLogs();
-        http_response_code(200);
-        echo json_encode(["status" => "success", "data" => $logs], JSON_UNESCAPED_UNICODE);
+        try {
+            $this->requireAdmin();
+            $logs = $this->activityLogService->getAllLogs();
+            http_response_code(200);
+            echo json_encode(["status" => "success", "data" => $logs], JSON_UNESCAPED_UNICODE);
+        } catch (\Throwable $e) {
+            file_put_contents(__DIR__ . '/debug_500.txt', $e->getMessage() . "\n" . $e->getTraceAsString());
+            http_response_code(500);
+            echo json_encode(["status" => "error", "message" => $e->getMessage()]);
+        }
     }
 
     public function updateRole(): void {

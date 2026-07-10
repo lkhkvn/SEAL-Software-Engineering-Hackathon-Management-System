@@ -19,6 +19,7 @@ interface Criteria {
   name: string;
   max_score: number;
   weight: number;
+  contest_id?: number | null;
 }
 
 interface ScoreInput {
@@ -64,7 +65,37 @@ export function JudgingDetailPage() {
         }
 
         setTeam(foundTeam);
-        setCriteria(result.data.criteria || []);
+        
+        const allCriteria: Criteria[] = result.data.criteria || [];
+        
+        // Fetch specific contest criteria
+        try {
+            const contestRes = await fetch(`http://localhost:8000/index.php/api/hackathons/${hackathonId}`);
+            const contestResult = await contestRes.json();
+            
+            if (contestRes.ok && contestResult.status === 'success' && contestResult.data?.criteria) {
+                const parsedCriteria = JSON.parse(contestResult.data.criteria);
+                if (parsedCriteria.items && parsedCriteria.items.length > 0) {
+                    const customNames = parsedCriteria.items.map((i: any) => i.name.trim().toLowerCase());
+                    const filteredCriteria = allCriteria.filter(c => customNames.includes(c.name.trim().toLowerCase()));
+                    
+                    if (filteredCriteria.length > 0) {
+                        setCriteria(filteredCriteria);
+                        return; // Found custom criteria, no need to fallback
+                    }
+                }
+            }
+        } catch (e) {
+            console.error("Lỗi lấy thông tin hackathon:", e);
+        }
+
+        // Fallback to old behavior
+        const contestCriteria = allCriteria.filter(c => c.contest_id === foundTeam.contestId);
+        if (contestCriteria.length > 0) {
+            setCriteria(contestCriteria);
+        } else {
+            setCriteria(allCriteria.filter(c => !c.contest_id));
+        }
       } catch (err: any) {
         setError(err.message || 'Lỗi kết nối máy chủ');
       } finally {
@@ -214,7 +245,7 @@ export function JudgingDetailPage() {
                     <div>
                         <h4 className="text-lg font-bold text-gray-800">{crit.name}</h4>
                         <div className="flex gap-4 mt-2">
-                            <span className="text-sm bg-gray-100 text-gray-600 px-2 py-1 rounded">Trọng số: {crit.weight}</span>
+                            <span className="text-sm bg-gray-100 text-gray-600 px-2 py-1 rounded">Trọng số: {Number(crit.weight) * 100}%</span>
                             <span className="text-sm bg-blue-50 text-blue-600 px-2 py-1 rounded">Điểm tối đa: {crit.max_score}</span>
                         </div>
                     </div>

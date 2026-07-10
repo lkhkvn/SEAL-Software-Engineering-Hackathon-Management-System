@@ -1,4 +1,4 @@
-FROM php:8.2-apache
+FROM php:8.2-apache-bookworm
 
 # 1. Cài đặt các công cụ hệ thống và Extension pdo_mysql để kết nối SQL
 RUN apt-get update && apt-get install -y \

@@ -1,0 +1,1 @@
+<?php $conn = new mysqli('localhost', 'root', '', 'seal_hackathon'); $admin = $conn->query('SELECT id FROM users WHERE role = ''ADMIN'' LIMIT 1')->fetch_assoc(); if($admin) { $id = $admin['id']; $conn->query("INSERT INTO admin_activity_logs (admin_id, action, target_type, description) VALUES ($id, 'UPDATE', 'system', 'Test 1')"); echo 'Done'; } else { echo 'No admin'; }

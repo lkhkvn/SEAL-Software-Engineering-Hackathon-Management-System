@@ -37,6 +37,9 @@ class SubmissionModel
     #[ORM\Column(type: 'text', nullable: true)]
     public ?string $notes = null;
 
+    #[ORM\Column(name: 'project_avatar_url', type: 'string', length: 255, nullable: true)]
+    public ?string $projectAvatarUrl = null;
+
     #[ORM\Column(name: 'submitted_at', type: 'datetime', nullable: true)]
     public ?DateTime $submittedAt = null;
 }

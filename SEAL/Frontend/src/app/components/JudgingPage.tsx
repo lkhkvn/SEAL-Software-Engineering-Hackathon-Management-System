@@ -1,196 +1,321 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Loader2, Calendar, Search, ArrowRight, Trophy, Clock, Target, Sparkles } from 'lucide-react';
-
-interface Hackathon {
-  id: number;
-  name: string;
-  description: string;
-  status: string;
-  start_date: string;
-  end_date: string;
-}
+import { Search, Filter, Users, Lightbulb, Hexagon, Loader2 } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Skeleton } from './ui/skeleton';
+import { motion } from 'motion/react';
 
 export function JudgingPage() {
-  const [hackathons, setHackathons] = useState<Hackathon[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  
   const navigate = useNavigate();
 
   useEffect(() => {
-    const fetchHackathons = async () => {
+    const fetchEvents = async () => {
       try {
-        const response = await fetch('http://localhost:8000/index.php/api/hackathons');
-        const result = await response.json();
-        if (!response.ok || result.status === 'error') {
-          throw new Error(result.message || 'Lỗi tải dữ liệu sự kiện');
-        }
+        setLoading(true);
+        setError(null);
+        const res = await fetch('http://localhost:8000/index.php/api/hackathons');
+        const result = await res.json();
         
-        setHackathons(result.data || []);
+        if (result.status === 'success' && result.data) {
+          const mappedEvents = result.data.map((item: any) => {
+            const startStr = item.start_date || item.startDate;
+            const endStr = item.end_date || item.endDate;
+            const now = new Date();
+            
+            // Tính toán trạng thái dựa trên timeline thực tế
+            let computedStatus = item.status;
+            if (startStr && endStr) {
+                const start = new Date(startStr);
+                const end = new Date(endStr);
+                if (now < start) computedStatus = 'UPCOMING';
+                else if (now > end) computedStatus = 'COMPLETED';
+                else computedStatus = 'ACTIVE';
+            }
+
+            // Tính tổng tiền thưởng từ prize_details
+            let computedPrize = item.prize || '15.000 $';
+            const details = item.prize_details || item.prizeDetails;
+            if (details) {
+                const cleanStr = details.replace(/[,\.]/g, '');
+                const numbers = cleanStr.match(/\d+/g);
+                if (numbers) {
+                    let sum = 0;
+                    numbers.forEach((n: string) => sum += parseInt(n, 10));
+                    if (sum > 0) {
+                        computedPrize = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(sum);
+                    }
+                }
+            }
+
+            return {
+              id: item.id,
+              name: item.name,
+              startDate: startStr,
+              endDate: endStr,
+              location: item.location,
+              teams: item.registered_teams_count || 0,
+              maxTeams: item.max_teams || item.maxTeams || 50,
+              prize: computedPrize,
+              status: computedStatus,
+              category: item.category,
+              image: item.image || item.image_url,
+              description: item.description || 'Chưa có mô tả'
+            };
+          });
+          
+          setEvents(mappedEvents);
+        } else if (!res.ok || result.status === 'error') {
+            throw new Error(result.message || 'Lỗi tải dữ liệu sự kiện');
+        }
       } catch (err: any) {
-        setError(err.message || 'Lỗi kết nối máy chủ');
+        console.error('Lỗi khi tải dữ liệu sự kiện:', err);
+        setError(err.message || 'Lỗi kết nối API Backend.');
       } finally {
         setLoading(false);
       }
     };
-    fetchHackathons();
+    
+    fetchEvents();
   }, []);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-            <Loader2 className="animate-spin text-blue-600" size={48} />
-            <p className="text-gray-500 font-medium animate-pulse">Đang tải danh sách sự kiện...</p>
-        </div>
-      </div>
-    );
-  }
+  const filteredEvents = events.filter((event) => {
+    const matchesSearch = (event.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         (event.category || '').toLowerCase().includes(searchQuery.toLowerCase());
+    let mappedStatusForFilter = event.status;
+    if (event.status === 'ACTIVE' || event.status === 'Đang diễn ra') mappedStatusForFilter = 'ACTIVE';
+    if (event.status === 'UPCOMING' || event.status === 'Sắp diễn ra') mappedStatusForFilter = 'UPCOMING';
+    if (event.status === 'COMPLETED' || event.status === 'Đã kết thúc') mappedStatusForFilter = 'COMPLETED';
 
-  const filteredHackathons = hackathons.filter(h => 
-    h.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+    const matchesFilter = filterStatus === 'all' || mappedStatusForFilter === filterStatus;
+    return matchesSearch && matchesFilter;
+  });
+
+  // Calculate days left for the progress bar
+  const calculateDaysLeft = (endDateStr: string | null) => {
+    if (!endDateStr) return 0;
+    const end = new Date(endDateStr).getTime();
+    const now = new Date().getTime();
+    const diff = end - now;
+    if (diff < 0) return 0;
+    return Math.ceil(diff / (1000 * 3600 * 24));
+  };
+
+  const getStatusBadge = (statusStr: string) => {
+    const status = statusStr.toUpperCase();
+    if (status === 'ACTIVE' || status === 'ĐANG DIỄN RA') {
+      return { text: 'Sự đăng ký', bgColor: 'bg-blue-600', textColor: 'text-white' };
+    }
+    if (status === 'UPCOMING' || status === 'SẮP DIỄN RA') {
+      return { text: 'Ý tưởng', bgColor: 'bg-[#5027d9]', textColor: 'text-white' };
+    }
+    if (status === 'COMPLETED' || status === 'Đã KẾT THÚC') {
+      return { text: 'Hoàn thành', bgColor: 'bg-white', textColor: 'text-gray-900' };
+    }
+    return { text: 'Sự đăng ký', bgColor: 'bg-blue-600', textColor: 'text-white' };
+  };
+
+  // Helper cho mock logo ngẫu nhiên để giống Taikai
+  const getMockLogo = (id: number) => {
+    const logos = [
+      'https://ui-avatars.com/api/?name=PO&background=0D8ABC&color=fff&size=128',
+      'https://ui-avatars.com/api/?name=CS&background=D32F2F&color=fff&size=128',
+      'https://ui-avatars.com/api/?name=HA&background=303F9F&color=fff&size=128',
+      'https://ui-avatars.com/api/?name=TK&background=388E3C&color=fff&size=128'
+    ];
+    return logos[id % logos.length];
+  };
+  
+  const getMockCover = (id: number) => {
+    const covers = [
+      'https://images.unsplash.com/photo-1555066931-4365d14bab8c?auto=format&fit=crop&q=80&w=800&h=400',
+      'https://images.unsplash.com/photo-1516116216624-53e697fedbea?auto=format&fit=crop&q=80&w=800&h=400',
+      'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=800&h=400',
+      'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&q=80&w=800&h=400'
+    ];
+    return covers[id % covers.length];
+  };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] pb-20">
-      {/* Hero Section */}
-      <div className="bg-gradient-to-br from-blue-900 via-blue-800 to-indigo-900 text-white pt-20 pb-24 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
-        {/* Decorative elements */}
-        <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-            <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-blue-500 opacity-20 blur-3xl"></div>
-            <div className="absolute top-1/2 -left-24 w-72 h-72 rounded-full bg-indigo-500 opacity-20 blur-3xl"></div>
-            <div className="absolute bottom-0 right-1/4 w-80 h-80 rounded-full bg-purple-500 opacity-20 blur-3xl"></div>
-        </div>
+    <div className="min-h-screen bg-gray-50/30">
+      <div className="bg-white/80 backdrop-blur-xl border-b border-gray-200/80 sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
+            <h1 className="text-3xl font-bold text-gray-900 hidden sm:block">Chấm điểm Sự kiện</h1>
+            <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto flex-1 justify-end">
+              <div className="relative max-w-md w-full">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                <input
+                  type="text"
+                  placeholder="Tìm kiếm..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-11 pr-4 py-2.5 bg-gray-100/80 hover:bg-gray-100 border border-transparent focus:border-blue-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 transition-all font-medium text-sm"
+                />
+              </div>
 
-        <div className="relative z-10 flex flex-col md:flex-row md:items-end justify-between gap-8">
-          <div className="max-w-2xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-blue-100 text-sm font-medium mb-6">
-                <Sparkles size={16} className="text-yellow-400" />
-                <span>Cổng Chấm Điểm Ban Giám Khảo</span>
+              <div className="relative">
+                <Filter className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
+                <select
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                  className="pl-11 pr-10 py-2.5 bg-gray-100/80 hover:bg-gray-100 border border-transparent focus:border-blue-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 appearance-none cursor-pointer text-gray-700 font-medium text-sm transition-all"
+                >
+                  <option value="all">Tất cả trạng thái</option>
+                  <option value="ACTIVE">Sự đăng ký</option>
+                  <option value="UPCOMING">Ý tưởng</option>
+                  <option value="COMPLETED">Hoàn thành</option>
+                </select>
+                <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
+                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                </div>
+              </div>
             </div>
-            <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-4 leading-tight">
-                Sự kiện cần <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-200 to-cyan-200">chấm điểm</span>
-            </h1>
-            <p className="text-blue-100/80 text-lg md:text-xl font-light">
-                Chọn một sự kiện dưới đây để xem danh sách các dự án và bắt đầu quá trình đánh giá.
-            </p>
-          </div>
-          
-          <div className="relative w-full md:w-96 group">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors z-10" size={20} />
-            <input
-              type="text"
-              placeholder="Tìm kiếm sự kiện..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-12 pr-4 py-4 rounded-2xl shadow-xl text-gray-800 bg-white/95 backdrop-blur-sm border-2 border-transparent focus:border-blue-400 focus:outline-none focus:ring-4 focus:ring-blue-400/20 transition-all font-medium"
-            />
           </div>
         </div>
       </div>
 
-      <div className="px-4 sm:px-6 lg:px-8 py-8">
-        <div className="relative z-20">
-        {error && (
-          <div className="bg-white text-red-600 p-6 rounded-2xl mb-8 shadow-lg border-l-4 border-red-500 flex items-center gap-4">
-            <div className="bg-red-50 p-2 rounded-full">
-                <Target size={24} className="text-red-500" />
-            </div>
-            <div>
-                <h3 className="font-bold">Đã xảy ra lỗi</h3>
-                <span className="font-medium text-sm text-red-500/80">{error}</span>
-            </div>
-          </div>
-        )}
-
-        {hackathons.length === 0 && !error ? (
-          <div className="bg-white rounded-3xl shadow-xl border border-gray-100 p-20 flex flex-col items-center justify-center text-center">
-            <div className="bg-blue-50 p-6 rounded-full mb-6">
-                <Calendar size={48} className="text-blue-400" />
-            </div>
-            <h2 className="text-2xl font-bold text-gray-800 mb-2">Chưa có sự kiện nào</h2>
-            <p className="text-gray-500 max-w-md">Hệ thống hiện tại chưa có sự kiện nào được tạo. Vui lòng quay lại sau hoặc liên hệ Admin.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filteredHackathons.map(hackathon => (
-              <div 
-                key={hackathon.id}
-                onClick={() => navigate(`/judging/hackathon/${hackathon.id}`)}
-                className="bg-white rounded-2xl shadow-sm hover:shadow-xl border border-gray-100 hover:border-blue-200 transition-all duration-300 cursor-pointer group flex flex-col overflow-hidden hover:-translate-y-1"
-              >
-                {/* Card Banner */}
-                <div className="h-24 bg-gradient-to-r from-blue-50 to-indigo-50 relative p-5 flex items-start justify-between border-b border-gray-100 overflow-hidden">
-                    <div className="absolute right-0 top-0 opacity-10 transform translate-x-2 -translate-y-2 group-hover:scale-110 transition-transform duration-500 pointer-events-none">
-                        <Trophy size={100} />
-                    </div>
-                    <div className="bg-white p-2.5 rounded-xl shadow-sm z-10 group-hover:scale-110 transition-transform relative">
-                        <Trophy size={20} className="text-blue-600" />
-                    </div>
-                    <span className={`z-10 px-2.5 py-1 text-[10px] font-bold rounded-full uppercase tracking-wider shadow-sm border relative ${
-                        hackathon.status === 'UPCOMING' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
-                        (hackathon.status === 'ONGOING' || hackathon.status === 'ACTIVE') ? 'bg-green-50 text-green-600 border-green-200' :
-                        'bg-gray-100 text-gray-600 border-gray-200'
-                    }`}>
-                        {hackathon.status}
-                    </span>
-                </div>
-
-                {/* Card Content */}
-                <div className="p-5 flex flex-col flex-grow">
-                    <h3 className="font-bold text-lg text-gray-900 group-hover:text-blue-700 transition-colors mb-2 line-clamp-2">
-                        {hackathon.name}
-                    </h3>
-                    
-                    <p className="text-gray-500 mb-6 line-clamp-2 text-sm leading-relaxed flex-grow">
-                        {hackathon.description || 'Không có mô tả cho sự kiện này.'}
-                    </p>
-
-                    <div className="space-y-2.5 mb-6">
-                        <div className="flex items-center text-xs text-gray-600 bg-gray-50 p-2 rounded-lg">
-                            <Calendar size={14} className="text-gray-400 mr-2" />
-                            <div className="flex flex-col">
-                                <span className="text-[10px] text-gray-400 font-medium">Bắt đầu</span>
-                                <span className="font-semibold text-gray-800">{new Date(hackathon.start_date).toLocaleDateString('vi-VN')}</span>
-                            </div>
-                        </div>
-                        <div className="flex items-center text-xs text-gray-600 bg-gray-50 p-2 rounded-lg">
-                            <Clock size={14} className="text-gray-400 mr-2" />
-                            <div className="flex flex-col">
-                                <span className="text-[10px] text-gray-400 font-medium">Kết thúc</span>
-                                <span className="font-semibold text-gray-800">{new Date(hackathon.end_date).toLocaleDateString('vi-VN')}</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="mt-auto">
-                        <button className="w-full py-2.5 px-4 bg-gray-50 group-hover:bg-blue-600 text-gray-700 group-hover:text-white rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all duration-300">
-                            Chấm điểm
-                            <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
-                        </button>
-                    </div>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div key={i} className="bg-white rounded-[20px] overflow-hidden shadow-sm border border-gray-100 h-[460px]">
+                <Skeleton className="h-48 w-full rounded-none" />
+                <div className="p-6">
+                  <Skeleton className="h-8 w-20 rounded-full absolute top-4 left-4" />
+                  <Skeleton className="h-16 w-16 rounded-full absolute top-36 left-6 border-4 border-white" />
+                  <Skeleton className="h-6 w-3/4 mt-8 mb-3" />
+                  <Skeleton className="h-4 w-full mb-2" />
+                  <Skeleton className="h-4 w-2/3 mb-6" />
                 </div>
               </div>
             ))}
-            
-            {filteredHackathons.length === 0 && hackathons.length > 0 && (
-                <div className="col-span-full py-16 flex flex-col items-center justify-center text-center">
-                    <Search size={48} className="text-gray-300 mb-4" />
-                    <h3 className="text-xl font-bold text-gray-700 mb-2">Không tìm thấy kết quả</h3>
-                    <p className="text-gray-500">Không có sự kiện nào phù hợp với từ khóa "{searchQuery}"</p>
-                    <button 
-                        onClick={() => setSearchQuery('')}
-                        className="mt-4 px-4 py-2 text-blue-600 font-medium hover:bg-blue-50 rounded-lg transition-colors"
-                    >
-                        Xóa tìm kiếm
-                    </button>
-                </div>
-            )}
+          </div>
+        ) : error ? (
+          <div className="text-center py-12 text-red-500 font-medium">
+            <p>{error}</p>
+          </div>
+        ) : (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ staggerChildren: 0.1 }}
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
+          >
+          {filteredEvents.map((event, index) => {
+            const badge = getStatusBadge(event.status);
+            const daysLeft = calculateDaysLeft(event.endDate);
+            const coverImage = (event.image && (event.image.startsWith('http') || event.image.startsWith('/'))) ? event.image : getMockCover(event.id);
+            const logoImage = (event.logo_url && (event.logo_url.startsWith('http') || event.logo_url.startsWith('/'))) ? event.logo_url : getMockLogo(event.id);
+
+            return (
+              <motion.div
+                key={event.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.1 }}
+                className="flex flex-col h-full"
+              >
+                <Link
+                  to={`/judging/hackathon/${event.id}`}
+                  className="group flex flex-col h-full bg-white rounded-2xl overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:shadow-[0_20px_40px_-12px_rgba(0,0,0,0.12)] hover:-translate-y-1 transition-all duration-300 border border-gray-100 hover:border-blue-100 relative"
+                >
+                  {/* Hover Gradient Overlay */}
+                  <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/5 opacity-0 group-hover:opacity-100 transition-opacity z-0 pointer-events-none" />
+                  
+                  {/* Cover Image Section (Top half) */}
+                  <div className="relative h-[200px] w-full bg-gray-100 overflow-hidden z-10">
+                    <img 
+                      src={coverImage}
+                      alt={event.name}
+                      className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-700 ease-out"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-60" />
+                    {/* Badge */}
+                    <div className={`absolute top-4 left-4 px-3 py-1.5 rounded-lg text-xs font-bold shadow-md backdrop-blur-md ${badge.bgColor} ${badge.textColor}`}>
+                      {badge.text}
+                    </div>
+                  </div>
+
+                  {/* Body Section */}
+                  <div className="relative p-6 flex flex-col flex-1 pt-12 z-10 bg-white">
+                    {/* Avatar Overlapping */}
+                    <div className="absolute -top-10 left-6">
+                      <div className="w-20 h-20 rounded-2xl border-4 border-white overflow-hidden bg-white shadow-md transform -rotate-3 group-hover:rotate-0 transition-transform duration-300">
+                        <img 
+                          src={logoImage} 
+                          alt="Org Avatar"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Stats Top Right */}
+                    <div className="absolute top-4 right-6 flex items-center gap-4 text-gray-500 text-sm font-semibold">
+                      <div className="flex items-center gap-1.5 text-[#5027d9]">
+                        <Users size={16} /> {event.teams}
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <Lightbulb size={16} /> {Math.floor(event.teams * 1.5)}
+                      </div>
+                    </div>
+
+                    {/* Title & Description */}
+                    <h3 className="text-[22px] leading-tight font-bold text-gray-900 mb-3 group-hover:text-[#5027d9] transition-colors line-clamp-2">
+                      {event.name}
+                    </h3>
+                    <p className="text-gray-500 text-sm mb-6 line-clamp-2 leading-relaxed">
+                      {event.description}
+                    </p>
+
+                    {/* Tags */}
+                    <div className="flex flex-wrap gap-2 mb-6">
+                      <span className="text-xs font-semibold text-[#5027d9] bg-[#5027d9]/10 px-2.5 py-1 rounded-md flex items-center gap-1">
+                        <Hexagon size={12}/> Chuỗi khối
+                      </span>
+                      <span className="text-xs font-semibold text-[#5027d9] bg-[#5027d9]/10 px-2.5 py-1 rounded-md flex items-center gap-1">
+                        <Hexagon size={12}/> Công nghệ
+                      </span>
+                      {event.category && event.category !== 'Công nghệ' && (
+                        <span className="text-xs font-semibold text-[#5027d9] bg-[#5027d9]/10 px-2.5 py-1 rounded-md flex items-center gap-1">
+                          <Hexagon size={12}/> {event.category}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Footer Section */}
+                  <div className="mt-auto px-6 py-5 border-t border-gray-100 flex items-center justify-between bg-white">
+                    <div className="flex flex-col">
+                      <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                        Phần thưởng
+                      </span>
+                      <span className="text-lg font-black text-gray-900">
+                        {event.prize || '15.000 $'}
+                      </span>
+                    </div>
+
+                    <div className="flex flex-col items-end">
+                      <div className="text-[#5027d9] font-bold text-sm flex items-center gap-1">
+                        Chấm điểm <span className="text-lg">→</span>
+                      </div>
+                    </div>
+                  </div>
+                </Link>
+              </motion.div>
+            );
+          })}
+          </motion.div>
+        )}
+
+        {!loading && !error && filteredEvents.length === 0 && (
+          <div className="text-center py-20 bg-white rounded-[24px] border border-gray-100 shadow-sm mt-8">
+            <p className="text-gray-500 text-lg font-medium">Không tìm thấy sự kiện nào để chấm điểm.</p>
           </div>
         )}
-        </div>
       </div>
     </div>
   );

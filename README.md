@@ -58,7 +58,7 @@ Sau khi khởi động xong:
 
 Backend API sẽ chạy tại địa chỉ: http://localhost:8000
 
-Cơ sở dữ liệu MySQL sẽ chạy tại cổng: 3307
+Cơ sở dữ liệu MySQL sẽ chạy tại cổng: 3308
 
 Bước 2: Cập nhật Cấu trúc Bảng Database (Doctrine)
 Để tự động tạo và cập nhật các bảng cơ sở dữ liệu dựa trên cấu trúc Thực thể (Entities) của Backend, hãy chạy lệnh sau:
@@ -85,7 +85,7 @@ Dành cho DBeaver / TablePlus / VS Code Database Client nếu bạn muốn kết
 
 Host: 127.0.0.1 (hoặc localhost)
 
-Port: 3307
+Port: 3308
 
 Database Name: CleanDb
 

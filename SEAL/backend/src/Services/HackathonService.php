@@ -16,7 +16,7 @@ class HackathonService {
         $conn = $this->em->getConnection();
         return $conn->executeQuery("
             SELECT id, name, category, description, location,
-                   start_date, end_date, max_teams, status, prize, image, schedule, prize_details, rules, organizer, registration_deadline, criteria, created_at,
+                   start_date, end_date, max_teams, status, prize, image, logo_url, schedule, prize_details, rules, organizer, registration_deadline, criteria, created_at,
                    (SELECT COUNT(*) FROM contest_registrations WHERE contest_id = contests.id) as registered_teams_count
             FROM contests
             ORDER BY created_at DESC
@@ -27,7 +27,7 @@ class HackathonService {
         $conn = $this->em->getConnection();
         $contest = $conn->executeQuery("
             SELECT id, name, category, description, location,
-                   start_date, end_date, max_teams, status, prize, image, schedule, prize_details, rules, organizer, registration_deadline, criteria, created_at,
+                   start_date, end_date, max_teams, status, prize, image, logo_url, schedule, prize_details, rules, organizer, registration_deadline, criteria, created_at,
                    (SELECT COUNT(*) FROM contest_registrations WHERE contest_id = contests.id) as registered_teams_count
             FROM contests WHERE id = :id
         ", ['id' => $id])->fetchAssociative();
@@ -89,10 +89,10 @@ class HackathonService {
 
         $conn->executeStatement("
             INSERT INTO contests (name, category, description, location, start_date, end_date,
-                max_teams, status, prize, image, schedule, prize_details, rules, organizer,
+                max_teams, status, prize, image, logo_url, schedule, prize_details, rules, organizer,
                 registration_deadline, criteria, created_at)
             VALUES (:name, :category, :description, :location, :startDate, :endDate,
-                :maxTeams, :status, :prize, :image, :schedule, :prizeDetails, :rules, :organizer,
+                :maxTeams, :status, :prize, :image, :logoUrl, :schedule, :prizeDetails, :rules, :organizer,
                 :registrationDeadline, :criteria, NOW())
         ", [
             'name'                 => trim($data['name']        ?? ''),
@@ -105,6 +105,7 @@ class HackathonService {
             'status'               => $status,
             'prize'                => trim($data['prize']        ?? ''),
             'image'                => trim($data['image']        ?? ''),
+            'logoUrl'              => trim($data['logo_url']     ?? ''),
             'schedule'             => trim($data['schedule']     ?? ''),
             'prizeDetails'         => trim($data['prize_details'] ?? ''),
             'rules'                => trim($data['rules']        ?? ''),
@@ -113,7 +114,12 @@ class HackathonService {
             'criteria'             => trim($data['criteria']    ?? ''),
         ]);
 
-        return (int)$conn->lastInsertId();
+        $newId = (int)$conn->lastInsertId();
+        
+        // Đồng bộ tiêu chí vào bảng criteria
+        $this->syncCriteria($newId, trim($data['criteria'] ?? ''));
+
+        return $newId;
     }
 
     public function updateHackathon(int $id, array $data): void {
@@ -132,7 +138,7 @@ class HackathonService {
             UPDATE contests
             SET name=:name, category=:category, description=:description, location=:location,
                 start_date=:startDate, end_date=:endDate, max_teams=:maxTeams, status=:status,
-                prize=:prize, image=:image, schedule=:schedule, prize_details=:prizeDetails,
+                prize=:prize, image=:image, logo_url=:logoUrl, schedule=:schedule, prize_details=:prizeDetails,
                 rules=:rules, organizer=:organizer, registration_deadline=:registrationDeadline,
                 criteria=:criteria
             WHERE id=:id
@@ -147,6 +153,7 @@ class HackathonService {
             'status'               => $status,
             'prize'                => trim($data['prize']        ?? ''),
             'image'                => trim($data['image']        ?? ''),
+            'logoUrl'              => trim($data['logo_url']     ?? ''),
             'schedule'             => trim($data['schedule']     ?? ''),
             'prizeDetails'         => trim($data['prize_details'] ?? ''),
             'rules'                => trim($data['rules']        ?? ''),
@@ -155,6 +162,33 @@ class HackathonService {
             'criteria'             => trim($data['criteria']    ?? ''),
             'id'                   => $id,
         ]);
+
+        // Đồng bộ tiêu chí vào bảng criteria
+        $this->syncCriteria($id, trim($data['criteria'] ?? ''));
+    }
+
+    private function syncCriteria(int $contestId, string $criteriaJson): void {
+        $conn = $this->em->getConnection();
+        $data = json_decode($criteriaJson, true);
+        if (!$data || !isset($data['items']) || !is_array($data['items'])) return;
+        
+        $existing = $conn->executeQuery("SELECT id, name FROM criteria")->fetchAllAssociative();
+        $existingMap = [];
+        foreach ($existing as $row) {
+            $existingMap[$row['name']] = $row['id'];
+        }
+        
+        foreach ($data['items'] as $item) {
+            $name = trim($item['name'] ?? '');
+            $weight = (float)($item['weight'] ?? 0) / 100; // convert percentage to decimal
+            if ($name === '' || $weight <= 0) continue;
+            
+            if (isset($existingMap[$name])) {
+                $conn->executeStatement("UPDATE criteria SET weight = ?, max_score = ? WHERE id = ?", [$weight, 10, $existingMap[$name]]);
+            } else {
+                $conn->executeStatement("INSERT INTO criteria (name, weight, max_score) VALUES (?, ?, ?)", [$name, $weight, 10]);
+            }
+        }
     }
 
     public function deleteHackathon(int $id): string {
@@ -225,7 +259,8 @@ class HackathonService {
         $conn = $this->em->getConnection();
         $teams = $conn->executeQuery("
             SELECT t.id, t.team_name as name, t.category as description, t.leader_id, cr.registered_at, cr.status,
-                   u.name as leader_name, u.email as leader_email
+                   u.name as leader_name, u.email as leader_email,
+                   (SELECT COUNT(*) FROM team_members tm WHERE tm.team_id = t.id) as member_count
             FROM teams t
             INNER JOIN contest_registrations cr ON cr.team_id = t.id
             LEFT JOIN users u ON u.id = t.leader_id
@@ -233,6 +268,34 @@ class HackathonService {
             ORDER BY cr.registered_at DESC
         ", ['contestId' => $contestId])->fetchAllAssociative();
         return $teams;
+    }
+
+    public function getSubmissions(int $contestId): array {
+        $conn = $this->em->getConnection();
+        $submissions = $conn->executeQuery("
+            SELECT s.id, s.project_name, s.description, s.github_url, s.demo_video_url, s.file_url, s.submitted_at, s.project_avatar_url,
+                   t.id as team_id, t.team_name, t.category, t.logo_url
+            FROM submissions s
+            INNER JOIN teams t ON s.team_id = t.id
+            WHERE s.contest_id = :contestId
+            ORDER BY s.submitted_at DESC
+        ", ['contestId' => $contestId])->fetchAllAssociative();
+        return $submissions;
+    }
+
+    public function getContestParticipants(int $contestId): array {
+        $conn = $this->em->getConnection();
+        $participants = $conn->executeQuery("
+            SELECT DISTINCT u.id, u.name, u.avatar_url, u.skills, t.team_name as project
+            FROM users u
+            INNER JOIN teams t ON u.team_id = t.id
+            LEFT JOIN contest_registrations cr ON cr.team_id = t.id AND cr.contest_id = :contestId
+            LEFT JOIN submissions s ON s.team_id = t.id AND s.contest_id = :contestId
+            WHERE cr.contest_id = :contestId OR s.contest_id = :contestId
+            ORDER BY u.name ASC
+        ", ['contestId' => $contestId])->fetchAllAssociative();
+
+        return $participants;
     }
 
     public function removeTeam(int $contestId, int $teamId): void {
