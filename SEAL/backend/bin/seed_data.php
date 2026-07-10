@@ -12,9 +12,9 @@ try {
     // 1. Tắt tạm thời kiểm tra khóa ngoại để dọn dẹp bảng
     $conn->executeStatement('SET FOREIGN_KEY_CHECKS = 0');
     $conn->executeStatement('CREATE TABLE IF NOT EXISTS team_members (
-        id INT UNSIGNED NOT NULL AUTO_INCREMENT,
-        team_id INT UNSIGNED NOT NULL,
-        user_id INT UNSIGNED NOT NULL,
+        id INT NOT NULL AUTO_INCREMENT,
+        team_id INT NOT NULL,
+        user_id INT NOT NULL,
         role_in_team VARCHAR(20) NOT NULL DEFAULT \'MEMBER\',
         joined_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (id),
@@ -29,9 +29,7 @@ try {
     $conn->executeStatement('TRUNCATE TABLE judging_assignments');
     $conn->executeStatement('TRUNCATE TABLE teams');
     $conn->executeStatement('TRUNCATE TABLE criteria');
-    // Xóa tất cả users ngoại trừ Admin (ID=1) và Giám khảo A (testuser, ID=2)
-    $conn->executeStatement('DELETE FROM users WHERE id > 2');
-    $conn->executeStatement('ALTER TABLE users AUTO_INCREMENT = 3');
+    $conn->executeStatement('TRUNCATE TABLE users');
     $conn->executeStatement('TRUNCATE TABLE team_members');
     $conn->executeStatement('SET FOREIGN_KEY_CHECKS = 1');
 
@@ -44,9 +42,12 @@ try {
     ");
     echo "- Đã tạo 4 Tiêu chí chấm điểm thành công.\n";
 
-    // 3. Tạo các tài khoản thí sinh (Users)
+    // 3. Tạo các tài khoản người dùng (Users) gồm Admin, Giám khảo và Thí sinh
     $hashedPassword = password_hash('password123', PASSWORD_BCRYPT);
+    $adminHashedPassword = password_hash('hack123', PASSWORD_BCRYPT);
     $conn->executeStatement("INSERT INTO users (id, name, email, password, role, phone, skills, team_id) VALUES 
+        (1, 'Admin Hệ Thống', 'admin1@gmail.com', '$adminHashedPassword', 'ADMIN', '0900000001', 'Admin, System Management', NULL),
+        (2, 'Giám khảo A', 'testuser@gmail.com', '$hashedPassword', 'JUDGE', '0900000002', 'Judging, Evaluation', NULL),
         (3, 'Nguyễn Văn A', 'nguyenvana@gmail.com', '$hashedPassword', 'PARTICIPANT', '0912345678', 'Python, React, Machine Learning', NULL),
         (4, 'Trần Thị B', 'tranthib@gmail.com', '$hashedPassword', 'PARTICIPANT', '0912345679', 'React, UI/UX, Tailwind CSS', NULL),
         (5, 'Lê Văn C', 'levanc@gmail.com', '$hashedPassword', 'PARTICIPANT', '0912345680', 'Node.js, Express, MongoDB', NULL),
