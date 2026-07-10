@@ -6,6 +6,7 @@ use Doctrine\ORM\Mapping as ORM;
 
 #[ORM\Entity]
 #[ORM\Table(name: 'schedules')]
+#[ORM\Index(name: 'idx_schedules_hackathon_id', columns: ['hackathon_id'])]
 class ScheduleModel
 {
     #[ORM\Id]

@@ -373,20 +373,29 @@ class HackathonService {
     public function syncContestStatuses(?NotificationService $notificationService = null): void {
         $conn = $this->em->getConnection();
         
-        // Lấy danh sách các cuộc thi để kiểm tra và cập nhật trạng thái
-        $contests = $conn->executeQuery("SELECT id, name, status, start_date, end_date FROM contests")->fetchAllAssociative();
+        $todayStr = (new \DateTime())->format('Y-m-d H:i:s');
         
-        $todayStr = (new \DateTime())->format('Y-m-d');
+        // Optimize query to ONLY fetch contests that need status synchronization
+        $contests = $conn->executeQuery("
+            SELECT id, name, status, start_date, end_date 
+            FROM contests 
+            WHERE status != 'CANCELLED' 
+              AND (
+                  (status != 'UPCOMING' AND :today < start_date) OR
+                  (status != 'ACTIVE' AND :today >= start_date AND :today <= end_date) OR
+                  (status != 'COMPLETED' AND :today > end_date)
+              )
+        ", ['today' => $todayStr])->fetchAllAssociative();
+        
+        if (empty($contests)) {
+            return;
+        }
         
         foreach ($contests as $contest) {
             $contestId = (int)$contest['id'];
             $currentStatus = $contest['status'];
             $startDate = $contest['start_date'];
             $endDate = $contest['end_date'];
-            
-            if ($currentStatus === 'CANCELLED') {
-                continue;
-            }
             
             $expectedStatus = $currentStatus;
             if ($todayStr < $startDate) {
