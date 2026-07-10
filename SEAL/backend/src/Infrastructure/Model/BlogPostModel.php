@@ -26,6 +26,9 @@ class BlogPostModel {
     #[ORM\Column(type: 'string', length: 100)]
     public string $author;
 
+    #[ORM\Column(name: 'author_avatar_url', type: 'string', length: 255, nullable: true)]
+    public ?string $authorAvatarUrl = null;
+
     #[ORM\Column(type: 'string', length: 255, nullable: true)]
     public ?string $tags = null; // Comma separated tags
 

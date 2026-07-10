@@ -19,7 +19,7 @@ export function Navigation({ currentUser, onLogout }: NavigationProps) {
     { path: '/events', icon: Calendar, label: 'Sự kiện' },
     { path: '/organizations', icon: Building2, label: 'Tổ chức' },
     { path: '/blog', icon: BookOpen, label: 'Blog' },
-    ...(isParticipant ? [{ path: '/submit', icon: Upload, label: 'Nộp dự án' }] : []),
+    ...(isParticipant ? [{ path: '/teams', icon: Users, label: 'Đội của tôi' }] : []),
     ...(isUserJudge && !isUserAdmin ? [{ path: '/judging', icon: CheckSquare, label: 'Chấm điểm' }] : []),
     ...(isUserMentor ? [{ path: '/mentor', icon: HelpCircle, label: 'Mentor' }] : []),
     ...(isUserAdmin ? [{ path: '/admin', icon: Settings, label: 'Quản lý' }] : []),

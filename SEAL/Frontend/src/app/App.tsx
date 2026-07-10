@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Outlet, useNavigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Outlet, useNavigate, Navigate } from 'react-router-dom';
 import { useState } from 'react';
 import { Toaster } from 'sonner';
 import { Navigation } from './components/Navigation';
@@ -18,6 +18,7 @@ import { SubmissionPage } from './components/SubmissionPage';
 import { MentorDashboardPage } from './components/MentorDashboardPage';
 import { OrganizationsPage } from './components/OrganizationsPage';
 import { BlogPage } from './components/BlogPage';
+import { AIMentorWidget } from './components/AIMentorWidget';
 import { FloatingHelpButton } from './components/FloatingHelpButton';
 
 // Component Layout chung bọc thanh điều hướng Navigation
@@ -26,6 +27,7 @@ function MainLayout({ currentUser, onLogout }: { currentUser: any, onLogout: () 
     <>
       <Navigation currentUser={currentUser} onLogout={onLogout} />
       <Outlet /> {/* Khu vực hiển thị nội dung của các trang con */}
+      <AIMentorWidget />
       <FloatingHelpButton currentUser={currentUser} />
     </>
   );
@@ -45,8 +47,12 @@ function AppRoutes() {
     localStorage.setItem('user', JSON.stringify(userData));
     console.log("Đăng nhập thành công! Dữ liệu User:", userData);
     
-    // Điều hướng về trang profile sau khi xác thực thành công để user nhập thông tin
-    navigate('/profile');
+    if (userData.role === 'ADMIN' || userData.role === 'admin') {
+      navigate('/admin');
+    } else {
+      // Điều hướng về trang profile sau khi xác thực thành công để user nhập thông tin
+      navigate('/profile');
+    }
   };
 
   // Xử lý khi đăng xuất
@@ -89,10 +95,16 @@ function AppRoutes() {
         <Route path="/judging/hackathon/:hackathonId/team/:teamId" element={<JudgingDetailPage />} />
         <Route path="/submit" element={<SubmissionPage />} />
         <Route path="/mentor" element={<MentorDashboardPage />} />
-        <Route path="/admin" element={<AdminPage currentUser={currentUser} onLogout={handleLogout} />} />
       </Route>
 
       {/* Nhóm 2: Các trang KHÔNG hiển thị thanh Navigation (Ẩn hoàn toàn) */}
+      <Route path="/admin" element={
+        currentUser && currentUser.role?.toUpperCase() === 'ADMIN' ? (
+          <AdminPage currentUser={currentUser} onLogout={handleLogout} />
+        ) : (
+          <Navigate to={currentUser ? "/" : "/login"} replace />
+        )
+      } />
       <Route 
         path="/login" 
         element={

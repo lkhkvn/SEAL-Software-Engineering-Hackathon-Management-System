@@ -1,0 +1,1 @@
+<?php require_once __DIR__ . '/../vendor/autoload.php'; $em = require __DIR__ . '/../cli-config.php'; $service = new App\Services\ActivityLogService($em); try { $logs = $service->getAllLogs(); file_put_contents('out.txt', print_r($logs, true)); echo 'OK'; } catch(Exception $e) { file_put_contents('out.txt', $e->getMessage()); echo 'ERR'; }

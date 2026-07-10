@@ -22,6 +22,7 @@ class ContentService {
                 'name' => $org->name,
                 'description' => $org->description,
                 'logoUrl' => $org->logoUrl,
+                'coverUrl' => $org->coverUrl,
                 'websiteUrl' => $org->websiteUrl
             ];
         }
@@ -40,10 +41,43 @@ class ContentService {
                 'content' => $blog->content,
                 'thumbnailUrl' => $blog->thumbnailUrl,
                 'author' => $blog->author,
+                'authorAvatarUrl' => $blog->authorAvatarUrl,
                 'tags' => $blog->tags ? array_map('trim', explode(',', $blog->tags)) : [],
                 'createdAt' => $blog->createdAt->format('Y-m-d H:i:s')
             ];
         }
         return $result;
+    }
+
+    public function createOrganization(array $data): int {
+        $org = new OrganizationModel();
+        $org->name = trim($data['name'] ?? '');
+        if (isset($data['description'])) $org->description = trim($data['description']);
+        if (isset($data['logoUrl'])) $org->logoUrl = trim($data['logoUrl']);
+        if (isset($data['coverUrl'])) $org->coverUrl = trim($data['coverUrl']);
+        if (isset($data['websiteUrl'])) $org->websiteUrl = trim($data['websiteUrl']);
+
+        $this->em->persist($org);
+        $this->em->flush();
+        return $org->id;
+    }
+
+    public function createBlog(array $data): int {
+        $blog = new BlogPostModel();
+        $blog->title = trim($data['title'] ?? '');
+        $blog->summary = trim($data['summary'] ?? '');
+        $blog->content = trim($data['content'] ?? '');
+        $blog->author = trim($data['author'] ?? 'Admin');
+        
+        if (isset($data['thumbnailUrl'])) $blog->thumbnailUrl = trim($data['thumbnailUrl']);
+        if (isset($data['authorAvatarUrl'])) $blog->authorAvatarUrl = trim($data['authorAvatarUrl']);
+        if (isset($data['tags'])) {
+            $tags = is_array($data['tags']) ? implode(',', $data['tags']) : trim($data['tags']);
+            $blog->tags = $tags;
+        }
+
+        $this->em->persist($blog);
+        $this->em->flush();
+        return $blog->id;
     }
 }

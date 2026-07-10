@@ -31,8 +31,8 @@ class UserController {
                    t.max_members as maxMembers, t.status, t.leader_id as leaderId,
                    (SELECT COUNT(*) FROM users u2 WHERE u2.team_id = t.id) as memberCount
             FROM teams t
-            INNER JOIN users u ON u.team_id = t.id
-            WHERE u.id = :userId
+            INNER JOIN users u1 ON u1.team_id = t.id
+            WHERE u1.id = :userId
             LIMIT 1
         ", ['userId' => $currentUser->id])->fetchAssociative();
 

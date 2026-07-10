@@ -9,6 +9,7 @@ import {
 import confetti from 'canvas-confetti';
 import { Skeleton } from './ui/skeleton';
 import { motion } from 'motion/react';
+import { TeamChatWidget } from './TeamChatWidget';
 const CV_THEMES: Record<string, {
   headerBg: string;
   accentText: string;
@@ -267,6 +268,8 @@ interface Team {
   score: number;
   tech: string[];
   project: { name: string; description: string; githubUrl: string; demoVideoUrl: string } | null;
+  avatarUrl?: string;
+  backgroundUrl?: string;
 }
 
 // ────────── Sub-components ──────────
@@ -1139,9 +1142,35 @@ function JoinTeamModal({ teams, onClose, onJoined }: { teams: Team[]; onClose: (
 }
 
 // ────────── Modal: Xem chi tiết đội ──────────
-function TeamDetailModal({ team, onClose }: { team: Team; onClose: () => void }) {
+function TeamDetailModal({ team, userTeam, onUpdate, onClose }: { team: Team; userTeam?: any; onUpdate?: () => void; onClose: () => void }) {
   const [teamMembers, setTeamMembers] = useState<any[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const isLeaderOfThisTeam = userTeam && userTeam.id === team.id && userTeam.isLeader;
+  const token = getToken();
+
+  const handleImageUpload = async (type: 'avatar' | 'background', e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append(type, file);
+      const res = await fetch(`http://localhost:8000/index.php/api/teams/my-team/images`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData
+      });
+      const data = await res.json();
+      if (!res.ok || data.status === 'error') throw new Error(data.message || 'Lỗi cập nhật ảnh');
+      alert(`Đã cập nhật ${type === 'avatar' ? 'ảnh đại diện' : 'ảnh nền'} thành công!`);
+      if (onUpdate) onUpdate();
+    } catch (err: any) {
+      alert(err.message || 'Lỗi cập nhật ảnh');
+    } finally {
+      setUploading(false);
+    }
+  };
 
   useEffect(() => {
     const fetchMembers = async () => {
@@ -1174,21 +1203,41 @@ function TeamDetailModal({ team, onClose }: { team: Team; onClose: () => void })
       <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl overflow-hidden ring-1 ring-white/20 transform transition-all animate-in fade-in zoom-in-95 duration-200">
         {/* Premium Banner */}
         <div className="h-32 relative flex items-end p-6 overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-orange-500 via-amber-500 to-orange-400"></div>
-          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 mix-blend-overlay"></div>
+          <div className="absolute inset-0 bg-gradient-to-br from-orange-500 via-amber-500 to-orange-400"
+               style={team.backgroundUrl ? { backgroundImage: `url(http://localhost:8000/index.php${team.backgroundUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}}
+          ></div>
+          {!team.backgroundUrl && <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 mix-blend-overlay"></div>}
           <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none"></div>
           
-          <button onClick={onClose} className="absolute top-4 right-4 p-2 bg-black/10 hover:bg-black/30 backdrop-blur-md rounded-full text-white transition-all hover:rotate-90 duration-300">
+          <button onClick={onClose} className="absolute top-4 right-4 p-2 bg-black/10 hover:bg-black/30 backdrop-blur-md rounded-full text-white transition-all hover:rotate-90 duration-300 z-50">
             <X size={18} />
           </button>
           
-          <div className="relative flex items-end gap-5 z-10 w-full">
-            <div className="w-20 h-20 bg-white/95 backdrop-blur-sm rounded-2xl flex items-center justify-center shadow-xl shadow-orange-900/20 text-4xl font-black text-transparent bg-clip-text bg-gradient-to-br from-orange-500 to-amber-500 border-2 border-white/50 group hover:scale-105 hover:rotate-3 transition-transform duration-300">
-              {team.name.charAt(0).toUpperCase()}
+          <div className="relative flex items-end gap-5 z-10 w-full group/banner">
+            <div className="relative w-20 h-20 bg-white/95 backdrop-blur-sm rounded-2xl flex items-center justify-center shadow-xl shadow-orange-900/20 text-4xl font-black text-transparent bg-clip-text bg-gradient-to-br from-orange-500 to-amber-500 border-2 border-white/50 group hover:scale-105 hover:rotate-3 transition-transform duration-300 overflow-hidden">
+              {team.avatarUrl ? (
+                <img src={`http://localhost:8000/index.php${team.avatarUrl}`} alt={team.name} className="w-full h-full object-cover" />
+              ) : (
+                team.name.charAt(0).toUpperCase()
+              )}
+              {isLeaderOfThisTeam && (
+                <label className="absolute inset-0 bg-black/50 text-white opacity-0 hover:opacity-100 flex items-center justify-center cursor-pointer transition-opacity z-20" title="Đổi ảnh đại diện">
+                  <Camera size={20} />
+                  <input type="file" className="hidden" accept="image/*" onChange={(e) => handleImageUpload('avatar', e)} disabled={uploading} />
+                </label>
+              )}
             </div>
-            <div className="pb-1.5 flex-1 min-w-0">
-              <h3 className="text-3xl font-extrabold text-white drop-shadow-md truncate">{team.name}</h3>
-              <p className="text-orange-50 text-sm font-semibold tracking-wide uppercase mt-0.5 opacity-90">{team.category}</p>
+            <div className="pb-1.5 flex-1 min-w-0 flex items-center justify-between">
+              <div>
+                <h3 className="text-3xl font-extrabold text-white drop-shadow-md truncate">{team.name}</h3>
+                <p className="text-orange-50 text-sm font-semibold tracking-wide uppercase mt-0.5 opacity-90">{team.category}</p>
+              </div>
+              {isLeaderOfThisTeam && (
+                <label className="shrink-0 p-2 bg-white/20 hover:bg-white/30 backdrop-blur-md rounded-xl text-white shadow-sm cursor-pointer transition-colors" title="Đổi ảnh nền">
+                  <Camera size={18} />
+                  <input type="file" className="hidden" accept="image/*" onChange={(e) => handleImageUpload('background', e)} disabled={uploading} />
+                </label>
+              )}
             </div>
           </div>
         </div>
@@ -1750,9 +1799,13 @@ export function TeamsPage() {
                 className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition-all border border-gray-100 hover:-translate-y-0.5 group"
               >
                 {/* Card Banner */}
-                <div className="h-20 flex items-center justify-center relative" style={{ background: getAvatarGradient(team.id) }}>
-                  <div className="w-14 h-14 bg-white rounded-xl flex items-center justify-center shadow-md text-2xl font-black text-gray-700">
-                    {team.name.charAt(0).toUpperCase()}
+                <div className="h-20 flex items-center justify-center relative" style={team.backgroundUrl ? { backgroundImage: `url(http://localhost:8000/index.php${team.backgroundUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' } : { background: getAvatarGradient(team.id) }}>
+                  <div className="w-14 h-14 bg-white rounded-xl flex items-center justify-center shadow-md text-2xl font-black text-gray-700 overflow-hidden">
+                    {team.avatarUrl ? (
+                      <img src={`http://localhost:8000/index.php${team.avatarUrl}`} alt={team.name} className="w-full h-full object-cover" />
+                    ) : (
+                      team.name.charAt(0).toUpperCase()
+                    )}
                   </div>
                   {team.rank <= 3 && (
                     <div className={`absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center text-xs font-black shadow ${
@@ -1813,9 +1866,14 @@ export function TeamsPage() {
       {showCreate && <CreateTeamModal onClose={() => setShowCreate(false)} onCreated={handleCreated} />}
       {showJoin && <JoinTeamModal teams={teams} onClose={() => setShowJoin(false)} onJoined={handleJoined} />}
       {inviteResult && <InviteCodeModal data={inviteResult} onClose={() => { setInviteResult(null); }} />}
-      {selectedTeam && <TeamDetailModal team={selectedTeam} onClose={() => setSelectedTeam(null)} />}
+      {selectedTeam && <TeamDetailModal team={selectedTeam} userTeam={userTeam} onUpdate={() => window.location.reload()} onClose={() => setSelectedTeam(null)} />}
       {showCV && <MyCVModal onClose={() => setShowCV(false)} />}
       {showAskHelp && <AskForHelpModal onClose={() => setShowAskHelp(false)} onSuccess={() => setShowAskHelp(false)} />}
+
+      {/* Tích hợp khung chat nếu người dùng thuộc 1 Đội */}
+      {userTeam && userTeam.id && (
+        <TeamChatWidget teamId={userTeam.id} />
+      )}
 
       {/* Modal: Xem CV Ứng Viên */}
       {selectedCV && (

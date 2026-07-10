@@ -1,0 +1,1 @@
+<?php require_once __DIR__ . '/../vendor/autoload.php'; $em = require __DIR__ . '/../cli-config.php'; $conn = $em->getConnection(); var_dump($conn->executeQuery('SELECT id, admin_id FROM admin_activity_logs')->fetchAllAssociative());

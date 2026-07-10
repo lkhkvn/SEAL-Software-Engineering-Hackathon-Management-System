@@ -476,15 +476,38 @@ export function EventDetailPage() {
     { id: 'leaderboard', label: 'Bảng Xếp Hạng', icon: Award },
   ];
 
+  const getMockCover = (id: number) => {
+    const covers = [
+      'https://images.unsplash.com/photo-1555066931-4365d14bab8c?auto=format&fit=crop&q=80&w=800&h=400',
+      'https://images.unsplash.com/photo-1516116216624-53e697fedbea?auto=format&fit=crop&q=80&w=800&h=400',
+      'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=800&h=400',
+      'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&q=80&w=800&h=400'
+    ];
+    return covers[id % covers.length];
+  };
+
+  const getMockLogo = (id: number) => {
+    const logos = [
+      'https://ui-avatars.com/api/?name=PO&background=0D8ABC&color=fff&size=128',
+      'https://ui-avatars.com/api/?name=CS&background=D32F2F&color=fff&size=128',
+      'https://ui-avatars.com/api/?name=HA&background=303F9F&color=fff&size=128',
+      'https://ui-avatars.com/api/?name=TK&background=388E3C&color=fff&size=128'
+    ];
+    return logos[id % logos.length];
+  };
+
+  const currentCover = (eventData.cover_url || event.image) && ((eventData.cover_url || event.image).startsWith('http') || (eventData.cover_url || event.image).startsWith('/'))
+    ? (eventData.cover_url || event.image)
+    : getMockCover(event.id);
+    
+  const currentLogo = eventData.logo_url && (eventData.logo_url.startsWith('http') || eventData.logo_url.startsWith('/'))
+    ? eventData.logo_url
+    : getMockLogo(event.id);
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* 1. Full-width Cover Image */}
-      <div className="w-full h-64 lg:h-80 bg-cover bg-center" style={{
-         backgroundImage: event.image && (event.image.startsWith('http') || event.image.startsWith('/')) 
-           ? `url(${event.image})` 
-           : 'none',
-         background: !(event.image && (event.image.startsWith('http') || event.image.startsWith('/'))) ? event.image : 'none'
-      }}></div>
+      <div className="w-full h-64 lg:h-80 bg-cover bg-center" style={{ backgroundImage: `url(${currentCover})` }}></div>
 
       {/* 2. Sticky Tab Bar */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm relative">
@@ -492,14 +515,7 @@ export function EventDetailPage() {
           
           {/* Logo overlapping the cover and tab bar */}
           <div className="absolute -top-16 left-4 sm:left-6 lg:left-8 w-32 h-32 rounded-full border-4 border-white overflow-hidden bg-white shadow-md z-50 flex items-center justify-center">
-            {eventData.logo_url ? (
-              <img src={eventData.logo_url} alt="Logo" className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full bg-[#111827] text-white font-bold flex flex-col items-center justify-center text-center p-2 text-sm">
-                <span className="text-orange-500 font-black text-lg">PORTO HACK</span>
-                <span className="text-xs tracking-widest mt-1">SANTOS 2026</span>
-              </div>
-            )}
+            <img src={currentLogo} alt="Logo" className="w-full h-full object-cover" />
           </div>
 
           <div className="flex overflow-x-auto hide-scrollbar pl-40">
@@ -591,7 +607,7 @@ export function EventDetailPage() {
                         <div className="w-12 h-12 bg-gray-800 rounded-full flex items-center justify-center text-white font-bold">gu</div>
                         <div className="text-white">
                           <div className="font-bold text-xl">Bắt đầu từ đây: Chào mừng và hướng dẫn đăng ký</div>
-                          <div className="text-gray-300">Ban tổ chức Porto Hack</div>
+                          <div className="text-gray-300">Ban tổ chức {event.name}</div>
                         </div>
                       </div>
                     </div>

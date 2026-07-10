@@ -28,7 +28,11 @@ import {
   Send,
   Lock,
   Unlock,
-  UploadCloud
+  UploadCloud,
+  PlayCircle,
+  LogOut,
+  Lightbulb,
+  Building2
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -45,6 +49,7 @@ import {
   Pie
 } from 'recharts';
 import { JudgingPage } from './JudgingPage';
+import { DashboardCharts } from './DashboardCharts';
 
 interface AdminPageProps {
   currentUser: any;
@@ -154,6 +159,106 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
   const [searchTerm, setSearchTerm]     = useState('');
   const [updatingUserId, setUpdatingUserId] = useState<number | null>(null);
   const [totalTeams, setTotalTeams]     = useState<number>(0);
+
+  // ── Admin Content Creation ──
+  const [orgForm, setOrgForm] = useState({ name: '', description: '', logoUrl: '', coverUrl: '', websiteUrl: '' });
+  const [blogForm, setBlogForm] = useState({ title: '', summary: '', content: '', thumbnailUrl: '', author: 'Admin', authorAvatarUrl: '', tags: '' });
+  const [isSubmittingContent, setIsSubmittingContent] = useState(false);
+  const [contentMsg, setContentMsg] = useState<{type: 'success'|'error', text: string} | null>(null);
+
+  const handleCreateOrg = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmittingContent(true);
+    setContentMsg(null);
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch('http://localhost:8000/index.php/api/admin/organizations', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(orgForm)
+      });
+      const data = await res.json();
+      if (res.ok && data.status === 'success') {
+        setContentMsg({ type: 'success', text: 'Tạo tổ chức thành công!' });
+        setOrgForm({ name: '', description: '', logoUrl: '', coverUrl: '', websiteUrl: '' });
+      } else {
+        setContentMsg({ type: 'error', text: data.message || 'Lỗi khi tạo tổ chức.' });
+      }
+    } catch (e: any) {
+      setContentMsg({ type: 'error', text: e.message });
+    } finally {
+      setIsSubmittingContent(false);
+    }
+  };
+
+  const handleCreateBlog = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmittingContent(true);
+    setContentMsg(null);
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch('http://localhost:8000/index.php/api/admin/blogs', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ ...blogForm, tags: blogForm.tags.split(',').map(t => t.trim()).filter(Boolean) })
+      });
+      const data = await res.json();
+      if (res.ok && data.status === 'success') {
+        setContentMsg({ type: 'success', text: 'Tạo bài viết blog thành công!' });
+        setBlogForm({ title: '', summary: '', content: '', thumbnailUrl: '', author: 'Admin', authorAvatarUrl: '', tags: '' });
+      } else {
+        setContentMsg({ type: 'error', text: data.message || 'Lỗi khi tạo blog.' });
+      }
+    } catch (e: any) {
+      setContentMsg({ type: 'error', text: e.message });
+    } finally {
+      setIsSubmittingContent(false);
+    }
+  };
+
+  const handleContentImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, formType: 'org' | 'blog', field: string) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    const file = e.target.files[0];
+    if (file.size > 5 * 1024 * 1024) {
+      setContentMsg({ type: 'error', text: 'Ảnh tải lên không được vượt quá 5MB.' });
+      return;
+    }
+
+    const token = localStorage.getItem('auth_token');
+    const uploadData = new FormData();
+    uploadData.append('file', file);
+    setIsSubmittingContent(true);
+    setContentMsg(null);
+
+    try {
+      const response = await fetch('http://localhost:8000/index.php/api/admin/hackathons/upload-image', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: uploadData,
+      });
+      const result = await response.json();
+      if (response.ok && result.status === 'success') {
+        const fullUrl = 'http://localhost:8000/index.php' + result.url;
+        if (formType === 'org') {
+          setOrgForm(p => ({ ...p, [field]: fullUrl }));
+        } else {
+          setBlogForm(p => ({ ...p, [field]: fullUrl }));
+        }
+      } else {
+        setContentMsg({ type: 'error', text: result.message || 'Lỗi tải ảnh lên.' });
+      }
+    } catch (err) {
+      setContentMsg({ type: 'error', text: 'Không thể kết nối đến máy chủ.' });
+    } finally {
+      setIsSubmittingContent(false);
+    }
+  };
 
   // ── Hackathons ──
   const [contests, setContests]         = useState<Hackathon[]>([]);
@@ -1103,13 +1208,13 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
     { label: 'Người dùng hệ thống',  value: users.length > 0 ? String(users.length) : '0',       icon: BarChart3, color: 'orange' },
   ];
 
-  const filteredUsers    = users.filter(u =>
-    u.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    u.email?.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredUsers = users.filter(u =>
+    (u.username || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (u.email || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
   const filteredContests = contests.filter(c =>
-    c.name?.toLowerCase().includes(contestSearch.toLowerCase()) ||
-    c.category?.toLowerCase().includes(contestSearch.toLowerCase())
+    (c.name || '').toLowerCase().includes(contestSearch.toLowerCase()) ||
+    (c.category || '').toLowerCase().includes(contestSearch.toLowerCase())
   );
 
   return (
@@ -1451,16 +1556,65 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-1.5">
-                        Danh mục <span className="text-red-500">*</span>
+                        Danh mục <span className="text-red-500">*</span> (Chọn nhiều hoặc nhập thêm)
                       </label>
-                      <select
-                        id="contest-category"
-                        value={formData.category}
-                        onChange={e => setFormData(p => ({ ...p, category: e.target.value }))}
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-sm"
-                      >
-                        {CATEGORIES.map(c => <option key={c}>{c}</option>)}
-                      </select>
+                      <div className="flex flex-wrap gap-2 p-1 items-center">
+                        {CATEGORIES.map(c => {
+                          const isSelected = (formData.category || '').split(',').map(s => s.trim()).includes(c);
+                          return (
+                            <button
+                              key={c}
+                              type="button"
+                              onClick={() => {
+                                const cats = (formData.category || '').split(',').map(s => s.trim()).filter(Boolean);
+                                if (cats.includes(c)) {
+                                  setFormData(p => ({ ...p, category: cats.filter(x => x !== c).join(', ') }));
+                                } else {
+                                  setFormData(p => ({ ...p, category: [...cats, c].join(', ') }));
+                                }
+                              }}
+                              className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all ${isSelected ? 'bg-blue-600 text-white shadow-md scale-105 ring-2 ring-blue-300 ring-offset-1' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                            >
+                              {c}
+                            </button>
+                          );
+                        })}
+                        {/* Custom categories */}
+                        {(formData.category || '').split(',').map(s => s.trim()).filter(Boolean).filter(c => !CATEGORIES.includes(c)).map(c => (
+                          <div key={c} className="flex items-center gap-1 bg-blue-600 text-white px-3 py-1.5 rounded-full text-xs font-bold shadow-md scale-105 ring-2 ring-blue-300 ring-offset-1">
+                            <span>{c}</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const cats = (formData.category || '').split(',').map(s => s.trim()).filter(Boolean);
+                                setFormData(p => ({ ...p, category: cats.filter(x => x !== c).join(', ') }));
+                              }}
+                              className="text-white hover:text-red-200"
+                            >
+                              <X size={12} />
+                            </button>
+                          </div>
+                        ))}
+                        {/* Input for new category */}
+                        <input
+                          type="text"
+                          placeholder="+ Nhập khác (Enter)"
+                          className="px-3 py-1.5 rounded-full text-xs border border-gray-300 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 w-32"
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              const val = e.currentTarget.value.trim();
+                              if (val) {
+                                const cats = (formData.category || '').split(',').map(s => s.trim()).filter(Boolean);
+                                if (!cats.includes(val)) {
+                                  setFormData(p => ({ ...p, category: [...cats, val].join(', ') }));
+                                }
+                                e.currentTarget.value = '';
+                              }
+                            }
+                          }}
+                        />
+                      </div>
                     </div>
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-1.5">Trạng thái</label>
@@ -1917,59 +2071,46 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
         </div>
       )}
 
-      {/* ══════════════════ SIDEBAR ══════════════════ */}
-      <aside className="w-[280px] bg-white/80 backdrop-blur-xl border-r border-gray-200/80 flex flex-col flex-shrink-0 hidden md:flex shadow-[4px_0_24px_rgba(0,0,0,0.02)] z-10">
-        <div className="p-7 border-b border-gray-100/80 flex-shrink-0 bg-gradient-to-b from-gray-50/50 to-transparent">
-          <h2 className="text-xl font-black text-gray-900 tracking-tight flex items-center gap-2.5">
-            <div className="bg-gradient-to-br from-blue-600 to-indigo-600 p-1.5 rounded-lg shadow-md">
-              <SettingsIcon size={20} className="text-white" />
-            </div>
-            Quản trị hệ thống
-          </h2>
-          <p className="text-xs text-gray-500 mt-2 font-medium tracking-wide">Dashboard điều hành SEAL</p>
+      {/* ══════════════════ SIDEBAR (LEFT) ══════════════════ */}
+      <aside className="hidden md:flex w-[260px] flex-col bg-white flex-shrink-0 z-20 shadow-[0_2px_12px_rgba(0,0,0,0.04)] m-4 rounded-2xl overflow-hidden relative">
+        <div className="absolute inset-0 bg-white" />
+        
+        {/* Logo Section */}
+        <div className="p-6 border-b border-gray-100 flex items-center justify-center gap-3 relative z-10">
+          <div className="w-8 h-8 rounded bg-gradient-to-tr from-purple-600 to-blue-500 flex items-center justify-center text-white shadow-md">
+            <Trophy size={18} strokeWidth={2.5} />
+          </div>
+          <span className="font-extrabold text-gray-800 text-lg tracking-tight uppercase">SEAL Admin</span>
         </div>
-        <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
+
+        {/* Navigation Section */}
+        <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto relative z-10">
           {[
             { id: 'overview', icon: BarChart3, label: 'Tổng quan' },
             { id: 'events', icon: Calendar, label: 'Quản lý Hackathon' },
             { id: 'permissions', icon: Shield, label: 'Phân quyền' },
             { id: 'judging', icon: CheckSquare, label: 'Chấm điểm' },
-            { id: 'logs', icon: FileText, label: 'Nhật ký hoạt động' }
+            { id: 'logs', icon: FileText, label: 'Nhật ký hoạt động' },
+            { id: 'organizations', icon: Building2, label: 'Quản lý Tổ chức' },
+            { id: 'blogs', icon: BookOpen, label: 'Quản lý Blog' }
           ].map(tab => {
             const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
             return (
               <button
                 key={tab.id}
                 id={`admin-tab-${tab.id}`}
                 onClick={() => setActiveTab(tab.id)}
-                className={`w-full flex items-center gap-3.5 px-5 py-3.5 rounded-xl font-bold transition-all duration-300 text-sm cursor-pointer group relative overflow-hidden ${
-                  activeTab === tab.id
-                    ? 'text-blue-700'
-                    : 'text-gray-500 hover:text-gray-900'
+                className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-xl font-medium transition-all duration-300 text-sm cursor-pointer ${
+                  isActive
+                    ? 'bg-gradient-to-r from-purple-600 to-purple-500 text-white shadow-md shadow-purple-200'
+                    : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'
                 }`}
               >
-                {/* Active Background with Glass Effect */}
-                {activeTab === tab.id && (
-                  <div className="absolute inset-0 bg-gradient-to-r from-blue-50 to-indigo-50/30 border border-blue-100 rounded-xl" />
-                )}
-                
-                {/* Hover Background */}
-                {activeTab !== tab.id && (
-                  <div className="absolute inset-0 bg-gray-50/80 opacity-0 group-hover:opacity-100 rounded-xl transition-opacity" />
-                )}
-                
-                {/* Active Indicator Line */}
-                {activeTab === tab.id && (
-                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-blue-600 rounded-r-full" />
-                )}
-
-                <div className="relative flex items-center gap-3.5 w-full">
-                  <Icon 
-                    size={18} 
-                    className={`transition-colors ${activeTab === tab.id ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-500'}`} 
-                  />
-                  {tab.label}
+                <div className={`flex items-center justify-center w-8 h-8 rounded-lg ${isActive ? 'text-white' : 'text-gray-400'}`}>
+                  <Icon size={20} strokeWidth={isActive ? 2.5 : 2} />
                 </div>
+                {tab.label}
               </button>
             );
           })}
@@ -1977,54 +2118,63 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
       </aside>
 
       {/* ══════════════════ MAIN CONTENT AREA ══════════════════ */}
-      <main className="flex-1 flex flex-col h-full overflow-hidden bg-gray-50">
+      <main className="flex-1 flex flex-col h-full overflow-hidden relative">
         
-        {/* Top Header of Main Area */}
-        <header className="bg-white/80 backdrop-blur-md border-b border-gray-200/80 px-8 py-5 flex items-center justify-between shadow-sm flex-shrink-0 z-10">
-          <div>
-            <h1 className="text-2xl font-black text-gray-900 tracking-tight">
+        {/* Top Navbar */}
+        <header className="px-8 py-6 flex items-center justify-between flex-shrink-0 z-10">
+          <div className="hidden md:block">
+            <h1 className="text-xl font-semibold text-gray-800 capitalize">
               {activeTab === 'overview' && 'Tổng quan hệ thống'}
               {activeTab === 'events' && 'Quản lý Hackathon'}
               {activeTab === 'permissions' && 'Phân quyền thành viên'}
               {activeTab === 'judging' && 'Chấm điểm'}
               {activeTab === 'logs' && 'Nhật ký hoạt động'}
             </h1>
-            <p className="text-sm text-gray-500 mt-1 font-medium">Quản lý và điều hành các hoạt động trên hệ thống</p>
           </div>
-          {activeTab === 'events' && (
-            <button
-              id="btn-create-contest"
-              onClick={openCreate}
-              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all shadow-[0_4px_12px_rgba(37,99,235,0.2)] hover:shadow-[0_6px_16px_rgba(37,99,235,0.3)] font-bold text-sm cursor-pointer active:scale-95"
-            >
-              <Plus size={18} />
-              Tạo Hackathon mới
-            </button>
-          )}
+          
+          <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end">
+            <div className="md:hidden font-bold text-lg">SEAL Admin</div>
+            <div className="flex items-center gap-4">
+              <div className="relative hidden sm:block">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                <input
+                  type="text"
+                  placeholder="Tìm kiếm..."
+                  className="pl-9 pr-4 py-2 border-none bg-white rounded-full focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm transition-all shadow-sm w-48 focus:w-64"
+                />
+              </div>
+              {activeTab === 'events' && (
+                <button
+                  id="btn-create-contest"
+                  onClick={openCreate}
+                  className="w-10 h-10 rounded-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white flex items-center justify-center shadow-md hover:from-purple-700 hover:to-indigo-700 transition-all cursor-pointer"
+                  title="Tạo Hackathon mới"
+                >
+                  <Plus size={18} />
+                </button>
+              )}
+              <button className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-gray-500 shadow-sm hover:text-purple-600 transition-colors">
+                <div className="relative">
+                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>
+                  <SettingsIcon size={18} />
+                </div>
+              </button>
+              <button className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-gray-500 shadow-sm hover:text-purple-600 transition-colors">
+                <Users size={18} />
+              </button>
+              <button 
+                onClick={() => onLogout && onLogout()}
+                title="Đăng xuất"
+                className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center text-red-500 shadow-sm hover:bg-red-100 transition-colors"
+              >
+                <LogOut size={18} />
+              </button>
+            </div>
+          </div>
         </header>
 
-        <div className="md:hidden flex gap-2 px-4 py-3 bg-white border-b border-gray-200 overflow-x-auto hide-scrollbar flex-shrink-0 shadow-sm">
-          {['overview', 'events', 'permissions', 'judging', 'logs'].map(tab => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-4 py-2 rounded-lg font-medium transition-all text-xs whitespace-nowrap cursor-pointer ${
-                activeTab === tab
-                  ? 'bg-blue-600 text-white shadow-md shadow-blue-200'
-                  : 'text-gray-600 bg-gray-50 hover:bg-gray-100 hover:text-gray-900'
-              }`}
-            >
-              {tab === 'overview'     && 'Tổng quan'}
-              {tab === 'events'       && 'Hackathon'}
-              {tab === 'permissions'  && 'Phân quyền'}
-              {tab === 'judging'      && 'Chấm điểm'}
-              {tab === 'logs'         && 'Nhật ký'}
-            </button>
-          ))}
-        </div>
-
         {/* Scrollable Content Body */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+        <div className="flex-1 overflow-y-auto px-8 pb-8 custom-scrollbar">
 
         {/* ── Tab: Tổng quan ── */}
         {activeTab === 'overview' && (() => {
@@ -2042,144 +2192,52 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
 
           return (
             <div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                {stats.map((stat, i) => {
-                  const Icon = stat.icon;
-                  return (
-                    <div key={i} className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-lg transition-all hover:-translate-y-0.5">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600">
-                          <Icon size={24} />
-                        </div>
-                      </div>
-                      <div className="text-3xl font-bold text-gray-900 mb-1 tracking-tight">{stat.value}</div>
-                      <div className="text-gray-500 text-sm font-medium">{stat.label}</div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* ── Thống kê trực quan (Charts Section) ── */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-                {/* Cột 1 & 2: Biểu đồ cột phân loại */}
-                <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm lg:col-span-2 text-left">
-                  <h3 className="text-base font-bold text-gray-900 mb-4">Phân bố Hackathon theo Danh mục</h3>
-                  <div className="h-64">
-                    {contests.length === 0 ? (
-                      <div className="h-full flex items-center justify-center text-gray-400 text-sm italic">
-                        Chưa có dữ liệu thống kê
-                      </div>
-                    ) : (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={categoryData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                          <XAxis dataKey="name" stroke="#9CA3AF" fontSize={11} tickLine={false} />
-                          <YAxis stroke="#9CA3AF" fontSize={11} tickLine={false} allowDecimals={false} />
-                          <ChartTooltip 
-                            contentStyle={{ background: '#FFF', border: '1px solid #E5E7EB', borderRadius: '8px', fontSize: '12px' }}
-                            labelStyle={{ fontWeight: 'bold', color: '#111827' }}
-                          />
-                          <Bar dataKey="count" radius={[4, 4, 0, 0]} fill="#3B82F6" barSize={32}>
-                            {categoryData.map((entry, index) => {
-                              const colors = ['#3B82F6', '#8B5CF6', '#EC4899', '#10B981', '#F59E0B', '#EF4444', '#14B8A6'];
-                              return <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />;
-                            })}
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
-                    )}
-                  </div>
-                </div>
-
-                {/* Cột 3: Biểu đồ tròn trạng thái */}
-                <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm text-left">
-                  <h3 className="text-base font-bold text-gray-900 mb-4">Tỷ lệ trạng thái sự kiện</h3>
-                  <div className="h-64 flex flex-col justify-between">
-                    {contests.length === 0 ? (
-                      <div className="h-full flex items-center justify-center text-gray-400 text-sm italic">
-                        Chưa có dữ liệu thống kê
-                      </div>
-                    ) : statusData.length === 0 ? (
-                      <div className="h-full flex items-center justify-center text-gray-400 text-sm italic">
-                        Không có trạng thái hợp lệ
-                      </div>
-                    ) : (
-                      <>
-                        <div className="flex-1 min-h-0">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                              <Pie
-                                data={statusData}
-                                cx="50%"
-                                cy="50%"
-                                innerRadius={60}
-                                outerRadius={80}
-                                paddingAngle={4}
-                                dataKey="value"
-                              >
-                                {statusData.map((entry, index) => (
-                                  <Cell key={`cell-${index}`} fill={entry.color} />
-                                ))}
-                              </Pie>
-                              <ChartTooltip
-                                contentStyle={{ background: '#FFF', border: '1px solid #E5E7EB', borderRadius: '8px', fontSize: '12px' }}
-                              />
-                            </PieChart>
-                          </ResponsiveContainer>
-                        </div>
-                        <div className="flex flex-wrap gap-x-4 gap-y-1.5 justify-center mt-2 border-t border-gray-100 pt-3">
-                          {statusData.map((item, idx) => (
-                            <div key={idx} className="flex items-center gap-1.5 text-xs font-semibold text-gray-600">
-                              <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: item.color }}></span>
-                              <span>{item.name}: {item.value}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
+              <DashboardCharts contests={contests} users={users} totalTeams={totalTeams} />
 
               {/* Danh sách cuộc thi gần đây */}
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-              <div className="p-6 border-b border-gray-200 flex items-center justify-between">
-                <h2 className="text-xl font-bold text-gray-900">Hackathon gần đây</h2>
-                <button onClick={() => setActiveTab('events')} className="text-sm text-blue-600 font-semibold hover:underline cursor-pointer">
-                  Xem tất cả →
-                </button>
+            {/* Danh sách cuộc thi gần đây */}
+            <div className="bg-white rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.05)] px-4 pb-4 pt-0 relative mt-8">
+              <div className="-mt-8 mx-auto w-[calc(100%-1rem)] rounded-xl bg-gradient-to-tr from-purple-600 to-purple-400 shadow-lg shadow-purple-500/40 p-5 mb-4">
+                <h2 className="text-xl font-light text-white tracking-tight">Hackathon gần đây</h2>
+                <p className="text-white/80 text-sm mt-1 font-light">Các sự kiện mới nhất trên hệ thống</p>
               </div>
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto px-4 mt-6">
                 <table className="w-full">
-                  <thead className="bg-gray-50">
+                  <thead className="border-b border-gray-100">
                     <tr>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Tên Hackathon</th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Trạng thái</th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Danh mục</th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Thời gian</th>
+                      <th className="py-4 text-left text-xs font-semibold text-purple-600 uppercase tracking-wider">Tên Hackathon</th>
+                      <th className="py-4 text-left text-xs font-semibold text-purple-600 uppercase tracking-wider">Trạng thái</th>
+                      <th className="py-4 text-left text-xs font-semibold text-purple-600 uppercase tracking-wider">Danh mục</th>
+                      <th className="py-4 text-left text-xs font-semibold text-purple-600 uppercase tracking-wider">Thời gian</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200">
+                  <tbody className="divide-y divide-gray-50">
                     {contests.slice(0, 5).map(c => (
-                      <tr key={c.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-6 py-4 font-semibold text-gray-900 text-sm text-left">{c.name}</td>
-                        <td className="px-6 py-4 text-left">
-                          <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${STATUS_COLORS[c.status] ?? 'bg-gray-100 text-gray-600'}`}>
+                      <tr key={c.id} className="hover:bg-gray-50/50 transition-colors duration-200">
+                        <td className="py-4 font-light text-gray-800 text-sm text-left">{c.name}</td>
+                        <td className="py-4 text-left">
+                          <span className={`px-3 py-1 rounded-full text-xs font-medium border ${STATUS_COLORS[c.status] ?? 'bg-gray-100 text-gray-600 border-gray-200'}`}>
                             {STATUS_LABELS[c.status] ?? c.status}
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-600 text-left">{c.category}</td>
-                        <td className="px-6 py-4 text-sm text-gray-500 text-left">{c.startDate?.slice(0,10)} → {c.endDate?.slice(0,10)}</td>
+                        <td className="py-4 text-sm font-light text-gray-500 text-left">{c.category || '—'}</td>
+                        <td className="py-4 text-sm font-light text-gray-500 text-left">{c.startDate?.slice(0,10)} &rarr; {c.endDate?.slice(0,10)}</td>
                       </tr>
                     ))}
                     {contests.length === 0 && (
                       <tr>
-                        <td colSpan={4} className="px-6 py-12 text-center text-gray-400 text-sm">
+                        <td colSpan={4} className="py-12 text-center text-gray-400 text-sm font-light">
                           Chưa có Hackathon nào. Hãy tạo Hackathon đầu tiên!
                         </td>
                       </tr>
                     )}
                   </tbody>
                 </table>
+                <div className="flex justify-end mt-4 pt-4 border-t border-gray-100">
+                  <button onClick={() => setActiveTab('events')} className="text-sm text-purple-600 font-medium hover:text-purple-700 hover:underline cursor-pointer flex items-center gap-1">
+                    Xem tất cả <span aria-hidden="true">&rarr;</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -2243,64 +2301,108 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
                         return covers[id % covers.length];
                       };
                       const coverImage = (c.image && (c.image.startsWith('http') || c.image.startsWith('/'))) ? c.image : getMockCover(c.id);
+                      const daysLeft = (() => {
+                        if (!c.endDate) return 0;
+                        const diff = new Date(c.endDate).getTime() - new Date().getTime();
+                        if (diff < 0) return 0;
+                        return Math.ceil(diff / (1000 * 3600 * 24));
+                      })();
                       
                       return (
                       <div key={c.id} className="bg-white rounded-[24px] border border-gray-200 shadow-sm hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all duration-300 flex flex-col overflow-hidden">
-                        {/* Cover Image Section (Top half) */}
-                        <div className="relative h-[160px] w-full bg-gray-100 group">
-                          <img 
-                            src={coverImage}
-                            alt={c.name}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                          />
-                          {/* Badge */}
-                          <div className={`absolute top-4 left-4 px-2.5 py-1 rounded-lg text-xs font-bold shadow-sm border ${STATUS_COLORS[c.status] ?? 'bg-gray-100 text-gray-600 border-gray-200'}`}>
-                            {STATUS_LABELS[c.status] ?? c.status}
-                          </div>
-                        </div>
-
-                        {/* Body Section */}
-                        <div className="relative p-5 pb-3 flex-col flex-1 pt-10">
-                          {/* Avatar Overlapping */}
-                          <div className="absolute -top-8 left-5">
-                            <div className="w-16 h-16 rounded-full border-4 border-white overflow-hidden bg-white shadow-sm">
-                              <img 
-                                src={c.logo_url || getMockLogo(c.id)} 
-                                alt="Org Avatar"
-                                className="w-full h-full object-cover"
-                              />
+                        {/* Clickable Card Content */}
+                        <div onClick={() => navigate(`/events/${c.id}`)} className="flex flex-col flex-1 cursor-pointer">
+                          {/* Cover Image Section (Top half) */}
+                          <div className="relative h-[200px] w-full bg-gray-100 group">
+                            <img 
+                              src={coverImage}
+                              alt={c.name}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                            />
+                            {/* Badge */}
+                            <div className="absolute top-4 left-4 px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm bg-white text-gray-800">
+                              {STATUS_LABELS[c.status] ?? c.status}
                             </div>
                           </div>
 
-                          <h3 className="font-bold text-gray-900 text-[18px] leading-snug line-clamp-2 text-left mb-2 group-hover:text-[#5027d9] transition-colors">{c.name}</h3>
-
-                          {c.description && (
-                            <p className="text-gray-500 text-xs line-clamp-2 mb-4 text-left leading-relaxed">{c.description}</p>
-                          )}
-
-                          <div className="space-y-1.5 text-left mb-2">
-                            <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                              <Tag size={13} className="text-[#5027d9]" />
-                              <span className="font-medium text-[#5027d9] bg-[#5027d9]/10 px-2 py-0.5 rounded">{c.category}</span>
+                          {/* Body Section */}
+                          <div className="relative p-6 flex flex-col flex-1 pt-12">
+                            {/* Avatar Overlapping */}
+                            <div className="absolute -top-10 left-6">
+                              <div className="w-20 h-20 rounded-full border-[5px] border-white overflow-hidden bg-white shadow-sm">
+                                <img 
+                                  src={c.logo_url || getMockLogo(c.id)} 
+                                  alt="Org Avatar"
+                                  className="w-full h-full object-cover"
+                                />
+                              </div>
                             </div>
-                            {c.location && (
-                              <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                                <MapPin size={13} className="text-gray-400" />
-                                <span>{c.location}</span>
+
+                            {/* Stats Top Right */}
+                            <div className="absolute top-4 right-6 flex items-center gap-4 text-gray-500 text-sm font-medium">
+                              <div className="flex items-center gap-1.5 text-[#5027d9]" title="Số lượng đội tham gia">
+                                <Users size={16} /> {(c as any).registered_teams_count || 0}
+                              </div>
+                              <div className="flex items-center gap-1.5 text-gray-400">
+                                <Lightbulb size={16} /> {Math.floor(((c as any).registered_teams_count || 0) * 1.5)}
+                              </div>
+                            </div>
+
+                            {/* Title & Description */}
+                            <h3 className="text-[22px] leading-tight font-bold text-gray-900 mb-3 group-hover:text-[#5027d9] transition-colors line-clamp-2 text-left">
+                              {c.name}
+                            </h3>
+                            <p className="text-gray-500 text-sm mb-6 line-clamp-2 leading-relaxed text-left">
+                              {c.description}
+                            </p>
+
+                            {/* Tags */}
+                            <div className="flex flex-wrap gap-2 mb-6">
+                              {c.category ? c.category.split(',').map((tag: string, i: number) => (
+                                <span key={i} className="text-xs font-semibold text-[#5027d9] bg-[#5027d9]/10 px-2.5 py-1 rounded-md flex items-center gap-1">
+                                  <Tag size={12}/> {tag.trim()}
+                                </span>
+                              )) : (
+                                <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-2.5 py-1 rounded-md flex items-center gap-1">
+                                  <Tag size={12}/> Khác
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Footer Section (inner) */}
+                          <div className="mt-auto px-6 py-5 border-t border-gray-100 flex items-center justify-between bg-white">
+                            <div className="flex flex-col text-left">
+                              <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                                Phần thưởng
+                              </span>
+                              <span className="text-sm font-black text-gray-900 line-clamp-1 max-w-[150px]" title={(c as any).prize_details || c.prizeDetails || 'Chưa cập nhật'}>
+                                {(c as any).prize_details || c.prizeDetails || 'Chưa cập nhật'}
+                              </span>
+                            </div>
+
+                            {daysLeft > 0 && c.status === 'ACTIVE' ? (
+                              <div className="flex flex-col items-end w-32">
+                                <span className="text-[11px] font-bold text-[#5027d9] uppercase tracking-wider mb-2">
+                                  Còn {daysLeft} ngày nữa
+                                </span>
+                                <div className="w-full bg-gray-100 rounded-full h-1.5">
+                                  <div 
+                                    className="bg-[#5027d9] h-1.5 rounded-full" 
+                                    style={{ width: `${Math.min(100, Math.max(10, (daysLeft / 60) * 100))}%` }}
+                                  ></div>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex flex-col items-end text-right">
+                                <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                                  Trạng thái
+                                </span>
+                                <span className="text-sm font-bold text-gray-900 mt-1">
+                                  {STATUS_LABELS[c.status] ?? c.status}
+                                </span>
                               </div>
                             )}
-                            <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                              <Calendar size={13} className="text-gray-400" />
-                              <span>Diễn ra: {c.startDate?.slice(0,10)} → {c.endDate?.slice(0,10)}</span>
-                            </div>
-                            <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                              <Clock size={13} className="text-gray-400" />
-                              <span>Đăng ký: {c.registrationStart?.slice(0,10)} → {c.registrationEnd?.slice(0,10)}</span>
-                            </div>
-                            <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                              <Hash size={13} className="text-gray-400" />
-                              <span>Tối đa {c.maxTeams} đội</span>
-                            </div>
                           </div>
                         </div>
 
@@ -2721,6 +2823,157 @@ export function AdminPage({ currentUser, onLogout }: AdminPageProps) {
                   </div>
                 );
               })()}
+            </div>
+          </div>
+        )}
+
+        {/* ── Tab: Quản lý Tổ chức ── */}
+        {activeTab === 'organizations' && (
+          <div className="space-y-6">
+            <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm max-w-2xl mx-auto">
+              <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2 mb-6">
+                <Building2 className="text-blue-600" size={22} />
+                Thêm Tổ chức mới
+              </h2>
+              {contentMsg && (
+                <div className={`p-4 mb-6 rounded-lg text-sm font-medium ${contentMsg.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                  {contentMsg.text}
+                </div>
+              )}
+              <form onSubmit={handleCreateOrg} className="space-y-5">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Tên tổ chức *</label>
+                  <input type="text" required value={orgForm.name} onChange={e => setOrgForm({...orgForm, name: e.target.value})} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="VD: Google Developer Student Clubs" />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Mô tả</label>
+                  <textarea rows={3} value={orgForm.description} onChange={e => setOrgForm({...orgForm, description: e.target.value})} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="Mô tả ngắn gọn về tổ chức..." />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1">Logo Tổ chức</label>
+                    {orgForm.logoUrl ? (
+                      <div className="relative group w-24 h-24 rounded-lg overflow-hidden border border-gray-200">
+                        <img src={orgForm.logoUrl} alt="Logo Preview" className="w-full h-full object-cover" />
+                        <label className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-opacity">
+                          <span className="text-white text-xs font-semibold">Đổi Logo</span>
+                          <input type="file" accept="image/*" className="hidden" onChange={e => handleContentImageUpload(e, 'org', 'logoUrl')} />
+                        </label>
+                      </div>
+                    ) : (
+                      <label className="flex items-center justify-center w-full px-4 py-2 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors h-[42px]">
+                        <span className="text-sm text-gray-500 font-medium flex items-center gap-2"><UploadCloud size={16} /> Tải lên Logo (Tối đa 5MB)</span>
+                        <input type="file" accept="image/*" className="hidden" onChange={e => handleContentImageUpload(e, 'org', 'logoUrl')} />
+                      </label>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1">Ảnh bìa (Cover)</label>
+                    {orgForm.coverUrl ? (
+                      <div className="relative group w-full h-24 rounded-lg overflow-hidden border border-gray-200">
+                        <img src={orgForm.coverUrl} alt="Cover Preview" className="w-full h-full object-cover" />
+                        <label className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-opacity">
+                          <span className="text-white text-xs font-semibold">Đổi Ảnh bìa</span>
+                          <input type="file" accept="image/*" className="hidden" onChange={e => handleContentImageUpload(e, 'org', 'coverUrl')} />
+                        </label>
+                      </div>
+                    ) : (
+                      <label className="flex items-center justify-center w-full px-4 py-2 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors h-[42px]">
+                        <span className="text-sm text-gray-500 font-medium flex items-center gap-2"><UploadCloud size={16} /> Tải lên Ảnh bìa (Tối đa 5MB)</span>
+                        <input type="file" accept="image/*" className="hidden" onChange={e => handleContentImageUpload(e, 'org', 'coverUrl')} />
+                      </label>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Đường dẫn Website</label>
+                  <input type="url" value={orgForm.websiteUrl} onChange={e => setOrgForm({...orgForm, websiteUrl: e.target.value})} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="https://..." />
+                </div>
+                <button type="submit" disabled={isSubmittingContent} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition-colors flex justify-center items-center gap-2">
+                  {isSubmittingContent ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                  Tạo Tổ chức
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* ── Tab: Quản lý Blog ── */}
+        {activeTab === 'blogs' && (
+          <div className="space-y-6">
+            <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm max-w-3xl mx-auto">
+              <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2 mb-6">
+                <BookOpen className="text-blue-600" size={22} />
+                Thêm Bài viết Blog mới
+              </h2>
+              {contentMsg && (
+                <div className={`p-4 mb-6 rounded-lg text-sm font-medium ${contentMsg.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                  {contentMsg.text}
+                </div>
+              )}
+              <form onSubmit={handleCreateBlog} className="space-y-5">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Tiêu đề *</label>
+                  <input type="text" required value={blogForm.title} onChange={e => setBlogForm({...blogForm, title: e.target.value})} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="Tiêu đề bài viết" />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Tóm tắt ngắn *</label>
+                  <textarea required rows={2} value={blogForm.summary} onChange={e => setBlogForm({...blogForm, summary: e.target.value})} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="Đoạn mở đầu giới thiệu..." />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Nội dung chi tiết *</label>
+                  <textarea required rows={6} value={blogForm.content} onChange={e => setBlogForm({...blogForm, content: e.target.value})} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="Nội dung bài viết..." />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1">Tên tác giả</label>
+                    <input type="text" value={blogForm.author} onChange={e => setBlogForm({...blogForm, author: e.target.value})} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1">Ảnh đại diện tác giả</label>
+                    {blogForm.authorAvatarUrl ? (
+                      <div className="relative group w-10 h-10 rounded-full overflow-hidden border border-gray-200 inline-block">
+                        <img src={blogForm.authorAvatarUrl} alt="Avatar Preview" className="w-full h-full object-cover" />
+                        <label className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-opacity">
+                          <input type="file" accept="image/*" className="hidden" onChange={e => handleContentImageUpload(e, 'blog', 'authorAvatarUrl')} />
+                        </label>
+                      </div>
+                    ) : (
+                      <label className="flex items-center justify-center w-full px-4 py-2 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors h-[42px]">
+                        <span className="text-sm text-gray-500 font-medium flex items-center gap-2"><UploadCloud size={16} /> Tải Avatar</span>
+                        <input type="file" accept="image/*" className="hidden" onChange={e => handleContentImageUpload(e, 'blog', 'authorAvatarUrl')} />
+                      </label>
+                    )}
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1">Ảnh bìa bài viết</label>
+                    {blogForm.thumbnailUrl ? (
+                      <div className="relative group w-full h-24 rounded-lg overflow-hidden border border-gray-200">
+                        <img src={blogForm.thumbnailUrl} alt="Thumbnail Preview" className="w-full h-full object-cover" />
+                        <label className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-opacity">
+                          <span className="text-white text-xs font-semibold">Đổi Ảnh bìa</span>
+                          <input type="file" accept="image/*" className="hidden" onChange={e => handleContentImageUpload(e, 'blog', 'thumbnailUrl')} />
+                        </label>
+                      </div>
+                    ) : (
+                      <label className="flex items-center justify-center w-full px-4 py-2 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors h-[42px]">
+                        <span className="text-sm text-gray-500 font-medium flex items-center gap-2"><UploadCloud size={16} /> Tải Ảnh bìa</span>
+                        <input type="file" accept="image/*" className="hidden" onChange={e => handleContentImageUpload(e, 'blog', 'thumbnailUrl')} />
+                      </label>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1">Tags (cách nhau dấu phẩy)</label>
+                    <input type="text" value={blogForm.tags} onChange={e => setBlogForm({...blogForm, tags: e.target.value})} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="Công nghệ, AI, Cuộc sống..." />
+                  </div>
+                </div>
+                <button type="submit" disabled={isSubmittingContent} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition-colors flex justify-center items-center gap-2">
+                  {isSubmittingContent ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                  Đăng Bài viết
+                </button>
+              </form>
             </div>
           </div>
         )}

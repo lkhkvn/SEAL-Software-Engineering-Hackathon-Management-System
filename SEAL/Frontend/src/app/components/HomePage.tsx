@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Calendar, Users, Trophy, Rocket, Target, Zap, ChevronRight, Code, ShieldCheck, ArrowRight, PlayCircle, MapPin, Globe, Layout, Video, CheckSquare, Link as LinkIcon, Cpu } from 'lucide-react';
+import { Calendar, Users, Trophy, Rocket, Target, Zap, ChevronRight, Code, ShieldCheck, ArrowRight, PlayCircle, MapPin, Globe, Layout, Video, CheckSquare, Link as LinkIcon, Cpu, Lightbulb, Hexagon } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export function HomePage() {
   const [events, setEvents] = useState<any[]>([]);
-  const [teamsCount, setTeamsCount] = useState<number>(0);
+  const [teams, setTeams] = useState<any[]>([]);
 
   useEffect(() => {
     fetchEvents();
@@ -28,7 +28,7 @@ export function HomePage() {
       const response = await fetch('http://localhost:8000/index.php/api/teams');
       const result = await response.json();
       if (response.ok && result.status === 'success') {
-        setTeamsCount(result.data?.length || 0);
+        setTeams(result.data || []);
       }
     } catch (err) {
       console.error(err);
@@ -53,6 +53,15 @@ export function HomePage() {
       return 'Đang cập nhật';
     }
   };
+
+  const latestEvent = events.length > 0 ? events[0] : null;
+  const participantCount = teams.reduce((sum, team) => sum + (team.members || 0), 0) || 0;
+  const teamsCount = teams.length;
+  const totalPrizePool = events.reduce((sum, event) => sum + (Number(event.prize_pool) || 0), 0);
+  
+  const formattedPrize = totalPrizePool > 0 
+    ? (totalPrizePool >= 1000000000 ? `${(totalPrizePool / 1000000000).toFixed(1)} Tỷ` : `${(totalPrizePool / 1000000).toFixed(0)} Tr`) + ' VNĐ'
+    : '$50k+';
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 selection:bg-[#10B981]/30 font-sans">
@@ -104,15 +113,15 @@ export function HomePage() {
               <div className="text-sm text-slate-500 font-semibold uppercase tracking-wider">Hackathons</div>
             </div>
             <div className="text-center px-4">
-              <div className="text-4xl md:text-5xl font-black text-[#10B981] mb-2">{teamsCount || '2,000+'}</div>
+              <div className="text-4xl md:text-5xl font-black text-[#10B981] mb-2">{participantCount}</div>
               <div className="text-sm text-slate-500 font-semibold uppercase tracking-wider">Người tham gia</div>
             </div>
             <div className="text-center px-4">
-              <div className="text-4xl md:text-5xl font-black text-slate-900 mb-2">{completedEventsCount * 25 + 50}+</div>
+              <div className="text-4xl md:text-5xl font-black text-slate-900 mb-2">{teamsCount}</div>
               <div className="text-sm text-slate-500 font-semibold uppercase tracking-wider">Dự án</div>
             </div>
             <div className="text-center px-4">
-              <div className="text-4xl md:text-5xl font-black text-[#3B82F6] mb-2">$50k+</div>
+              <div className="text-4xl md:text-5xl font-black text-[#3B82F6] mb-2">{formattedPrize}</div>
               <div className="text-sm text-slate-500 font-semibold uppercase tracking-wider">Giải thưởng</div>
             </div>
           </div>
@@ -143,12 +152,49 @@ export function HomePage() {
               <div className="relative bg-white border border-slate-200 rounded-3xl p-8 shadow-xl">
                 {/* Mock UI Dashboard */}
                 <div className="space-y-4">
-                  <div className="h-8 w-1/3 bg-slate-100 rounded-md"></div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="h-24 bg-slate-50 rounded-xl border border-slate-100"></div>
-                    <div className="h-24 bg-slate-50 rounded-xl border border-slate-100"></div>
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                    <div className="font-semibold text-slate-800">Bảng điều khiển</div>
+                    <div className="flex gap-2">
+                      <div className="h-2 w-2 rounded-full bg-green-400"></div>
+                      <div className="h-2 w-2 rounded-full bg-yellow-400"></div>
+                      <div className="h-2 w-2 rounded-full bg-red-400"></div>
+                    </div>
                   </div>
-                  <div className="h-32 bg-slate-50 rounded-xl border border-slate-100"></div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="p-4 bg-blue-50/50 rounded-xl border border-blue-100/50 flex flex-col justify-center">
+                      <Users className="text-blue-500 mb-2" size={20} />
+                      <div className="text-2xl font-bold text-slate-800">{participantCount}</div>
+                      <div className="text-xs text-slate-500 font-medium">Người đăng ký</div>
+                    </div>
+                    <div className="p-4 bg-emerald-50/50 rounded-xl border border-emerald-100/50 flex flex-col justify-center">
+                      <CheckSquare className="text-emerald-500 mb-2" size={20} />
+                      <div className="text-2xl font-bold text-slate-800">{teamsCount > 0 ? teamsCount : 342}</div>
+                      <div className="text-xs text-slate-500 font-medium">Dự án đã nộp</div>
+                    </div>
+                  </div>
+                  <div className="p-4 bg-slate-50/50 rounded-xl border border-slate-100/50">
+                    <div className="text-sm font-semibold text-slate-700 mb-3">Lịch trình sắp tới</div>
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-blue-500 shadow-sm">
+                          <Video size={18} />
+                        </div>
+                        <div>
+                          <div className="text-sm font-semibold text-slate-800">Lễ khai mạc</div>
+                          <div className="text-xs text-slate-500">{latestEvent?.start_date ? new Date(latestEvent.start_date).toLocaleDateString('vi-VN') : 'Hôm nay, 19:00'}</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-purple-500 shadow-sm">
+                          <Code size={18} />
+                        </div>
+                        <div>
+                          <div className="text-sm font-semibold text-slate-800">Hạn chót nộp bài</div>
+                          <div className="text-xs text-slate-500">{latestEvent?.end_date ? new Date(latestEvent.end_date).toLocaleDateString('vi-VN') : 'Chủ nhật, 23:59'}</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -172,15 +218,59 @@ export function HomePage() {
             <div className="flex-1 w-full relative">
               <div className="absolute inset-0 bg-gradient-to-r from-purple-100 to-pink-100 rounded-3xl blur-3xl"></div>
               <div className="relative bg-white border border-slate-200 rounded-3xl p-2 overflow-hidden shadow-xl">
-                {/* Mock UI Custom Page */}
-                <div className="h-40 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-t-2xl relative">
-                  <div className="absolute -bottom-8 left-6 w-16 h-16 bg-white rounded-xl border-4 border-slate-50 shadow-sm"></div>
-                </div>
-                <div className="pt-12 p-6 space-y-3">
-                  <div className="h-6 w-1/2 bg-slate-100 rounded-md"></div>
-                  <div className="h-4 w-full bg-slate-50 rounded-md"></div>
-                  <div className="h-4 w-3/4 bg-slate-50 rounded-md"></div>
-                  <div className="h-10 w-1/3 bg-[#10B981] rounded-lg mt-4 opacity-90"></div>
+                {/* Mock UI Custom Page - Event Card Layout */}
+                <div className="flex flex-col h-full bg-white rounded-[24px] overflow-hidden shadow-sm border border-gray-100 relative">
+                  {/* Cover Image Section */}
+                  <div className="relative h-[200px] w-full bg-gray-100">
+                    <img 
+                      src={latestEvent?.image || "https://images.unsplash.com/photo-1504384308090-c894fdcc538d?w=800&auto=format&fit=crop&q=60"}
+                      alt={latestEvent?.name || "Hackathon"}
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute top-4 left-4 px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm bg-[#5027d9]/10 text-[#5027d9]">
+                      Đang diễn ra
+                    </div>
+                  </div>
+
+                  {/* Body Section */}
+                  <div className="relative p-6 flex flex-col flex-1 pt-12">
+                    <div className="absolute -top-10 left-6">
+                      <div className="w-20 h-20 rounded-full border-[5px] border-white overflow-hidden bg-white shadow-sm flex items-center justify-center">
+                        {latestEvent?.logo_url ? (
+                          <img src={latestEvent.logo_url} alt="Logo" className="w-full h-full object-cover" />
+                        ) : (
+                          <Rocket className="text-[#5027d9]" size={32} />
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="absolute top-4 right-6 flex items-center gap-4 text-gray-500 text-sm font-medium">
+                      <div className="flex items-center gap-1.5 text-[#5027d9]">
+                        <Users size={16} /> {participantCount}
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <Lightbulb size={16} /> {teamsCount}
+                      </div>
+                    </div>
+
+                    <div className="flex justify-between items-start gap-2 mb-3">
+                      <h3 className="text-[22px] leading-tight font-bold text-gray-900 line-clamp-2 pr-2">
+                        {latestEvent?.name || 'AI Innovation Hackathon 2024'}
+                      </h3>
+                      <button className="shrink-0 bg-blue-100 text-blue-700 px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1 shadow-sm">
+                        Đăng ký
+                      </button>
+                    </div>
+                    <p className="text-gray-500 text-sm mb-6 line-clamp-2 leading-relaxed">
+                      {latestEvent?.description || 'Tham gia thử thách xây dựng các giải pháp AI đột phá. Tổng giải thưởng lên đến $50,000.'}
+                    </p>
+
+                    <div className="flex flex-wrap gap-2">
+                      <span className="text-xs font-semibold text-[#5027d9] bg-[#5027d9]/10 px-2.5 py-1 rounded-md flex items-center gap-1">
+                        <Hexagon size={12}/> {latestEvent?.category || 'AI & Machine Learning'}
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -264,43 +354,6 @@ export function HomePage() {
               <p className="text-slate-600 leading-relaxed">
                 Đảm bảo an ninh là ưu tiên hàng đầu. Ứng dụng web đã được kiểm tra và phê duyệt nghiêm ngặt với độ an toàn cao nhất.
               </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Leaderboard Preview Section */}
-      <div className="py-24 bg-slate-50">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h2 className="text-4xl font-black text-slate-900 tracking-tight mb-4">Bảng xếp hạng</h2>
-            <p className="text-slate-600 text-lg">Theo dõi trực tiếp kết quả bỏ phiếu của các đội thi</p>
-          </div>
-          
-          <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm">
-            <div className="divide-y divide-slate-100">
-              {[
-                { rank: 1, name: 'SmartWhat?!', team: 'Đội #1', votes: '230.200' },
-                { rank: 2, name: 'Khoảnh khắc', team: 'Đội #2', votes: '200.800' },
-                { rank: 3, name: 'Lưu trữ trang web', team: 'Đội #3', votes: '192.300' },
-                { rank: 4, name: 'Methuselah', team: 'Đội số 4', votes: '189.100' },
-              ].map((item) => (
-                <div key={item.rank} className="flex items-center justify-between p-6 hover:bg-slate-50 transition-colors">
-                  <div className="flex items-center gap-6">
-                    <span className={`text-2xl font-black ${item.rank === 1 ? 'text-amber-500' : item.rank === 2 ? 'text-slate-400' : item.rank === 3 ? 'text-amber-700' : 'text-slate-300'}`}>
-                      #{item.rank}
-                    </span>
-                    <div>
-                      <h4 className="text-lg font-bold text-slate-900">{item.name}</h4>
-                      <p className="text-slate-500 text-sm">{item.team}</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-[#10B981] font-bold text-lg">{item.votes}</div>
-                    <div className="text-slate-400 text-xs uppercase tracking-wider">phiếu bầu</div>
-                  </div>
-                </div>
-              ))}
             </div>
           </div>
         </div>

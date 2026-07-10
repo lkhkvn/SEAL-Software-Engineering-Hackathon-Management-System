@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Filter, Users, Lightbulb, Hexagon } from 'lucide-react';
+import { Search, Filter, Users, Lightbulb, Hexagon, UploadCloud } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Skeleton } from './ui/skeleton';
 import { motion } from 'motion/react';
@@ -10,6 +10,7 @@ export function EventsPage() {
   const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [approvedContestIds, setApprovedContestIds] = useState<number[]>([]);
 
   useEffect(() => {
     const fetchEvents = async () => {
@@ -35,20 +36,9 @@ export function EventsPage() {
                 else computedStatus = 'ACTIVE';
             }
 
-            // Tính tổng tiền thưởng từ prize_details
-            let computedPrize = item.prize || '15.000 $';
-            const details = item.prize_details || item.prizeDetails;
-            if (details) {
-                const cleanStr = details.replace(/[,\.]/g, '');
-                const numbers = cleanStr.match(/\d+/g);
-                if (numbers) {
-                    let sum = 0;
-                    numbers.forEach((n: string) => sum += parseInt(n, 10));
-                    if (sum > 0) {
-                        computedPrize = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(sum);
-                    }
-                }
-            }
+            // Lấy dữ liệu thật từ admin
+            let computedPrize = item.prize_details || item.prizeDetails || item.prize || 'Chưa cập nhật';
+            // Bỏ đi logic tự cộng dồn để hiển thị chính xác những gì Admin nhập
 
             return {
               id: item.id,
@@ -75,8 +65,25 @@ export function EventsPage() {
         setLoading(false);
       }
     };
+
+    const fetchApprovedContests = async () => {
+      try {
+        const token = localStorage.getItem('auth_token');
+        if (!token) return;
+        const res = await fetch('http://localhost:8000/index.php/api/teams/my-team/contests', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const result = await res.json();
+        if (result.status === 'success' && result.data) {
+          setApprovedContestIds(result.data.map((c: any) => c.id));
+        }
+      } catch (err) {
+        console.error('Lỗi khi tải danh sách sự kiện đã duyệt:', err);
+      }
+    };
     
     fetchEvents();
+    fetchApprovedContests();
   }, []);
 
   const filteredEvents = events.filter((event) => {
@@ -253,25 +260,38 @@ export function EventsPage() {
                       </div>
                     </div>
 
-                    {/* Title & Description */}
-                    <h3 className="text-[22px] leading-tight font-bold text-gray-900 mb-3 group-hover:text-[#5027d9] transition-colors line-clamp-2">
-                      {event.name}
-                    </h3>
+                    {/* Title & Description & Submit Button */}
+                    <div className="flex justify-between items-start gap-2 mb-3">
+                      <h3 className="text-[22px] leading-tight font-bold text-gray-900 group-hover:text-[#5027d9] transition-colors line-clamp-2">
+                        {event.name}
+                      </h3>
+                      {approvedContestIds.includes(event.id) && (
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            window.location.href = '/submit';
+                          }}
+                          className="shrink-0 bg-blue-100 hover:bg-blue-600 text-blue-700 hover:text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 shadow-sm"
+                          title="Nộp dự án cho sự kiện này"
+                        >
+                          <UploadCloud size={14} /> Nộp bài
+                        </button>
+                      )}
+                    </div>
                     <p className="text-gray-500 text-sm mb-6 line-clamp-2 leading-relaxed">
                       {event.description}
                     </p>
 
                     {/* Tags */}
                     <div className="flex flex-wrap gap-2 mb-6">
-                      <span className="text-xs font-semibold text-[#5027d9] bg-[#5027d9]/10 px-2.5 py-1 rounded-md flex items-center gap-1">
-                        <Hexagon size={12}/> Chuỗi khối
-                      </span>
-                      <span className="text-xs font-semibold text-[#5027d9] bg-[#5027d9]/10 px-2.5 py-1 rounded-md flex items-center gap-1">
-                        <Hexagon size={12}/> Công nghệ
-                      </span>
-                      {event.category && event.category !== 'Công nghệ' && (
-                        <span className="text-xs font-semibold text-[#5027d9] bg-[#5027d9]/10 px-2.5 py-1 rounded-md flex items-center gap-1">
-                          <Hexagon size={12}/> {event.category}
+                      {event.category ? event.category.split(',').map((tag: string, i: number) => (
+                        <span key={i} className="text-xs font-semibold text-[#5027d9] bg-[#5027d9]/10 px-2.5 py-1 rounded-md flex items-center gap-1">
+                          <Hexagon size={12}/> {tag.trim()}
+                        </span>
+                      )) : (
+                        <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-2.5 py-1 rounded-md flex items-center gap-1">
+                          <Hexagon size={12}/> Khác
                         </span>
                       )}
                     </div>
@@ -283,8 +303,8 @@ export function EventsPage() {
                       <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
                         Phần thưởng
                       </span>
-                      <span className="text-lg font-black text-gray-900">
-                        {event.prize || '15.000 $'}
+                      <span className="text-sm font-black text-gray-900 line-clamp-1 max-w-[150px]" title={event.prize}>
+                        {event.prize}
                       </span>
                     </div>
 

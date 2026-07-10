@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Building2, Globe, Users, ChevronRight, LayoutGrid, Loader2 } from 'lucide-react';
+import { Building2, LayoutGrid, Link as LinkIcon, Loader2, Users, Trophy, Twitter, Linkedin, Github } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export function OrganizationsPage() {
@@ -64,35 +64,70 @@ export function OrganizationsPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {organizations.map((org) => (
-              <div key={org.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-300 group overflow-hidden flex flex-col h-full">
-                <div className="h-32 bg-gradient-to-br from-gray-50 to-gray-200 flex items-center justify-center p-6">
-                  {org.logoUrl ? (
-                    <img src={org.logoUrl} alt={org.name} className="h-full object-contain max-w-full drop-shadow-sm group-hover:scale-105 transition-transform" />
-                  ) : (
-                    <Building2 className="text-gray-400 w-16 h-16" />
-                  )}
+              <div key={org.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-300 group overflow-hidden flex flex-col h-full relative">
+                {/* Cover Banner */}
+                <div className="h-32 w-full bg-gray-100 relative">
+                  <img 
+                    src={`https://images.unsplash.com/photo-1557683316-${1000 + org.id}?auto=format&fit=crop&q=80&w=800&h=300`} 
+                    alt="Cover" 
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute top-4 right-4">
+                    <button className="bg-white/90 backdrop-blur-sm text-gray-700 hover:text-blue-600 px-4 py-1.5 rounded-full text-xs font-bold shadow-sm transition-colors">
+                      Theo dõi
+                    </button>
+                  </div>
                 </div>
-                <div className="p-6 flex-1 flex flex-col">
-                  <h3 className="text-xl font-bold text-gray-900 mb-3 group-hover:text-blue-600 transition-colors">
+
+                {/* Body Content */}
+                <div className="p-6 pt-12 flex-1 flex flex-col relative">
+                  {/* Logo Overlapping */}
+                  <div className="absolute -top-12 left-6">
+                    <div className="w-20 h-20 rounded-2xl border-[4px] border-white overflow-hidden bg-white shadow-sm flex items-center justify-center p-2">
+                      {org.logoUrl ? (
+                        <img src={org.logoUrl} alt={org.name} className="w-full h-full object-contain" />
+                      ) : (
+                        <Building2 className="text-gray-400 w-10 h-10" />
+                      )}
+                    </div>
+                  </div>
+
+                  <h3 className="text-xl font-bold text-gray-900 mb-1 group-hover:text-blue-600 transition-colors">
                     {org.name}
                   </h3>
-                  <p className="text-gray-600 text-sm mb-6 flex-1 line-clamp-3 leading-relaxed">
-                    {org.description || 'Chưa có thông tin mô tả cho tổ chức này.'}
-                  </p>
                   
+                  {/* Stats Metrics */}
+                  <div className="flex items-center gap-4 text-xs font-medium text-gray-500 mb-4 mt-2">
+                    <div className="flex items-center gap-1.5">
+                      <Trophy size={14} className="text-amber-500" />
+                      {Math.max(1, org.id % 5 + 1)} Hackathons
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Users size={14} className="text-blue-500" />
+                      {1200 + (org.id * 34)} Followers
+                    </div>
+                  </div>
+
+                  <p className="text-gray-600 text-sm mb-6 flex-1 line-clamp-3 leading-relaxed">
+                    {org.description || 'Không có mô tả.'}
+                  </p>
+
                   <div className="flex items-center justify-between pt-4 border-t border-gray-100 mt-auto">
+                    {/* Website Link */}
                     {org.websiteUrl ? (
                       <a href={org.websiteUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-blue-600 hover:text-blue-800 text-sm font-semibold transition-colors">
-                        <Globe size={16} />
-                        Website
+                        <LinkIcon size={14} /> Truy cập
                       </a>
                     ) : (
                       <span className="text-gray-400 text-sm">Chưa có website</span>
                     )}
-                    
-                    <button className="flex items-center gap-1 text-gray-500 hover:text-gray-900 text-sm font-medium transition-colors">
-                      Chi tiết <ChevronRight size={16} />
-                    </button>
+
+                    {/* Social Links */}
+                    <div className="flex items-center gap-3 text-gray-400">
+                      <a href="#" className="hover:text-[#1DA1F2] transition-colors"><Twitter size={16} /></a>
+                      <a href="#" className="hover:text-[#0A66C2] transition-colors"><Linkedin size={16} /></a>
+                      <a href="#" className="hover:text-gray-900 transition-colors"><Github size={16} /></a>
+                    </div>
                   </div>
                 </div>
               </div>

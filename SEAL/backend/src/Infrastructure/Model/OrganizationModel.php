@@ -23,6 +23,9 @@ class OrganizationModel {
     #[ORM\Column(name: 'website_url', type: 'string', length: 255, nullable: true)]
     public ?string $websiteUrl = null;
 
+    #[ORM\Column(name: 'cover_url', type: 'string', length: 255, nullable: true)]
+    public ?string $coverUrl = null;
+
     #[ORM\Column(name: 'created_at', type: 'datetime', options: ['default' => 'CURRENT_TIMESTAMP'])]
     public \DateTime $createdAt;
 

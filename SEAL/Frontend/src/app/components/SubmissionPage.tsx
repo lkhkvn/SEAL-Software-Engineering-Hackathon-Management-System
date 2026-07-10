@@ -203,6 +203,12 @@ export function SubmissionPage() {
             <h2 className="text-xl font-bold mb-2">Không đủ quyền truy cập</h2>
             <p>Chỉ <strong>Đội trưởng</strong> mới có quyền nộp hoặc cập nhật dự án cho đội thi.</p>
           </div>
+        ) : hackathons.length === 0 ? (
+          <div className="bg-orange-50 text-orange-700 p-6 rounded-xl border border-orange-200 text-center flex flex-col items-center">
+            <AlertCircle size={48} className="mb-4 text-orange-500" />
+            <h2 className="text-xl font-bold mb-2">Chưa được duyệt tham gia</h2>
+            <p>Đội của bạn chưa được Admin duyệt tham gia bất kỳ cuộc thi nào, hoặc cuộc thi đã kết thúc. Vui lòng chờ Admin duyệt để có thể nộp dự án.</p>
+          </div>
         ) : (
           <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
             <div className="p-6 md:p-8 space-y-6">

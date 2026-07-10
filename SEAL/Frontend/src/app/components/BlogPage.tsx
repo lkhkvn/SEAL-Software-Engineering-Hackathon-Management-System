@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { BookOpen, User, Calendar, Tag, ChevronRight, Loader2, Search } from 'lucide-react';
+import { BookOpen, User, Calendar, Tag, ChevronRight, Loader2, Search, Clock, Eye } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export function BlogPage() {
@@ -114,8 +114,12 @@ export function BlogPage() {
                 <div className="flex flex-col flex-1">
                   <div className="flex items-center gap-4 text-xs font-medium text-gray-500 mb-3">
                     <div className="flex items-center gap-1.5">
-                      <User size={14} />
-                      {blog.author}
+                      <img 
+                        src={`https://ui-avatars.com/api/?name=${encodeURIComponent(blog.author)}&background=random`} 
+                        alt={blog.author} 
+                        className="w-5 h-5 rounded-full object-cover"
+                      />
+                      <span className="text-gray-700 font-semibold">{blog.author}</span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <Calendar size={14} />
@@ -131,8 +135,20 @@ export function BlogPage() {
                     {blog.summary}
                   </p>
                   
-                  <div className="mt-auto flex items-center text-blue-600 font-semibold text-sm group-hover:text-blue-800 transition-colors">
-                    Đọc tiếp <ChevronRight size={16} className="ml-1 group-hover:translate-x-1 transition-transform" />
+                  <div className="mt-auto flex items-center justify-between">
+                    <div className="flex items-center gap-3 text-xs text-gray-400 font-medium">
+                      <span className="flex items-center gap-1">
+                        <Clock size={14} />
+                        {Math.max(2, Math.floor(blog.summary.length / 50))} min read
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Eye size={14} />
+                        {150 + (blog.id * 13)}
+                      </span>
+                    </div>
+                    <div className="flex items-center text-blue-600 font-semibold text-sm group-hover:text-blue-800 transition-colors">
+                      Đọc tiếp <ChevronRight size={16} className="ml-1 group-hover:translate-x-1 transition-transform" />
+                    </div>
                   </div>
                 </div>
               </article>

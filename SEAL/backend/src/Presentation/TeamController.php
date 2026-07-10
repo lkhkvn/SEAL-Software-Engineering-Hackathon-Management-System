@@ -6,6 +6,7 @@ use App\Services\AuthService;
 use App\DTO\JoinTeamRequestDTO;
 use App\Domain\Entity\User;
 use Doctrine\ORM\EntityManagerInterface;
+use Pusher\Pusher;
 use Exception;
 
 class TeamController {
@@ -227,6 +228,76 @@ class TeamController {
                 http_response_code(400);
             }
             echo json_encode(["status" => "error", "message" => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        }
+    }
+
+    public function uploadTeamImages(): void {
+        try {
+            $currentUser = $this->requireCurrentUser();
+            if (!$currentUser->teamId) {
+                http_response_code(403);
+                echo json_encode(["status" => "error", "message" => "Bạn chưa tham gia đội nào."], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            
+            $conn = $this->em->getConnection();
+            $team = $conn->executeQuery("SELECT leader_id FROM teams WHERE id = ?", [$currentUser->teamId])->fetchAssociative();
+            if (!$team || (int)$team['leader_id'] !== $currentUser->id) {
+                http_response_code(403);
+                echo json_encode(["status" => "error", "message" => "Chỉ đội trưởng mới có quyền thay đổi ảnh!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            // Ensure columns exist safely
+            try { $conn->executeStatement("ALTER TABLE teams ADD COLUMN avatar_url VARCHAR(255) DEFAULT NULL"); } catch (\Exception $e) {}
+            try { $conn->executeStatement("ALTER TABLE teams ADD COLUMN background_url VARCHAR(255) DEFAULT NULL"); } catch (\Exception $e) {}
+
+            $avatarDir = __DIR__ . '/../../storage/uploads/teams/';
+            if (!is_dir($avatarDir)) @mkdir($avatarDir, 0755, true);
+
+            $updates = [];
+            $params = ['id' => $currentUser->teamId];
+
+            if (isset($_FILES['avatar']) && $_FILES['avatar']['error'] === UPLOAD_ERR_OK) {
+                $ext = strtolower(pathinfo($_FILES['avatar']['name'], PATHINFO_EXTENSION));
+                $filename = 'team_avatar_' . $currentUser->teamId . '_' . time() . '.' . $ext;
+                if (move_uploaded_file($_FILES['avatar']['tmp_name'], $avatarDir . $filename)) {
+                    $updates[] = "avatar_url = :avatarUrl";
+                    $params['avatarUrl'] = '/api/teams/images/' . $filename;
+                }
+            }
+            if (isset($_FILES['background']) && $_FILES['background']['error'] === UPLOAD_ERR_OK) {
+                $ext = strtolower(pathinfo($_FILES['background']['name'], PATHINFO_EXTENSION));
+                $filename = 'team_bg_' . $currentUser->teamId . '_' . time() . '.' . $ext;
+                if (move_uploaded_file($_FILES['background']['tmp_name'], $avatarDir . $filename)) {
+                    $updates[] = "background_url = :bgUrl";
+                    $params['bgUrl'] = '/api/teams/images/' . $filename;
+                }
+            }
+
+            if (!empty($updates)) {
+                $sql = "UPDATE teams SET " . implode(", ", $updates) . " WHERE id = :id";
+                $conn->executeStatement($sql, $params);
+                echo json_encode(["status" => "success", "message" => "Đã cập nhật ảnh thành công."], JSON_UNESCAPED_UNICODE);
+            } else {
+                http_response_code(400);
+                echo json_encode(["status" => "error", "message" => "Không có file nào được tải lên."], JSON_UNESCAPED_UNICODE);
+            }
+        } catch (\Exception $e) {
+            http_response_code(400);
+            echo json_encode(["status" => "error", "message" => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        }
+    }
+
+    public function serveTeamImage(string $filename): void {
+        $filePath = __DIR__ . '/../../storage/uploads/teams/' . $filename;
+        if (file_exists($filePath)) {
+            $mime = mime_content_type($filePath);
+            header("Content-Type: $mime");
+            readfile($filePath);
+        } else {
+            http_response_code(404);
+            echo "Not found";
         }
     }
 
@@ -1180,7 +1251,7 @@ class TeamController {
                 SELECT c.id, c.name, c.start_date, c.end_date, cr.registered_at 
                 FROM contests c
                 INNER JOIN contest_registrations cr ON cr.contest_id = c.id
-                WHERE cr.team_id = :teamId
+                WHERE cr.team_id = :teamId AND cr.status = 'APPROVED'
             ", ['teamId' => $currentUser->teamId])->fetchAllAssociative();
 
             http_response_code(200);
@@ -1290,6 +1361,106 @@ class TeamController {
         } else {
             http_response_code(404);
             echo "File not found";
+        }
+    }
+    public function getMessages(int $teamId): void {
+        try {
+            $currentUser = $this->requireCurrentUser();
+            if ($currentUser->role !== 'ADMIN' && $currentUser->teamId !== $teamId) {
+                http_response_code(403);
+                echo json_encode(["status" => "error", "message" => "Bạn không có quyền truy cập đoạn chat của đội này!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            $conn = $this->em->getConnection();
+            $messages = $conn->executeQuery("
+                SELECT c.id, c.message, c.created_at, u.id as user_id, u.name as user_name, u.avatar_url
+                FROM chat_messages c
+                JOIN users u ON c.user_id = u.id
+                WHERE c.team_id = :teamId
+                ORDER BY c.created_at ASC
+            ", ['teamId' => $teamId])->fetchAllAssociative();
+
+            echo json_encode([
+                "status" => "success",
+                "data" => $messages
+            ], JSON_UNESCAPED_UNICODE);
+        } catch (\Throwable $e) {
+            http_response_code(401);
+            echo json_encode(["status" => "error", "message" => $e->getMessage(), "trace" => $e->getTraceAsString()], JSON_UNESCAPED_UNICODE);
+        }
+    }
+
+    public function postMessage(int $teamId): void {
+        try {
+            $currentUser = $this->requireCurrentUser();
+            if ($currentUser->role !== 'ADMIN' && $currentUser->teamId !== $teamId) {
+                http_response_code(403);
+                echo json_encode(["status" => "error", "message" => "Bạn không có quyền gửi tin nhắn vào đội này!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            $input = json_decode(file_get_contents('php://input'), true);
+            $message = trim($input['message'] ?? '');
+
+            if (empty($message)) {
+                http_response_code(400);
+                echo json_encode(["status" => "error", "message" => "Tin nhắn không được để trống!"], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+
+            $conn = $this->em->getConnection();
+            $createdAt = date('Y-m-d H:i:s');
+            
+            $conn->executeStatement("
+                INSERT INTO chat_messages (team_id, user_id, message, created_at)
+                VALUES (:teamId, :userId, :message, :createdAt)
+            ", [
+                'teamId' => $teamId,
+                'userId' => $currentUser->id,
+                'message' => $message,
+                'createdAt' => $createdAt
+            ]);
+
+            $messageId = $conn->lastInsertId();
+
+            // Lấy thông tin user để broadcast
+            $user = $conn->executeQuery("SELECT name, avatar_url FROM users WHERE id = :id", ['id' => $currentUser->id])->fetchAssociative();
+
+            $messageData = [
+                'id' => $messageId,
+                'message' => $message,
+                'created_at' => $createdAt,
+                'user_id' => $currentUser->id,
+                'user_name' => $user['name'] ?? 'Unknown',
+                'avatar_url' => $user['avatar_url'] ?? null
+            ];
+
+            // Gửi qua Pusher
+            try {
+                $pusher = new Pusher(
+                    'b0a454556dfbf62363e1',
+                    'dd49d0342ab3c8cc7844',
+                    '1825553',
+                    [
+                        'cluster' => 'ap1',
+                        'useTLS' => true
+                    ]
+                );
+                $pusher->trigger("team-chat-" . $teamId, 'new-message', $messageData);
+            } catch (Exception $e) {
+                error_log('[Pusher Error in TeamChat] ' . $e->getMessage());
+            }
+
+            echo json_encode([
+                "status" => "success",
+                "message" => "Gửi tin nhắn thành công",
+                "data" => $messageData
+            ], JSON_UNESCAPED_UNICODE);
+
+        } catch (\Throwable $e) {
+            http_response_code(401);
+            echo json_encode(["status" => "error", "message" => $e->getMessage(), "trace" => $e->getTraceAsString()], JSON_UNESCAPED_UNICODE);
         }
     }
 }

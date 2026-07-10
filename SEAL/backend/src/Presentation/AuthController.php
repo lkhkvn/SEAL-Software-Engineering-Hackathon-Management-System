@@ -34,16 +34,17 @@ class AuthController {
         $dto = new LoginRequestDTO($inputData);
         $result = $this->authService->login($dto);
 
-        if (strtoupper($result['user']['role'] ?? '') === 'ADMIN') {
-            $this->activityLogService->logActivity(
-                (int)$result['user']['id'],
-                'LOGIN',
-                'users',
-                (int)$result['user']['id'],
-                "Admin " . $result['user']['username'] . " đăng nhập vào hệ thống",
-                $_SERVER['REMOTE_ADDR'] ?? null
-            );
-        }
+        $roleName = strtoupper($result['user']['role'] ?? '');
+        $displayRole = $roleName === 'ADMIN' ? 'Admin ' : 'Người dùng ';
+
+        $this->activityLogService->logActivity(
+            (int)$result['user']['id'],
+            'LOGIN',
+            'users',
+            (int)$result['user']['id'],
+            $displayRole . $result['user']['username'] . " đăng nhập vào hệ thống",
+            $_SERVER['REMOTE_ADDR'] ?? null
+        );
 
         http_response_code(200);
         echo json_encode([
@@ -59,16 +60,15 @@ class AuthController {
         if (preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
             try {
                 $user = $this->authService->verifyToken($matches[1]);
-                if ($user->isAdmin()) {
-                    $this->activityLogService->logActivity(
-                        $user->id,
-                        'LOGOUT',
-                        'users',
-                        $user->id,
-                        "Admin " . $user->username . " đăng xuất khỏi hệ thống",
-                        $_SERVER['REMOTE_ADDR'] ?? null
-                    );
-                }
+                $displayRole = $user->isAdmin() ? 'Admin ' : 'Người dùng ';
+                $this->activityLogService->logActivity(
+                    $user->id,
+                    'LOGOUT',
+                    'users',
+                    $user->id,
+                    $displayRole . $user->username . " đăng xuất khỏi hệ thống",
+                    $_SERVER['REMOTE_ADDR'] ?? null
+                );
             } catch (\Exception $e) {
                 // Ignore expired or invalid token errors on logout
             }

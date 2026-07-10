@@ -1,10 +1,1 @@
-<?php
-require_once __DIR__ . '/../vendor/autoload.php';
-$em = require __DIR__ . '/../cli-config.php';
-$conn = $em->getConnection();
-try {
-    $result = $conn->executeQuery("DESCRIBE contests")->fetchAllAssociative();
-    echo json_encode($result);
-} catch (\Exception $e) {
-    echo json_encode(["error" => $e->getMessage()]);
-}
+<?php require_once __DIR__ . '/../vendor/autoload.php'; $em = require __DIR__ . '/../cli-config.php'; $conn = $em->getConnection(); var_dump($conn->executeQuery('SELECT id, role, email FROM users')->fetchAllAssociative()); var_dump($conn->executeQuery('SELECT * FROM admin_activity_logs')->fetchAllAssociative());

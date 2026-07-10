@@ -97,6 +97,7 @@ class LeaderboardService {
 
         $teamsQuery = "
             SELECT t.id, t.team_name as name, t.category, t.status, t.join_code as joinCode, t.max_members as maxMembers,
+                   t.avatar_url as avatarUrl, t.background_url as backgroundUrl,
                    u.name as leaderName,
                    (SELECT COUNT(*) FROM users m WHERE m.team_id = t.id) as members,
                    (
@@ -150,6 +151,8 @@ class LeaderboardService {
                 "status"     => $team['status'],
                 "joinCode"   => $team['joinCode'],
                 "leaderName" => $team['leaderName'],
+                "avatarUrl"  => $team['avatarUrl'] ?? null,
+                "backgroundUrl" => $team['backgroundUrl'] ?? null,
                 "score"      => (float)number_format((float)$totalScore, 1),
                 "tech"       => $techList,
                 "project"    => $team['projectName'] ? [

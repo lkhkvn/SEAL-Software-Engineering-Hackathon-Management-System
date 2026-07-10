@@ -41,11 +41,12 @@ use App\Presentation\MilestoneController;
 use App\Presentation\ScheduleController;
 use App\Presentation\UserController;
 use App\Presentation\ChallengeController;
+use App\Presentation\NotificationController;
+use App\Presentation\ScoreController;
+use App\Presentation\AiController;
 use App\Services\NotificationService;
 use App\Services\FileUploadService;
-use App\Presentation\NotificationController;
 use App\Services\ScoreService;
-use App\Presentation\ScoreController;
 use App\Infrastructure\Persistence\DoctrineMentorTicketRepository;
 use App\Services\MentorTicketService;
 use App\Presentation\MentorController;
@@ -107,6 +108,8 @@ try {
     $contentService        = new ContentService($entityManager);
     $contentController     = new ContentController($contentService);
 
+    $aiController          = new AiController($authService);
+
     // ============================================================================
     // ROUTER
     // ============================================================================
@@ -128,6 +131,9 @@ try {
     // ------------------------------------------------------------------
     // USER ROUTES
     // ------------------------------------------------------------------
+    if ($path === '/api/ai/chat' && $method === 'POST') {
+        $aiController->chat(); exit(0);
+    }
     if ($path === '/api/users/me/team' && $method === 'GET') {
         $userController->getMyTeam(); exit(0);
     }
@@ -152,12 +158,37 @@ try {
     if (preg_match('#^/api/teams/logo/([^/]+)$#', $path, $m) && $method === 'GET') {
         $teamController->serveTeamLogo($m[1]); exit(0);
     }
+    if (preg_match('#^/api/teams/images/([^/]+)$#', $path, $m) && $method === 'GET') {
+        $teamController->serveTeamImage($m[1]); exit(0);
+    }
 
     if ($path === '/api/auth/create-account' && $method === 'POST') {
         $authController->createAccount(); exit(0);
     }
     
     // ------------------------------------------------------------------
+    // TEMPORARY ROUTE TO UPDATE DB SCHEMA
+    if ($path === '/api/update-db' && $method === 'GET') {
+        try {
+            $conn = $entityManager->getConnection();
+            
+            try {
+                $conn->executeStatement("ALTER TABLE organizations ADD COLUMN cover_url VARCHAR(255) DEFAULT NULL;");
+                echo "Added cover_url to organizations.<br>";
+            } catch (Exception $e) { echo "orgs: " . $e->getMessage() . "<br>"; }
+            
+            try {
+                $conn->executeStatement("ALTER TABLE blog_posts ADD COLUMN author_avatar_url VARCHAR(255) DEFAULT NULL;");
+                echo "Added author_avatar_url to blog_posts.<br>";
+            } catch (Exception $e) { echo "blogs: " . $e->getMessage() . "<br>"; }
+            
+            echo "Done.";
+        } catch (Exception $e) {
+            echo "Error connecting to DB: " . $e->getMessage();
+        }
+        exit(0);
+    }
+    
     // CONTENT ROUTES
     // ------------------------------------------------------------------
     if ($path === '/api/organizations' && $method === 'GET') {
@@ -165,6 +196,12 @@ try {
     }
     if ($path === '/api/blogs' && $method === 'GET') {
         $contentController->getBlogs(); exit(0);
+    }
+    if ($path === '/api/admin/organizations' && $method === 'POST') {
+        $contentController->createOrganization(); exit(0);
+    }
+    if ($path === '/api/admin/blogs' && $method === 'POST') {
+        $contentController->createBlog(); exit(0);
     }
 
     // ------------------------------------------------------------------
@@ -186,6 +223,17 @@ try {
     if ($path === '/api/leaderboard' && $method === 'GET') {
         $leaderboardController->getLeaderboard(); exit(0);
     }
+
+    if (preg_match('#^/api/teams/(\d+)/messages$#', $path, $matches)) {
+        if ($method === 'GET') {
+            $teamController->getMessages((int)$matches[1]);
+            exit;
+        } elseif ($method === 'POST') {
+            $teamController->postMessage((int)$matches[1]);
+            exit;
+        }
+    }
+
     if ($path === '/api/teams' && $method === 'GET') {
         $leaderboardController->getTeamsList(); exit(0);
     }
@@ -195,6 +243,9 @@ try {
     // ------------------------------------------------------------------
     if ($path === '/api/teams' && $method === 'POST') {
         $teamController->createTeam(); exit(0);
+    }
+    if ($path === '/api/teams/my-team/images' && $method === 'POST') {
+        $teamController->uploadTeamImages(); exit(0);
     }
     if (preg_match('#^/api/teams/(\d+)$#', $path, $m) && $method === 'PUT') {
         $teamController->updateTeam((int)$m[1]); exit(0);
@@ -284,6 +335,15 @@ try {
     // ------------------------------------------------------------------
     // HACKATHON ADMIN ROUTES
     // ------------------------------------------------------------------
+    if ($path === '/api/admin/users' && $method === 'GET') {
+        $adminUserController->getAllUsers(); exit(0);
+    }
+    if ($path === '/api/admin/users/role' && $method === 'POST') {
+        $adminUserController->updateRole(); exit(0);
+    }
+    if ($path === '/api/admin/activity-logs' && $method === 'GET') {
+        $adminUserController->getActivityLogs(); exit(0);
+    }
     if ($path === '/api/admin/hackathons/upload-image' && $method === 'POST') {
         $hackathonController->uploadImage(); exit(0);
     }
