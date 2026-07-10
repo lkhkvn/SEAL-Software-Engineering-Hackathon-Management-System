@@ -38,46 +38,57 @@ class HackathonService {
     public function registerTeamToHackathon(int $contestId, int $teamId, int $currentUserId): void {
         $conn = $this->em->getConnection();
 
-        // Kiểm tra user có phải trưởng nhóm không
-        $team = $conn->executeQuery("SELECT leader_id FROM teams WHERE id = ?", [$teamId])->fetchAssociative();
-        if (!$team) {
-            throw new Exception("Đội thi không tồn tại!");
-        }
-        if ($team['leader_id'] !== $currentUserId) {
-            throw new Exception("Chỉ đội trưởng mới có quyền đăng ký thi đấu!");
-        }
-
-        // Kiểm tra cuộc thi
-        $contest = $conn->executeQuery("
-            SELECT max_teams, registration_deadline,
-            (SELECT COUNT(*) FROM contest_registrations WHERE contest_id = contests.id) as registered_count 
-            FROM contests WHERE id = ?
-        ", [$contestId])->fetchAssociative();
-
-        if (!$contest) {
-            throw new Exception("Cuộc thi không tồn tại!");
-        }
-
-        if ($contest['registered_count'] >= $contest['max_teams']) {
-            throw new Exception("Cuộc thi đã đủ số lượng đội đăng ký!");
-        }
-
-        // Kiểm tra thời gian đăng ký (realtime deadline check)
-        if (!empty($contest['registration_deadline'])) {
-            $deadline = new \DateTime($contest['registration_deadline']);
-            $deadline->setTime(23, 59, 59); // Hết ngày deadline
-            if (new \DateTime() > $deadline) {
-                throw new Exception("Đã hết hạn đăng ký cho cuộc thi này!");
+        $conn->beginTransaction();
+        try {
+            // Kiểm tra user có phải trưởng nhóm không
+            $team = $conn->executeQuery("SELECT leader_id FROM teams WHERE id = ?", [$teamId])->fetchAssociative();
+            if (!$team) {
+                throw new Exception("Đội thi không tồn tại!");
             }
-        }
+            if ($team['leader_id'] !== $currentUserId) {
+                throw new Exception("Chỉ đội trưởng mới có quyền đăng ký thi đấu!");
+            }
 
-        // Kiểm tra đã đăng ký chưa
-        $exists = $conn->executeQuery("SELECT 1 FROM contest_registrations WHERE contest_id = ? AND team_id = ?", [$contestId, $teamId])->fetchOne();
-        if ($exists) {
-            throw new Exception("Đội của bạn đã đăng ký tham gia cuộc thi này rồi!");
-        }
+            // Kiểm tra cuộc thi và KHÓA dòng cuộc thi để tránh tranh chấp đăng ký (Race Condition)
+            $contest = $conn->executeQuery("
+                SELECT max_teams, registration_deadline
+                FROM contests WHERE id = ? FOR UPDATE
+            ", [$contestId])->fetchAssociative();
 
-        $conn->executeStatement("INSERT INTO contest_registrations (contest_id, team_id) VALUES (?, ?)", [$contestId, $teamId]);
+            if (!$contest) {
+                throw new Exception("Cuộc thi không tồn tại!");
+            }
+
+            // Đếm số lượng đội đã đăng ký
+            $registeredCount = (int)$conn->executeQuery("
+                SELECT COUNT(*) FROM contest_registrations WHERE contest_id = ?
+            ", [$contestId])->fetchOne();
+
+            if ($registeredCount >= $contest['max_teams']) {
+                throw new Exception("Cuộc thi đã đủ số lượng đội đăng ký!");
+            }
+
+            // Kiểm tra thời gian đăng ký (realtime deadline check)
+            if (!empty($contest['registration_deadline'])) {
+                $deadline = new \DateTime($contest['registration_deadline']);
+                $deadline->setTime(23, 59, 59); // Hết ngày deadline
+                if (new \DateTime() > $deadline) {
+                    throw new Exception("Đã hết hạn đăng ký cho cuộc thi này!");
+                }
+            }
+
+            // Kiểm tra đã đăng ký chưa
+            $exists = $conn->executeQuery("SELECT 1 FROM contest_registrations WHERE contest_id = ? AND team_id = ?", [$contestId, $teamId])->fetchOne();
+            if ($exists) {
+                throw new Exception("Đội của bạn đã đăng ký tham gia cuộc thi này rồi!");
+            }
+
+            $conn->executeStatement("INSERT INTO contest_registrations (contest_id, team_id) VALUES (?, ?)", [$contestId, $teamId]);
+            $conn->commit();
+        } catch (Exception $e) {
+            $conn->rollBack();
+            throw $e;
+        }
     }
 
     public function createHackathon(array $data): int {
@@ -197,7 +208,22 @@ class HackathonService {
         if (!$existing) {
             throw new Exception("Cuộc thi không tồn tại!");
         }
-        $conn->executeStatement("DELETE FROM contests WHERE id = :id", ['id' => $id]);
+        
+        $conn->beginTransaction();
+        try {
+            // Xóa toàn bộ các bản ghi con liên quan để tránh rác dữ liệu (Bug 2)
+            $conn->executeStatement("DELETE FROM milestones WHERE hackathon_id = :id", ['id' => $id]);
+            $conn->executeStatement("DELETE FROM schedules WHERE hackathon_id = :id", ['id' => $id]);
+            $conn->executeStatement("DELETE FROM submissions WHERE contest_id = :id", ['id' => $id]);
+            $conn->executeStatement("DELETE FROM contest_registrations WHERE contest_id = :id", ['id' => $id]);
+            $conn->executeStatement("DELETE FROM contest_problems WHERE contest_id = :id", ['id' => $id]);
+            $conn->executeStatement("DELETE FROM contests WHERE id = :id", ['id' => $id]);
+            $conn->commit();
+        } catch (Exception $e) {
+            $conn->rollBack();
+            throw $e;
+        }
+        
         return $existing['name'];
     }
 

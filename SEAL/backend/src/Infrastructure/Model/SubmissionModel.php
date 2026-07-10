@@ -19,6 +19,10 @@ class SubmissionModel
     #[ORM\JoinColumn(name: 'team_id', referencedColumnName: 'id', unique: true, onDelete: 'CASCADE')]
     public TeamModel $team;
 
+    #[ORM\ManyToOne(targetEntity: HackathonModel::class)]
+    #[ORM\JoinColumn(name: 'contest_id', referencedColumnName: 'id', onDelete: 'CASCADE')]
+    public ?HackathonModel $contest = null;
+
     #[ORM\Column(name: 'project_name', type: 'string', length: 150, nullable: true)]
     public ?string $projectName = null;
 

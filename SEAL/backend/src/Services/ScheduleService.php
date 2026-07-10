@@ -47,6 +47,9 @@ class ScheduleService {
             : new \DateTime();
         if (!empty($data['endTime'])) {
             $schedule->endTime = new \DateTime($data['endTime']);
+            if ($schedule->endTime < $schedule->startTime) {
+                throw new Exception("Thời gian kết thúc không thể trước thời gian bắt đầu!");
+            }
         }
 
         $this->em->persist($schedule);
@@ -62,13 +65,21 @@ class ScheduleService {
             throw new Exception("Lịch trình không tồn tại!");
         }
 
+        $startTime = isset($data['startTime']) ? new \DateTime($data['startTime']) : $schedule->startTime;
+        $endTime = $schedule->endTime;
+        if (isset($data['endTime'])) {
+            $endTime = !empty($data['endTime']) ? new \DateTime($data['endTime']) : null;
+        }
+
+        if ($endTime !== null && $endTime < $startTime) {
+            throw new Exception("Thời gian kết thúc không thể trước thời gian bắt đầu!");
+        }
+
         if (isset($data['title']))       $schedule->title       = $data['title'];
         if (isset($data['description'])) $schedule->description = $data['description'];
         if (isset($data['location']))    $schedule->location    = $data['location'];
-        if (isset($data['startTime']))   $schedule->startTime   = new \DateTime($data['startTime']);
-        if (isset($data['endTime'])) {
-            $schedule->endTime = !empty($data['endTime']) ? new \DateTime($data['endTime']) : null;
-        }
+        if (isset($data['startTime']))   $schedule->startTime   = $startTime;
+        if (isset($data['endTime']))     $schedule->endTime     = $endTime;
 
         $this->em->flush();
     }
