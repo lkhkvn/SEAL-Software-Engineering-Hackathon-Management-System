@@ -155,10 +155,95 @@ class NotificationService
     }
 
     /**
+     * Tự động kiểm tra và tạo thông báo nếu có Milestone sắp đến hạn (trong vòng 24h) (Đề xuất 2)
+     */
+    public function checkAndNotifyApproachingMilestones(int $userId): void
+    {
+        $conn = $this->em->getConnection();
+
+        // 1. Lấy team_id của user
+        $teamId = $conn->executeQuery("SELECT team_id FROM users WHERE id = :userId", ['userId' => $userId])->fetchOne();
+        if (!$teamId) {
+            return;
+        }
+
+        // 2. Lấy danh sách cuộc thi mà đội này đã đăng ký tham gia
+        $contests = $conn->executeQuery("
+            SELECT contest_id 
+            FROM contest_registrations 
+            WHERE team_id = :teamId AND status = 'APPROVED'
+        ", ['teamId' => $teamId])->fetchAllAssociative();
+
+        if (empty($contests)) {
+            return;
+        }
+
+        $contestIds = array_map(function($c) { return (int)$c['contest_id']; }, $contests);
+        $contestIdsStr = implode(',', $contestIds);
+
+        // 3. Tìm các milestone của những cuộc thi này sắp đến hạn trong vòng 24 giờ tiếp theo
+        $milestones = $conn->executeQuery("
+            SELECT m.id, m.name, m.due_date, m.hackathon_id, c.name AS contest_name
+            FROM milestones m
+            INNER JOIN contests c ON c.id = m.hackathon_id
+            WHERE m.hackathon_id IN ($contestIdsStr)
+              AND m.due_date IS NOT NULL
+              AND m.due_date > NOW()
+              AND m.due_date <= DATE_ADD(NOW(), INTERVAL 24 HOUR)
+        ")->fetchAllAssociative();
+
+        foreach ($milestones as $m) {
+            $title = "⏰ Sắp đến hạn chót Milestone: {$m['name']}";
+            $message = "Mốc thời gian \"{$m['name']}\" của cuộc thi \"{$m['contest_name']}\" sẽ đến hạn chót vào lúc " . date('H:i d/m/Y', strtotime($m['due_date'])) . ". Hãy hoàn thành và nộp bài đúng hạn!";
+
+            // 4. Kiểm tra xem đã gửi thông báo loại này cho user về mốc này chưa
+            $pattern = "%mốc thời gian \"{$m['name']}\"%";
+            $exists = $conn->executeQuery("
+                SELECT 1 FROM notifications 
+                WHERE user_id = :userId 
+                  AND type = 'MILESTONE_DEADLINE_APPROACHING' 
+                  AND message LIKE :pattern
+            ", [
+                'userId' => $userId,
+                'pattern' => $pattern
+            ])->fetchOne();
+
+            if (!$exists) {
+                // 5. Thêm thông báo vào DB
+                $conn->executeStatement("
+                    INSERT INTO notifications (user_id, contest_id, type, title, message, is_read, created_at)
+                    VALUES (:userId, :contestId, 'MILESTONE_DEADLINE_APPROACHING', :title, :message, 0, NOW())
+                ", [
+                    'userId' => $userId,
+                    'contestId' => $m['hackathon_id'],
+                    'title' => $title,
+                    'message' => $message
+                ]);
+
+                // 6. Broadcast qua Pusher
+                if ($this->pusher) {
+                    try {
+                        $this->pusher->trigger('global-notifications', 'milestone-approaching', [
+                            'user_id' => $userId,
+                            'contest_id' => $m['hackathon_id'],
+                            'title' => $title,
+                            'message' => $message
+                        ]);
+                    } catch (\Throwable $ex) {
+                        error_log('[Pusher Error] ' . $ex->getMessage());
+                    }
+                }
+            }
+        }
+    }
+
+    /**
      * Lấy danh sách thông báo của 1 user (mới nhất trước).
      */
     public function getUserNotifications(int $userId, int $limit = 20): array
     {
+        $this->checkAndNotifyApproachingMilestones($userId);
+
         $conn = $this->em->getConnection();
         return $conn->executeQuery("
             SELECT n.id, n.contest_id, n.type, n.title, n.message, n.is_read,
