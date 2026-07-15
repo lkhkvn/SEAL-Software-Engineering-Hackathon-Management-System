@@ -354,6 +354,36 @@ LOCK TABLES `milestones` WRITE;
 UNLOCK TABLES;
 
 --
+-- Table structure for table `notifications`
+--
+
+DROP TABLE IF EXISTS `notifications`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `notifications` (
+  `id` int unsigned NOT NULL AUTO_INCREMENT,
+  `user_id` int NOT NULL,
+  `contest_id` int DEFAULT NULL,
+  `type` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `title` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `message` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `is_read` tinyint(1) NOT NULL DEFAULT '0',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `notifications`
+--
+
+LOCK TABLES `notifications` WRITE;
+/*!40000 ALTER TABLE `notifications` DISABLE KEYS */;
+INSERT INTO `notifications` VALUES (1,16,NULL,'PROJECT_SCORED','✅ Dự án đã được chấm điểm!','Dự án của đội Chung Sức vừa được Giám khảo hoàn tất việc chấm điểm. Bạn có thể kiểm tra lại trên Bảng xếp hạng!',0,'2026-07-03 14:09:10'),(2,17,NULL,'PROJECT_SCORED','✅ Dự án đã được chấm điểm!','Dự án của đội huy vừa được Giám khảo hoàn tất việc chấm điểm. Bạn có thể kiểm tra lại trên Bảng xếp hạng!',0,'2026-07-03 14:09:33'),(3,18,NULL,'PROJECT_SCORED','✅ Dự án đã được chấm điểm!','Dự án của đội huy vừa được Giám khảo hoàn tất việc chấm điểm. Bạn có thể kiểm tra lại trên Bảng xếp hạng!',0,'2026-07-03 14:09:33');
+/*!40000 ALTER TABLE `notifications` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
 -- Table structure for table `organizations`
 --
 
