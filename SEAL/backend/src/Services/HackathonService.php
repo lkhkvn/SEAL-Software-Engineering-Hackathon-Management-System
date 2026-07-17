@@ -438,4 +438,80 @@ class HackathonService {
             }
         }
     }
+
+    /**
+     * Xuất toàn bộ Milestone và Schedule của Hackathon dưới dạng định dạng iCalendar (.ics) (RFC 5545)
+     */
+    public function exportCalendar(int $hackathonId): string {
+        $conn = $this->em->getConnection();
+
+        // 1. Lấy thông tin Hackathon
+        $hackathon = $conn->executeQuery("SELECT name, description FROM contests WHERE id = ?", [$hackathonId])->fetchAssociative();
+        if (!$hackathon) {
+            throw new Exception("Cuộc thi không tồn tại!");
+        }
+
+        // 2. Lấy Milestones
+        $milestones = $conn->executeQuery("SELECT name, description, due_date FROM milestones WHERE hackathon_id = ?", [$hackathonId])->fetchAllAssociative();
+
+        // 3. Lấy Schedules
+        $schedules = $conn->executeQuery("SELECT title, description, start_time, end_time, location FROM schedules WHERE hackathon_id = ?", [$hackathonId])->fetchAllAssociative();
+
+        // 4. Sinh chuỗi định dạng iCalendar
+        $ics = "BEGIN:VCALENDAR\r\n";
+        $ics .= "VERSION:2.0\r\n";
+        $ics .= "PRODID:-//SEAL Hackathon Hub//EN\r\n";
+        $ics .= "CALSCALE:GREGORIAN\r\n";
+        $ics .= "METHOD:PUBLISH\r\n";
+
+        // Thêm các Milestone
+        foreach ($milestones as $m) {
+            if (empty($m['due_date'])) continue;
+            $dt = new \DateTime($m['due_date']);
+            $dtStartStr = $dt->format('Ymd\THis\Z');
+            $dtEnd = clone $dt;
+            $dtEndStr = $dtEnd->modify('+1 hour')->format('Ymd\THis\Z');
+
+            $uid = "milestone-" . $hackathonId . "-" . uniqid() . "@seal.hackathon";
+            $summary = "[DEADLINE] " . $m['name'];
+            $desc = str_replace(["\r", "\n"], ["", "\\n"], $m['description'] ?? '');
+
+            $ics .= "BEGIN:VEVENT\r\n";
+            $ics .= "UID:" . $uid . "\r\n";
+            $ics .= "DTSTART:" . $dtStartStr . "\r\n";
+            $ics .= "DTEND:" . $dtEndStr . "\r\n";
+            $ics .= "SUMMARY:" . $summary . "\r\n";
+            $ics .= "DESCRIPTION:" . $desc . "\r\n";
+            $ics .= "END:VEVENT\r\n";
+        }
+
+        // Thêm các sự kiện Lịch trình
+        foreach ($schedules as $s) {
+            if (empty($s['start_time'])) continue;
+            $dtStart = new \DateTime($s['start_time']);
+            $dtStartStr = $dtStart->format('Ymd\THis\Z');
+
+            $dtEnd = !empty($s['end_time']) ? new \DateTime($s['end_time']) : (clone $dtStart)->modify('+1 hour');
+            $dtEndStr = $dtEnd->format('Ymd\THis\Z');
+
+            $uid = "schedule-" . $hackathonId . "-" . uniqid() . "@seal.hackathon";
+            $summary = $s['title'];
+            $desc = str_replace(["\r", "\n"], ["", "\\n"], $s['description'] ?? '');
+            $location = $s['location'] ?? '';
+
+            $ics .= "BEGIN:VEVENT\r\n";
+            $ics .= "UID:" . $uid . "\r\n";
+            $ics .= "DTSTART:" . $dtStartStr . "\r\n";
+            $ics .= "DTEND:" . $dtEndStr . "\r\n";
+            $ics .= "SUMMARY:" . $summary . "\r\n";
+            $ics .= "DESCRIPTION:" . $desc . "\r\n";
+            if (!empty($location)) {
+                $ics .= "LOCATION:" . $location . "\r\n";
+            }
+            $ics .= "END:VEVENT\r\n";
+        }
+
+        $ics .= "END:VCALENDAR\r\n";
+        return $ics;
+    }
 }

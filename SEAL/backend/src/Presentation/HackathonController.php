@@ -392,5 +392,20 @@ class HackathonController {
         }
         return $user;
     }
+
+    /** GET /api/hackathons/{id}/calendar - Export calendar .ics file */
+    public function exportCalendar(int $hackathonId): void {
+        try {
+            $icsContent = $this->hackathonService->exportCalendar($hackathonId);
+
+            header('Content-Type: text/calendar; charset=utf-8');
+            header('Content-Disposition: attachment; filename="hackathon_' . $hackathonId . '_calendar.ics"');
+            echo $icsContent;
+            exit(0);
+        } catch (\Exception $e) {
+            http_response_code(404);
+            echo json_encode(["status" => "error", "message" => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        }
+    }
 }
 

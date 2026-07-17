@@ -310,6 +310,9 @@ try {
     if (preg_match('#^/api/hackathons/(\d+)$#', $path, $m) && $method === 'GET') {
         $hackathonController->getHackathonById((int)$m[1]); exit(0);
     }
+    if (preg_match('#^/api/hackathons/(\d+)/calendar$#', $path, $m) && $method === 'GET') {
+        $hackathonController->exportCalendar((int)$m[1]); exit(0);
+    }
     if (preg_match('#^/api/hackathons/(\d+)/register$#', $path, $m) && $method === 'POST') {
         $hackathonController->registerTeam((int)$m[1]); exit(0);
     }

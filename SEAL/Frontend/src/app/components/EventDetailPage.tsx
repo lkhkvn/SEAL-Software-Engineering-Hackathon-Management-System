@@ -632,7 +632,17 @@ export function EventDetailPage() {
                {/* TIMELINE TAB */}
                {activeTab === 'schedule' && (
                  <div className="space-y-6 text-gray-800 bg-white p-8 rounded-xl border border-gray-100 shadow-sm">
-                    <h2 className="text-xl font-bold text-gray-900 mb-8 pb-4">Dòng thời gian</h2>
+                    <div className="flex justify-between items-center mb-8 pb-4 border-b border-gray-100">
+                      <h2 className="text-xl font-bold text-gray-900">Dòng thời gian</h2>
+                      <a 
+                        href={`http://localhost:8000/index.php/api/hackathons/${id}/calendar`}
+                        download
+                        className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+                      >
+                        <Calendar size={16} />
+                        Đồng bộ lịch (.ics)
+                      </a>
+                    </div>
                     
                     <div className="relative border-l border-gray-200 ml-3 space-y-10 py-4">
                       {(() => {
